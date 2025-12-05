@@ -4,6 +4,14 @@ the next generation of template
 
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
+## Path dir
+
+npm run gen
+default for turbo repo apps/
+
+. for root
+custom test/
+
 ## Correct Structure for External Generators
 
 ```bash
