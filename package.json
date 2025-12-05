@@ -1,0 +1,28 @@
+{
+  "name": "next-gen",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "exports": {
+    ".": "./turbo/generators/config.ts"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "gen": "turbo gen"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/next-dev-team/next-gen.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/next-dev-team/next-gen/issues"
+  },
+  "homepage": "https://github.com/next-dev-team/next-gen#readme",
+  "dependencies": {
+    "@turbo/gen": "^2.6.3",
+    "turbo": "^2.6.3"
+  }
+}
