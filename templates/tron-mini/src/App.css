@@ -1,0 +1,16 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body { margin: 0; background: #0f0f13; color: #eaeef3; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif; }
+
+.app { display: grid; place-items: center; min-height: 100vh; padding: 24px; }
+.hello-card {
+  width: 100%;
+  max-width: 560px;
+  background: #15161c;
+  border: 1px solid #222639;
+  border-radius: 14px;
+  padding: 24px 28px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+}
+.hello-card h1 { margin: 0 0 10px; font-size: 22px; }
+.hello-card p { margin: 0; opacity: 0.85; }
