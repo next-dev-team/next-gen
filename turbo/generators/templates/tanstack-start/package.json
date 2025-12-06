@@ -1,0 +1,21 @@
+{
+  "name": "tanstack-start-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start"
+  },
+  "dependencies": {
+    "@tanstack/start": "latest",
+    "react": "^19.0.0-rc",
+    "react-dom": "^19.0.0-rc",
+    "vinxi": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0-rc",
+    "@types/react-dom": "^19.0.0-rc",
+    "typescript": "^5.0.0"
+  }
+}
