@@ -3,10 +3,12 @@ import {
   tronMiniGenerator,
   agentRulesGenerator,
   appScaffoldGenerator,
+  electronFloatGenerator,
 } from "./generators";
 
 export default function generator(plop: PlopTypes.NodePlopAPI): void {
   tronMiniGenerator(plop);
   agentRulesGenerator(plop);
   appScaffoldGenerator(plop);
+  electronFloatGenerator(plop);
 }

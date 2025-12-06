@@ -1,0 +1,13 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  versions: {
+    node: process.versions.node,
+    chrome: process.versions.chrome,
+    electron: process.versions.electron,
+  },
+  getStartOnBoot: () => ipcRenderer.invoke("get-start-on-boot"),
+  setStartOnBoot: (enabled) => ipcRenderer.invoke("set-start-on-boot", enabled),
+  runGenerator: (generatorName, answers) =>
+    ipcRenderer.invoke("run-generator", { generatorName, answers }),
+});

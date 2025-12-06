@@ -1,0 +1,36 @@
+{
+  "name": "{{ dashCase name }}",
+  "version": "1.0.0",
+  "description": "Electron app with floating DevTools",
+  "main": "./out/main/index.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron-vite preview",
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:win": "npm run build && electron-builder --win --dir",
+    "build:win:exe": "npm run build && electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-vite": "^2.0.0",
+    "vite": "^5.0.0"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "build": {
+    "appId": "com.{{ dashCase name }}.app",
+    "productName": "{{ titleCase name }}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": ["out/**/*"],
+    "win": {
+      "target": ["portable", "nsis"]
+    }
+  }
+}

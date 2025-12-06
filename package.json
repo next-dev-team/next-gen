@@ -7,6 +7,7 @@
     ".": "./turbo/generators/config.ts"
   },
   "scripts": {
+    "ui": "cd ui && npm run dev",
     "test": "echo \"Error: no test specified\" && exit 1",
     "gen": "turbo gen"
   },
@@ -24,5 +25,10 @@
   "dependencies": {
     "@turbo/gen": "^2.6.3",
     "turbo": "^2.6.3"
+  },
+  "devDependencies": {
+    "node-plop": "^0.32.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
   }
 }

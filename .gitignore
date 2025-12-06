@@ -5,3 +5,5 @@ build
 .cursor
 test-**
 my-app
+out
+playwright-report

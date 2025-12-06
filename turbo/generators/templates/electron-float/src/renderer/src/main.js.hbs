@@ -1,0 +1,25 @@
+import './style.css'
+
+let counter = 0
+
+const counterBtn = document.getElementById('counter')
+const startOnBootCheckbox = document.getElementById('startOnBoot')
+
+// Counter functionality
+counterBtn.addEventListener('click', () => {
+  counter++
+  counterBtn.textContent = `Count: ${counter}`
+})
+
+// Start on boot setting
+if (window.electronAPI) {
+  // Load saved setting
+  window.electronAPI.getStartOnBoot().then(enabled => {
+    startOnBootCheckbox.checked = enabled
+  })
+
+  // Save setting when changed
+  startOnBootCheckbox.addEventListener('change', () => {
+    window.electronAPI.setStartOnBoot(startOnBootCheckbox.checked)
+  })
+}
