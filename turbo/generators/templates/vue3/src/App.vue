@@ -8,7 +8,7 @@ const count = ref(0)
   <div style="padding: 20px">
     <h1>Vue 3 Counter</h1>
     <div class="card">
-      <button type="button" @click="count++">count is {{ count }}</button>
+      <button type="button" @click="count++">count is \{{ count }}</button>
     </div>
   </div>
 </template>

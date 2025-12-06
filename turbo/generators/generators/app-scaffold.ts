@@ -44,7 +44,7 @@ export default function appScaffoldGenerator(
       {
         type: "input",
         name: "dest",
-        message: "Destination (relative to root/apps)",
+        message: "Destination directory (default: 'apps', use '.' for root)",
         default: "apps",
       },
     ],
@@ -59,12 +59,17 @@ export default function appScaffoldGenerator(
       const rootDir = path.dirname(path.dirname(plopfileDir));
       const destination = path.resolve(rootDir, data.dest, data.name);
 
+      // Normalize paths for globbing (Windows support)
+      const templateBaseGlob = templateBase.replace(/\\/g, "/");
+
+      console.log(`\n  � Generating app "${data.name}" at: ${destination}\n`);
+
       // 1. Copy Base Template
       actions.push({
         type: "addMany",
         destination: destination,
-        base: templateBase,
-        templateFiles: `${templateBase}/**/*`,
+        base: templateBaseGlob,
+        templateFiles: `${templateBaseGlob}/**/*`,
         force: true, // Overwrite if exists (or warn?) - Plop default is to fail if exists unless force
         data: {
           name: data.name,
