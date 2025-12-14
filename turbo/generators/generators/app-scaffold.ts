@@ -1,4 +1,5 @@
 import type { PlopTypes } from "@turbo/gen";
+import fs from "node:fs";
 import path from "node:path";
 
 const UI_OPTIONS = [
@@ -15,7 +16,25 @@ const FRONTEND_OPTIONS = [
   { name: "TanStack Start", value: "tanstack-start" },
   { name: "Vue 3", value: "vue3" },
   { name: "Nuxt 4", value: "nuxt4" },
+  { name: "React Native Reusables (Expo)", value: "rnr-expo" },
 ];
+
+function copyDir(src: string, dest: string) {
+  if (!fs.existsSync(src)) return;
+  if (!fs.existsSync(dest)) {
+    fs.mkdirSync(dest, { recursive: true });
+  }
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      copyDir(srcPath, destPath);
+    } else {
+      fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
 
 export default function appScaffoldGenerator(
   plop: PlopTypes.NodePlopAPI
@@ -34,6 +53,14 @@ export default function appScaffoldGenerator(
         name: "ui",
         message: "Select UI / CSS Stack (Multiple selection allowed)",
         choices: UI_OPTIONS,
+        when: (answers: any) => answers.frontend !== "rnr-expo",
+      },
+      {
+        type: "list",
+        name: "packageManager",
+        message: "Select Package Manager",
+        choices: ["pnpm", "npm", "yarn", "bun"],
+        default: "pnpm",
       },
       {
         type: "input",
@@ -65,16 +92,53 @@ export default function appScaffoldGenerator(
       console.log(`\n  � Generating app "${data.name}" at: ${destination}\n`);
 
       // 1. Copy Base Template
+      if (frontend === "rnr-expo") {
+        actions.push(function copyRnrExpoTemplate() {
+          copyDir(templateBase, destination);
+          return `Copied rnr-expo template from ${templateBase} to ${destination}`;
+        });
+      } else {
+        actions.push({
+          type: "addMany",
+          destination: destination,
+          base: templateBaseGlob,
+          templateFiles: `${templateBaseGlob}/**/*`,
+          force: true,
+          data: {
+            name: data.name,
+          },
+        });
+      }
+
+      // Update package.json name for all frontends
       actions.push({
-        type: "addMany",
-        destination: destination,
-        base: templateBaseGlob,
-        templateFiles: `${templateBaseGlob}/**/*`,
-        force: true, // Overwrite if exists (or warn?) - Plop default is to fail if exists unless force
-        data: {
-          name: data.name,
-        },
+        type: "modify",
+        path: path.join(destination, "package.json"),
+        pattern: /"name": ".*"/,
+        template: `"name": "{{name}}"`,
       });
+
+      // Update app.json for rnr-expo
+      if (frontend === "rnr-expo") {
+        actions.push({
+          type: "modify",
+          path: path.join(destination, "app.json"),
+          pattern: /"name": "rnr-expo"/,
+          template: `"name": "{{name}}"`,
+        });
+        actions.push({
+          type: "modify",
+          path: path.join(destination, "app.json"),
+          pattern: /"slug": "rnr-expo"/,
+          template: `"slug": "{{name}}"`,
+        });
+        actions.push({
+          type: "modify",
+          path: path.join(destination, "app.json"),
+          pattern: /"scheme": "rnr-expo"/,
+          template: `"scheme": "{{name}}"`,
+        });
+      }
 
       // 2. Add UI Dependencies and Configs
       // This is simplified. Real implementation might need file modifications.
