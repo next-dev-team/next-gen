@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+.trae
+.cursor
+test-**
+my-app
+out
+playwright-report
