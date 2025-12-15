@@ -9,7 +9,9 @@
   "scripts": {
     "ui": "cd ui && npm run dev",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "gen": "turbo gen"
+    "gen": "turbo gen",
+    "gen:workspace": "turbo gen workspace",
+    "gen:turbo": "npx create-turbo@latest --example basic"
   },
   "repository": {
     "type": "git",
