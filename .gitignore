@@ -7,3 +7,4 @@ test-**
 my-app
 out
 playwright-report
+apps/
