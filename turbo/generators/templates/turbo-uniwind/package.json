@@ -1,0 +1,25 @@
+{
+  "name": "turbo-uniwind",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:native": "turbo -F native dev",
+    "dev:web": "turbo -F web dev"
+  },
+  "dependencies": {
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "turbo": "^2.6.3",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@10.19.0"
+}

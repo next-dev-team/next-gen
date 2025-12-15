@@ -1,6 +1,6 @@
-import type { PlopTypes } from "@turbo/gen";
 import fs from "node:fs";
 import path from "node:path";
+import type { PlopTypes } from "@turbo/gen";
 
 const UI_OPTIONS = [
   { name: "Shadcn UI / Tailwind", value: "shadcn" },
@@ -18,9 +18,14 @@ const FRONTEND_OPTIONS = [
   { name: "Nuxt 4", value: "nuxt4" },
   { name: "RN Reusables (Expo Nativewind)", value: "rnr-expo" },
   { name: "RN Reusables (Expo Uniwind)", value: "rnr-expo-uniwind" },
+  { name: "Turbo Uniwind", value: "turbo-uniwind" },
 ];
 
-const EXPO_FRONTENDS = new Set(["rnr-expo", "rnr-expo-uniwind"]);
+const EXPO_FRONTENDS = new Set([
+  "rnr-expo",
+  "rnr-expo-uniwind",
+  "turbo-uniwind",
+]);
 
 const FRONTEND_TEMPLATE_MAP: Record<string, string> = {
   "nextjs-15": "nextjs-15",
@@ -31,6 +36,7 @@ const FRONTEND_TEMPLATE_MAP: Record<string, string> = {
   nuxt4: "nuxt4",
   "rnr-expo": "rnr-expo",
   "rnr-expo-uniwind": "rnr-uniwind",
+  "turbo-uniwind": "turbo-uniwind",
 };
 
 function copyDir(src: string, dest: string) {
@@ -69,7 +75,8 @@ export default function appScaffoldGenerator(
         choices: UI_OPTIONS,
         when: (answers: any) =>
           answers.frontend !== "rnr-expo" &&
-          answers.frontend !== "rnr-expo-uniwind",
+          answers.frontend !== "rnr-expo-uniwind" &&
+          answers.frontend !== "turbo-uniwind",
       },
       {
         type: "list",
@@ -138,7 +145,7 @@ export default function appScaffoldGenerator(
         template: `"name": "{{name}}"`,
       });
 
-      if (isExpoFrontend) {
+      if (isExpoFrontend && frontend !== "turbo-uniwind") {
         actions.push({
           type: "modify",
           path: path.join(destination, "app.json"),
