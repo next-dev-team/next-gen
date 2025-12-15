@@ -96,6 +96,9 @@ export const generators = [
           { name: "TanStack Start", value: "tanstack-start" },
           { name: "Vue 3", value: "vue3" },
           { name: "Nuxt 4", value: "nuxt4" },
+          { name: "RN Reusables (Expo Nativewind)", value: "rnr-expo" },
+          { name: "RN Reusables (Expo Uniwind)", value: "rnr-expo-uniwind" },
+          { name: "Turbo Uniwind", value: "turbo-uniwind" },
         ],
       },
       {
@@ -108,6 +111,21 @@ export const generators = [
           { name: "Ant Design v6", value: "antd" },
           { name: "Hero UI", value: "heroui" },
         ],
+        // Logic to hide UI options for Expo/Turbo Uniwind is handled in the generator,
+        // but UI might want to replicate it or just pass all.
+        // For now, we list them all.
+      },
+      {
+        type: "list",
+        name: "packageManager",
+        message: "Select Package Manager",
+        choices: [
+          { name: "pnpm", value: "pnpm" },
+          { name: "npm", value: "npm" },
+          { name: "yarn", value: "yarn" },
+          { name: "bun", value: "bun" },
+        ],
+        default: { name: "pnpm", value: "pnpm" },
       },
       {
         type: "input",

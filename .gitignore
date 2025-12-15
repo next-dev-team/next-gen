@@ -10,3 +10,4 @@ playwright-report
 apps/
 packages/
 my-turborepo
+.DS_Store
