@@ -3,12 +3,7 @@ const fs = require("fs");
 const path = require("path");
 
 const generators = [
-  { name: "Next.js 16", value: "nextjs-16" },
-  { name: "Next.js 15", value: "nextjs-15" },
-  { name: "Vite + React 19", value: "vite-react-9" },
-  { name: "TanStack Start", value: "tanstack-start" },
-  { name: "Vue 3", value: "vue3" },
-  // { name: 'Nuxt 4', value: 'nuxt4' }, // Assuming nuxt4 might not be ready based on previous file reads
+  { name: "RN Reusables (Expo Uniwind)", value: "rnr-expo-uniwind" },
 ];
 
 const rootDir = path.resolve(__dirname, "..");

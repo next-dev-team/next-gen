@@ -16,8 +16,22 @@ const FRONTEND_OPTIONS = [
   { name: "TanStack Start", value: "tanstack-start" },
   { name: "Vue 3", value: "vue3" },
   { name: "Nuxt 4", value: "nuxt4" },
-  { name: "React Native Reusables (Expo)", value: "rnr-expo" },
+  { name: "RN Reusables (Expo Nativewind)", value: "rnr-expo" },
+  { name: "RN Reusables (Expo Uniwind)", value: "rnr-expo-uniwind" },
 ];
+
+const EXPO_FRONTENDS = new Set(["rnr-expo", "rnr-expo-uniwind"]);
+
+const FRONTEND_TEMPLATE_MAP: Record<string, string> = {
+  "nextjs-15": "nextjs-15",
+  "nextjs-16": "nextjs-16",
+  "vite-react-9": "vite-react-9",
+  "tanstack-start": "tanstack-start",
+  vue3: "vue3",
+  nuxt4: "nuxt4",
+  "rnr-expo": "rnr-expo",
+  "rnr-expo-uniwind": "rnr-uniwind",
+};
 
 function copyDir(src: string, dest: string) {
   if (!fs.existsSync(src)) return;
@@ -53,7 +67,9 @@ export default function appScaffoldGenerator(
         name: "ui",
         message: "Select UI / CSS Stack (Multiple selection allowed)",
         choices: UI_OPTIONS,
-        when: (answers: any) => answers.frontend !== "rnr-expo",
+        when: (answers: any) =>
+          answers.frontend !== "rnr-expo" &&
+          answers.frontend !== "rnr-expo-uniwind",
       },
       {
         type: "list",
@@ -80,22 +96,26 @@ export default function appScaffoldGenerator(
       const frontend = data.frontend;
       const ui = data.ui || [];
 
-      // Resolve paths
       const plopfileDir = plop.getPlopfilePath();
-      const templateBase = path.resolve(plopfileDir, "templates", frontend);
+      const frontendTemplate = FRONTEND_TEMPLATE_MAP[frontend] || frontend;
+      const templateBase = path.resolve(
+        plopfileDir,
+        "templates",
+        frontendTemplate
+      );
       const rootDir = path.dirname(path.dirname(plopfileDir));
       const destination = path.resolve(rootDir, data.dest, data.name);
 
-      // Normalize paths for globbing (Windows support)
       const templateBaseGlob = templateBase.replace(/\\/g, "/");
 
       console.log(`\n  � Generating app "${data.name}" at: ${destination}\n`);
 
-      // 1. Copy Base Template
-      if (frontend === "rnr-expo") {
+      const isExpoFrontend = EXPO_FRONTENDS.has(frontend);
+
+      if (isExpoFrontend) {
         actions.push(function copyRnrExpoTemplate() {
           copyDir(templateBase, destination);
-          return `Copied rnr-expo template from ${templateBase} to ${destination}`;
+          return `Copied ${frontendTemplate} template from ${templateBase} to ${destination}`;
         });
       } else {
         actions.push({
@@ -118,24 +138,23 @@ export default function appScaffoldGenerator(
         template: `"name": "{{name}}"`,
       });
 
-      // Update app.json for rnr-expo
-      if (frontend === "rnr-expo") {
+      if (isExpoFrontend) {
         actions.push({
           type: "modify",
           path: path.join(destination, "app.json"),
-          pattern: /"name": "rnr-expo"/,
+          pattern: /"name": "[^"]*"/,
           template: `"name": "{{name}}"`,
         });
         actions.push({
           type: "modify",
           path: path.join(destination, "app.json"),
-          pattern: /"slug": "rnr-expo"/,
+          pattern: /"slug": "[^"]*"/,
           template: `"slug": "{{name}}"`,
         });
         actions.push({
           type: "modify",
           path: path.join(destination, "app.json"),
-          pattern: /"scheme": "rnr-expo"/,
+          pattern: /"scheme": "[^"]*"/,
           template: `"scheme": "{{name}}"`,
         });
       }
