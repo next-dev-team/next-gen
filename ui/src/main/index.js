@@ -1,9 +1,17 @@
 const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
 const path = require("path");
-const Store = require("electron-store");
 const { spawn } = require("child_process");
 
-const store = new Store();
+let store;
+
+async function getStore() {
+  if (!store) {
+    const StoreModule = await import("electron-store");
+    const StoreClass = StoreModule.default || StoreModule;
+    store = new StoreClass();
+  }
+  return store;
+}
 let mainWindow = null;
 let devToolsWindow = null;
 
@@ -51,10 +59,14 @@ function createFloatDevTools() {
   });
 }
 
-ipcMain.handle("get-start-on-boot", () => store.get("startOnBoot", false));
+ipcMain.handle("get-start-on-boot", async () => {
+  const currentStore = await getStore();
+  return currentStore.get("startOnBoot", false);
+});
 
-ipcMain.handle("set-start-on-boot", (event, enabled) => {
-  store.set("startOnBoot", enabled);
+ipcMain.handle("set-start-on-boot", async (event, enabled) => {
+  const currentStore = await getStore();
+  currentStore.set("startOnBoot", enabled);
   app.setLoginItemSettings({ openAtLogin: enabled });
   return true;
 });
@@ -109,7 +121,8 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
   });
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const currentStore = await getStore();
   createWindow();
   globalShortcut.register("CommandOrControl+Shift+I", () => {
     if (mainWindow && !mainWindow.isDestroyed())
@@ -118,7 +131,7 @@ app.whenReady().then(() => {
   globalShortcut.register("CommandOrControl+Shift+D", () => {
     if (mainWindow && !mainWindow.isDestroyed()) createFloatDevTools();
   });
-  if (store.get("startOnBoot", false)) {
+  if (currentStore.get("startOnBoot", false)) {
     app.setLoginItemSettings({ openAtLogin: true });
   }
 });

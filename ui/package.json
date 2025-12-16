@@ -10,8 +10,7 @@
     "dev": "concurrently \"npx @tailwindcss/cli -i src/renderer/src/input.css -o src/renderer/src/output.css --watch\" \"electron-vite dev\"",
     "build": "npx @tailwindcss/cli -i src/renderer/src/input.css -o src/renderer/src/output.css --minify && electron-vite build",
     "postinstall": "electron-builder install-app-deps",
-    "build:win": "npm run build && electron-builder --win --dir",
-    "build:win:exe": "npm run build && electron-builder --win",
+    "build:win": "npm run build && electron-builder --win",
     "test": "playwright test"
   },
   "devDependencies": {
@@ -29,6 +28,9 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "conf": "^10.2.0",
+    "dot-prop": "^6.0.1",
+    "is-obj": "^3.0.0",
     "electron-store": "^8.1.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
@@ -42,11 +44,22 @@
     "files": [
       "out/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "../scripts",
+        "to": "scripts"
+      },
+      {
+        "from": "../turbo",
+        "to": "turbo"
+      }
+    ],
     "win": {
       "target": [
         "portable",
         "nsis"
-      ]
+      ],
+      "signAndEditExecutable": false
     }
   }
 }
