@@ -1,13 +1,73 @@
 /** biome-ignore-all lint/a11y/noLabelWithoutControl: <explanation> */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import {
+  ConfigProvider,
+  Layout,
+  Steps,
+  Button,
+  Switch,
+  Typography,
+  Tooltip,
+  message,
+  Space,
+} from "antd";
+import {
+  RocketOutlined,
+  SettingOutlined,
+  EyeOutlined,
+  PlayCircleOutlined,
+  ArrowLeftOutlined,
+  ArrowRightOutlined,
+  HomeOutlined,
+  GithubOutlined,
+  ReloadOutlined,
+} from "@ant-design/icons";
 import { generators } from "./generators-config";
+import { darkTheme, templatePreviews, uiStackInfo } from "./theme";
+import {
+  TemplateSelector,
+  ConfigureOptions,
+  PreviewStep,
+  GenerateStep,
+} from "./components/WizardSteps";
+
+const { Header, Content, Footer } = Layout;
+const { Title, Text } = Typography;
+
+const steps = [
+  {
+    title: "Template",
+    icon: <RocketOutlined />,
+    description: "Choose template",
+  },
+  {
+    title: "Configure",
+    icon: <SettingOutlined />,
+    description: "Set options",
+  },
+  {
+    title: "Preview",
+    icon: <EyeOutlined />,
+    description: "Review settings",
+  },
+  {
+    title: "Generate",
+    icon: <PlayCircleOutlined />,
+    description: "Create project",
+  },
+];
 
 function App() {
+  const [currentStep, setCurrentStep] = useState(0);
   const [startOnBoot, setStartOnBoot] = useState(false);
   const [selectedGenerator, setSelectedGenerator] = useState(null);
   const [answers, setAnswers] = useState({});
-  const [output, setOutput] = useState("");
+  const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isComplete, setIsComplete] = useState(false);
+  const [error, setError] = useState(null);
+  const [outputPath, setOutputPath] = useState(null);
+  const logsEndRef = useRef(null);
 
   useEffect(() => {
     if (window.electronAPI) {
@@ -15,18 +75,38 @@ function App() {
     }
   }, []);
 
-  const handleStartOnBootChange = (e) => {
-    const checked = e.target.checked;
+  // Auto-scroll logs
+  useEffect(() => {
+    if (logsEndRef.current) {
+      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [logs]);
+
+  // Listen for streaming logs
+  useEffect(() => {
+    if (window.electronAPI?.onGeneratorLog) {
+      const removeListener = window.electronAPI.onGeneratorLog((log) => {
+        setLogs((prev) => [...prev, log]);
+      });
+      return () => removeListener?.();
+    }
+  }, []);
+
+  const handleStartOnBootChange = (checked) => {
     setStartOnBoot(checked);
     if (window.electronAPI) {
       window.electronAPI.setStartOnBoot(checked);
     }
   };
 
-  const handleGeneratorSelect = (gen) => {
+  const handleGeneratorSelect = useCallback((gen) => {
     setSelectedGenerator(gen);
     setAnswers({});
-    setOutput("");
+    setLogs([]);
+    setIsComplete(false);
+    setError(null);
+    setOutputPath(null);
+
     // Initialize default values
     const initialAnswers = {};
     gen.prompts.forEach((p) => {
@@ -37,13 +117,13 @@ function App() {
         initialAnswers[p.name] = p.choices[0].value;
     });
     setAnswers(initialAnswers);
-  };
+  }, []);
 
-  const handleInputChange = (name, value) => {
+  const handleInputChange = useCallback((name, value) => {
     setAnswers((prev) => ({ ...prev, [name]: value }));
-  };
+  }, []);
 
-  const handleCheckboxChange = (name, value, checked) => {
+  const handleCheckboxChange = useCallback((name, value, checked) => {
     setAnswers((prev) => {
       const current = prev[name] || [];
       if (checked) {
@@ -52,12 +132,35 @@ function App() {
         return { ...prev, [name]: current.filter((v) => v !== value) };
       }
     });
-  };
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleGenerate = async () => {
     setLoading(true);
-    setOutput("Running generator...");
+    setLogs([{ type: "info", message: "Starting generator..." }]);
+    setIsComplete(false);
+    setError(null);
+    setOutputPath(null);
+
+    // Compute output path from answers
+    const computeOutputPath = () => {
+      // Check common path field names
+      const destField =
+        answers.dest ||
+        answers.destination ||
+        answers.destBase ||
+        answers.directory ||
+        answers.path;
+      const nameField = answers.name || answers.pluginSlug || answers.appName;
+
+      if (destField && nameField) {
+        // If it's already an absolute path, use it directly
+        if (destField.includes(":") || destField.startsWith("/")) {
+          return `${destField}/${nameField}`;
+        }
+        return `${destField}/${nameField}`;
+      }
+      return destField || null;
+    };
 
     try {
       if (window.electronAPI) {
@@ -65,154 +168,456 @@ function App() {
           selectedGenerator.name,
           answers
         );
-        setOutput(result.output || "Generator finished successfully!");
+        setLogs((prev) => [
+          ...prev,
+          { type: "success", message: "─".repeat(50) },
+          {
+            type: "success",
+            message: result.output || "Generator finished successfully!",
+          },
+        ]);
+        setIsComplete(true);
+        setOutputPath(computeOutputPath());
+        message.success("Project generated successfully!");
       } else {
-        setOutput("Electron API not available");
+        throw new Error("Electron API not available");
       }
     } catch (err) {
-      setOutput(`Error: ${err.message}`);
+      setLogs((prev) => [
+        ...prev,
+        { type: "error", message: `Error: ${err.message}` },
+      ]);
+      setError(err.message);
+      message.error("Generation failed. Check the logs for details.");
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gray-900 text-white p-8">
-      <h1 className="text-3xl font-bold mb-8 text-blue-400">
-        Next Gen Generator
-      </h1>
+  const nextStep = () => {
+    if (currentStep === 0 && !selectedGenerator) {
+      message.warning("Please select a template first");
+      return;
+    }
+    setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+  };
 
-      <div className="bg-gray-800 p-6 rounded-lg shadow-lg mb-6">
-        <h2 className="text-xl font-semibold mb-4">Settings</h2>
-        <label className="flex items-center space-x-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={startOnBoot}
-            onChange={handleStartOnBootChange}
-            className="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500 bg-gray-700 border-gray-600"
+  const prevStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 0));
+  };
+
+  const resetWizard = () => {
+    setCurrentStep(0);
+    setSelectedGenerator(null);
+    setAnswers({});
+    setLogs([]);
+    setIsComplete(false);
+    setError(null);
+    setOutputPath(null);
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0:
+        return (
+          <TemplateSelector
+            generators={generators}
+            selectedGenerator={selectedGenerator}
+            onSelect={handleGeneratorSelect}
           />
-          <span>Start on system boot</span>
-        </label>
-      </div>
+        );
+      case 1:
+        return (
+          <ConfigureOptions
+            selectedGenerator={selectedGenerator}
+            answers={answers}
+            onInputChange={handleInputChange}
+            onCheckboxChange={handleCheckboxChange}
+          />
+        );
+      case 2:
+        return (
+          <PreviewStep
+            selectedGenerator={selectedGenerator}
+            answers={answers}
+            templatePreviews={templatePreviews}
+            uiStackInfo={uiStackInfo}
+          />
+        );
+      case 3:
+        return (
+          <GenerateStep
+            loading={loading}
+            logs={logs}
+            onGenerate={handleGenerate}
+            isComplete={isComplete}
+            error={error}
+            outputPath={outputPath}
+          />
+        );
+      default:
+        return null;
+    }
+  };
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-          <h2 className="text-xl font-semibold mb-4">Generators</h2>
-          <div className="space-y-2">
-            {generators.map((gen) => (
-              <button
-                type="button"
-                key={gen.name}
-                onClick={() => handleGeneratorSelect(gen)}
-                className={`w-full text-left p-3 rounded transition-colors ${
-                  selectedGenerator?.name === gen.name
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-700 hover:bg-gray-600"
-                }`}
+  return (
+    <ConfigProvider
+      theme={{
+        algorithm: undefined, // Using custom dark theme
+        ...darkTheme,
+      }}
+    >
+      <Layout style={{ minHeight: "100vh", background: "#0f172a" }}>
+        {/* Header */}
+        <Header
+          style={{
+            background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
+            borderBottom: "1px solid #334155",
+            padding: "0 24px",
+            paddingRight: 150, // Space for window control buttons
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            height: 64,
+            WebkitAppRegion: "drag", // Make header draggable
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              WebkitAppRegion: "no-drag",
+            }}
+          >
+            <div
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 10,
+                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <RocketOutlined style={{ color: "#fff", fontSize: 18 }} />
+            </div>
+            <Title level={4} style={{ color: "#f1f5f9", margin: 0 }}>
+              Next Gen
+            </Title>
+            <Text
+              style={{
+                color: "#64748b",
+                fontSize: 12,
+                padding: "2px 8px",
+                background: "#334155",
+                borderRadius: 4,
+              }}
+            >
+              v1.0
+            </Text>
+
+            {/* Divider */}
+            <div
+              style={{
+                width: 1,
+                height: 24,
+                background: "#475569",
+                margin: "0 8px",
+              }}
+            />
+
+            {/* Start on boot - moved to left side for visibility */}
+            <Tooltip title="Launch app when system starts">
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "6px 12px",
+                  background: startOnBoot
+                    ? "rgba(99, 102, 241, 0.2)"
+                    : "#334155",
+                  borderRadius: 8,
+                  border: startOnBoot
+                    ? "1px solid #6366f1"
+                    : "1px solid #475569",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+                onClick={() => handleStartOnBootChange(!startOnBoot)}
               >
-                <div className="font-medium">{gen.name}</div>
-                <div className="text-sm opacity-75">{gen.description}</div>
-              </button>
-            ))}
+                <SettingOutlined
+                  style={{
+                    color: startOnBoot ? "#6366f1" : "#94a3b8",
+                    fontSize: 14,
+                  }}
+                />
+                <Text
+                  style={{
+                    color: startOnBoot ? "#f1f5f9" : "#94a3b8",
+                    fontSize: 13,
+                  }}
+                >
+                  Auto-start
+                </Text>
+                <Switch
+                  size="small"
+                  checked={startOnBoot}
+                  onChange={handleStartOnBootChange}
+                />
+              </div>
+            </Tooltip>
+
+            {/* GitHub button - also on left */}
+            <Tooltip title="View on GitHub">
+              <Button
+                type="text"
+                icon={<GithubOutlined />}
+                style={{ color: "#94a3b8" }}
+                onClick={() => {
+                  if (window.electronAPI?.openExternal) {
+                    window.electronAPI.openExternal(
+                      "https://github.com/next-dev-team/next-gen"
+                    );
+                  }
+                }}
+              />
+            </Tooltip>
           </div>
-        </div>
+        </Header>
 
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg">
-          <h2 className="text-xl font-semibold mb-4">
-            {selectedGenerator
-              ? `Configure ${selectedGenerator.name}`
-              : "Select a Generator"}
-          </h2>
+        {/* Main Content */}
+        <Content style={{ padding: "24px 48px" }}>
+          {/* Steps Progress */}
+          <div
+            style={{
+              background: "#1e293b",
+              borderRadius: 16,
+              padding: "24px 32px",
+              marginBottom: 24,
+              border: "1px solid #334155",
+            }}
+          >
+            <Steps
+              current={currentStep}
+              items={steps.map((step, index) => ({
+                title: (
+                  <span
+                    style={{
+                      color: index <= currentStep ? "#f1f5f9" : "#64748b",
+                    }}
+                  >
+                    {step.title}
+                  </span>
+                ),
+                description: (
+                  <span
+                    style={{
+                      color: index <= currentStep ? "#94a3b8" : "#475569",
+                    }}
+                  >
+                    {step.description}
+                  </span>
+                ),
+                icon: (
+                  <span
+                    style={{
+                      color:
+                        index < currentStep
+                          ? "#22c55e"
+                          : index === currentStep
+                          ? "#6366f1"
+                          : "#64748b",
+                    }}
+                  >
+                    {step.icon}
+                  </span>
+                ),
+              }))}
+              style={{ maxWidth: 800, margin: "0 auto" }}
+            />
+          </div>
 
-          {selectedGenerator ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {selectedGenerator.prompts.map((prompt) => (
-                <div key={prompt.name}>
-                  <label className="block text-sm font-medium mb-1">
-                    {prompt.message}
-                  </label>
+          {/* Step Content */}
+          <div
+            style={{
+              background: "#1e293b",
+              borderRadius: 16,
+              padding: 32,
+              minHeight: 400,
+              border: "1px solid #334155",
+              marginBottom: 24,
+            }}
+          >
+            {renderStepContent()}
+          </div>
 
-                  {prompt.type === "input" && (
-                    <input
-                      type="text"
-                      value={answers[prompt.name] || ""}
-                      onChange={(e) =>
-                        handleInputChange(prompt.name, e.target.value)
-                      }
-                      className="w-full bg-gray-700 border border-gray-600 rounded p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    />
-                  )}
+          {/* Navigation Buttons */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Button
+              icon={<HomeOutlined />}
+              onClick={resetWizard}
+              style={{
+                background: "#334155",
+                borderColor: "#475569",
+                color: "#94a3b8",
+              }}
+            >
+              Start Over
+            </Button>
 
-                  {prompt.type === "list" && (
-                    <select
-                      value={answers[prompt.name] || ""}
-                      onChange={(e) =>
-                        handleInputChange(prompt.name, e.target.value)
-                      }
-                      className="w-full bg-gray-700 border border-gray-600 rounded p-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                    >
-                      {prompt.choices.map((c) => (
-                        <option key={c.value} value={c.value}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-
-                  {prompt.type === "checkbox" && (
-                    <div className="space-y-2">
-                      {prompt.choices.map((c) => (
-                        <label
-                          key={c.value}
-                          className="flex items-center space-x-2"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={(answers[prompt.name] || []).includes(
-                              c.value
-                            )}
-                            onChange={(e) =>
-                              handleCheckboxChange(
-                                prompt.name,
-                                c.value,
-                                e.target.checked
-                              )
-                            }
-                            className="form-checkbox h-4 w-4 text-blue-600 rounded bg-gray-700 border-gray-600"
-                          />
-                          <span>{c.name}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            <Space size={12}>
+              <Button
+                icon={<ArrowLeftOutlined />}
+                onClick={prevStep}
+                disabled={currentStep === 0}
+                style={{
+                  background: currentStep === 0 ? "#1e293b" : "#334155",
+                  borderColor: "#475569",
+                  color: currentStep === 0 ? "#475569" : "#f1f5f9",
+                }}
               >
-                {loading ? "Running..." : "Run Generator"}
-              </button>
-            </form>
-          ) : (
-            <p className="text-gray-400">
-              Please select a generator from the list to start.
-            </p>
-          )}
-        </div>
-      </div>
+                Previous
+              </Button>
 
-      {output && (
-        <div className="mt-6 bg-gray-800 p-6 rounded-lg shadow-lg">
-          <h2 className="text-xl font-semibold mb-2">Output</h2>
-          <pre className="bg-black p-4 rounded overflow-x-auto text-sm text-green-400 whitespace-pre-wrap">
-            {output}
-          </pre>
-        </div>
-      )}
-    </div>
+              {currentStep < steps.length - 1 ? (
+                <Button
+                  type="primary"
+                  onClick={nextStep}
+                  disabled={currentStep === 0 && !selectedGenerator}
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                    border: "none",
+                    boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
+                  }}
+                >
+                  Next
+                  <ArrowRightOutlined />
+                </Button>
+              ) : (
+                isComplete && (
+                  <Button
+                    type="primary"
+                    icon={<ReloadOutlined />}
+                    onClick={resetWizard}
+                    style={{
+                      background:
+                        "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                      border: "none",
+                    }}
+                  >
+                    Create Another
+                  </Button>
+                )
+              )}
+            </Space>
+          </div>
+        </Content>
+
+        {/* Footer */}
+        <Footer
+          style={{
+            background: "transparent",
+            borderTop: "1px solid #334155",
+            textAlign: "center",
+            padding: "16px 24px",
+          }}
+        >
+          <Text style={{ color: "#64748b" }}>
+            Next Gen Generator © {new Date().getFullYear()} | Built with ❤️
+            using Electron + React + Ant Design
+          </Text>
+        </Footer>
+      </Layout>
+
+      {/* Global Styles */}
+      <style>{`
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+          background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: #475569;
+          border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: #64748b;
+        }
+
+        /* Card hover effects */
+        .template-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .template-card.selected {
+          transform: translateY(-2px);
+          box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Cursor blink animation */
+        .cursor-blink {
+          animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0; }
+        }
+
+        /* Smooth transitions */
+        .ant-steps-item-icon {
+          transition: all 0.3s ease;
+        }
+
+        .ant-btn {
+          transition: all 0.2s ease;
+        }
+
+        .ant-btn:hover:not(:disabled) {
+          transform: translateY(-1px);
+        }
+
+        /* Steps custom styling */
+        .ant-steps-item-finish .ant-steps-item-icon {
+          background: #22c55e !important;
+          border-color: #22c55e !important;
+        }
+
+        .ant-steps-item-process .ant-steps-item-icon {
+          background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
+          border-color: #6366f1 !important;
+        }
+
+        .ant-steps-item-wait .ant-steps-item-icon {
+          background: #334155 !important;
+          border-color: #475569 !important;
+        }
+
+        /* Input focus states */
+        input:focus, select:focus {
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        /* Message customization */
+        .ant-message-notice-content {
+          background: #334155 !important;
+        }
+      `}</style>
+    </ConfigProvider>
   );
 }
 

@@ -1,4 +1,11 @@
-const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
+const {
+  app,
+  BrowserWindow,
+  globalShortcut,
+  ipcMain,
+  shell,
+  dialog,
+} = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -12,13 +19,23 @@ async function getStore() {
   }
   return store;
 }
+
 let mainWindow = null;
 let devToolsWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    width: 1200,
+    height: 800,
+    minWidth: 900,
+    minHeight: 600,
+    backgroundColor: "#0f172a",
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: "#1e293b",
+      symbolColor: "#94a3b8",
+      height: 38,
+    },
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       nodeIntegration: false,
@@ -59,6 +76,13 @@ function createFloatDevTools() {
   });
 }
 
+// Send log to renderer
+function sendLog(type, message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("generator-log", { type, message });
+  }
+}
+
 ipcMain.handle("get-start-on-boot", async () => {
   const currentStore = await getStore();
   return currentStore.get("startOnBoot", false);
@@ -71,30 +95,72 @@ ipcMain.handle("set-start-on-boot", async (event, enabled) => {
   return true;
 });
 
+// Select folder dialog
+ipcMain.handle("select-folder", async (event, { title, defaultPath }) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: title || "Select Folder",
+    defaultPath: defaultPath || app.getPath("documents"),
+    properties: ["openDirectory", "createDirectory"],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
+// Open folder in file explorer
+ipcMain.handle("open-folder", async (event, folderPath) => {
+  if (folderPath) {
+    shell.openPath(folderPath);
+    return true;
+  }
+  return false;
+});
+
+// Get project root path
+ipcMain.handle("get-project-root", async () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath);
+  }
+  return path.resolve(__dirname, "../../..");
+});
+
 ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
   return new Promise((resolve, reject) => {
-    // In dev: __dirname is .../ui/out/main
-    // Project root is .../next-gen
-    // script is in .../next-gen/scripts/run-generator.ts
-    const scriptPath = path.resolve(
-      __dirname,
-      "../../../scripts/run-generator.ts"
-    );
+    // Determine script path based on environment
+    let scriptPath;
+    let cwd;
+
+    if (app.isPackaged) {
+      // Production: resources are in the app resources folder
+      scriptPath = path.join(process.resourcesPath, "scripts/run-generator.ts");
+      cwd = path.join(process.resourcesPath);
+    } else {
+      // Development: relative to the project
+      scriptPath = path.resolve(__dirname, "../../../scripts/run-generator.ts");
+      cwd = path.resolve(__dirname, "../../..");
+    }
+
     const answersString = JSON.stringify(answers);
     const answersBase64 = Buffer.from(answersString).toString("base64");
-
     const npx = process.platform === "win32" ? "npx.cmd" : "npx";
 
-    console.log(
-      `Running generator: ${generatorName} with script: ${scriptPath}`
+    sendLog("info", `🚀 Starting generator: ${generatorName}`);
+    sendLog("info", `📁 Working directory: ${cwd}`);
+    sendLog(
+      "info",
+      `📋 Configuration: ${Object.keys(answers).length} options set`
     );
+    sendLog("info", "─".repeat(50));
 
     const child = spawn(
       npx,
       ["tsx", scriptPath, generatorName, answersBase64],
       {
-        cwd: path.resolve(__dirname, "../../.."), // Run in project root
+        cwd,
         shell: true,
+        env: { ...process.env, FORCE_COLOR: "1" },
       }
     );
 
@@ -102,19 +168,67 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
     let stderr = "";
 
     child.stdout.on("data", (data) => {
-      stdout += data.toString();
-      console.log(`[Generator] ${data}`);
+      const text = data.toString();
+      stdout += text;
+
+      // Stream each line to the renderer
+      const lines = text.split("\n").filter((line) => line.trim());
+      lines.forEach((line) => {
+        // Detect log type based on content
+        let type = "info";
+        if (
+          line.includes("error") ||
+          line.includes("Error") ||
+          line.includes("❌")
+        ) {
+          type = "error";
+        } else if (
+          line.includes("success") ||
+          line.includes("Success") ||
+          line.includes("✓") ||
+          line.includes("✔") ||
+          line.includes("done")
+        ) {
+          type = "success";
+        } else if (
+          line.includes("warning") ||
+          line.includes("Warning") ||
+          line.includes("⚠")
+        ) {
+          type = "warning";
+        }
+        sendLog(type, line);
+      });
     });
 
     child.stderr.on("data", (data) => {
-      stderr += data.toString();
-      console.error(`[Generator Error] ${data}`);
+      const text = data.toString();
+      stderr += text;
+
+      const lines = text.split("\n").filter((line) => line.trim());
+      lines.forEach((line) => {
+        // Some npm/npx messages go to stderr but aren't errors
+        if (line.includes("npm") || line.includes("WARN")) {
+          sendLog("warning", line);
+        } else {
+          sendLog("error", line);
+        }
+      });
+    });
+
+    child.on("error", (error) => {
+      sendLog("error", `Process error: ${error.message}`);
+      reject(new Error(`Failed to start generator: ${error.message}`));
     });
 
     child.on("close", (code) => {
+      sendLog("info", "─".repeat(50));
+
       if (code === 0) {
+        sendLog("success", "✅ Generator completed successfully!");
         resolve({ success: true, output: stdout });
       } else {
+        sendLog("error", `❌ Generator failed with exit code ${code}`);
         reject(new Error(`Generator failed with code ${code}\n${stderr}`));
       }
     });
@@ -124,13 +238,16 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
 app.whenReady().then(async () => {
   const currentStore = await getStore();
   createWindow();
+
   globalShortcut.register("CommandOrControl+Shift+I", () => {
     if (mainWindow && !mainWindow.isDestroyed())
       mainWindow.webContents.toggleDevTools();
   });
+
   globalShortcut.register("CommandOrControl+Shift+D", () => {
     if (mainWindow && !mainWindow.isDestroyed()) createFloatDevTools();
   });
+
   if (currentStore.get("startOnBoot", false)) {
     app.setLoginItemSettings({ openAtLogin: true });
   }
@@ -140,4 +257,15 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("activate", () => {
+  if (mainWindow === null) {
+    createWindow();
+  }
+});
+
+// Handle external links
+ipcMain.on("open-external", (event, url) => {
+  shell.openExternal(url);
 });

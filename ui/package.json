@@ -28,10 +28,13 @@
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "@ant-design/cssinjs": "^2.0.1",
+    "@ant-design/icons": "^6.1.0",
+    "antd": "^6.1.1",
     "conf": "^10.2.0",
     "dot-prop": "^6.0.1",
-    "is-obj": "^3.0.0",
     "electron-store": "^8.1.0",
+    "is-obj": "^3.0.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1"
   },
