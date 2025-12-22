@@ -34,6 +34,7 @@ const { Search } = Input;
 // Available IDEs with their icons/colors
 const IDE_OPTIONS = [
   { key: "cursor", label: "Cursor", icon: "🖱️", color: "#00D4FF" },
+  { key: "trae", label: "Trae", icon: "🖱️", color: "#00D4FF" },
   { key: "vscode", label: "VS Code", icon: "💙", color: "#007ACC" },
   { key: "webstorm", label: "WebStorm", icon: "🌊", color: "#00CDD7" },
   { key: "zed", label: "Zed", icon: "⚡", color: "#F5A623" },

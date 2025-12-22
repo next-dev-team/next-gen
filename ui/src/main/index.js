@@ -197,6 +197,7 @@ ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
   // IDE commands for different editors
   const ideCommands = {
     cursor: "cursor",
+    trae: "cursor",
     vscode: "code",
     "vs-code": "code",
     code: "code",

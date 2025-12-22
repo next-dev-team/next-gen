@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Your Brand Colors */
+  --color-primary: #1677ff;
+  --color-secondary: #00b578;
+  --color-success: #52c41a;
+  --color-danger: #ff4d4f;
+  --color-warning: #faad14;
+
+  /* Typography */
+  --font-base: 14px;
+  --font-large: 16px;
+  --font-small: 12px;
+
+  /* Spacing */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* Safe Areas (for iOS notch) */
+  --safe-area-top: env(safe-area-inset-top);
+  --safe-area-bottom: env(safe-area-inset-bottom);
+
+  /* Override antd-mobile */
+  --adm-color-primary: var(--color-primary);
+  --adm-color-success: var(--color-success);
+  --adm-color-danger: var(--color-danger);
+  --adm-font-size-main: var(--font-base);
+}
+
+/* Dark Mode */
+[data-theme="dark"] {
+  --color-primary: #4096ff;
+  --color-bg: #141414;
+  --color-text: #ffffff;
+}

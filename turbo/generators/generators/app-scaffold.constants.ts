@@ -15,6 +15,10 @@ export const FRONTEND_OPTIONS = [
   { name: "RN Reusables (Expo Nativewind)", value: "rnr-expo" },
   { name: "RN Reusables (Expo Uniwind)", value: "rnr-expo-uniwind" },
   { name: "Turbo Uniwind", value: "turbo-uniwind" },
+  {
+    name: "Antd Mobile + Tailwind (Vite)",
+    value: "antd-mobile-tailwind-vite-7",
+  },
 ];
 
 export const EXPO_FRONTENDS = new Set([
@@ -33,6 +37,7 @@ export const FRONTEND_TEMPLATE_MAP: Record<string, string> = {
   "rnr-expo": "rnr-expo",
   "rnr-expo-uniwind": "rnr-uniwind",
   "turbo-uniwind": "turbo-uniwind",
+  "antd-mobile-tailwind-vite-7": "antd-mobile-tailwind-vite-7",
 };
 
 export const TAILWIND_CONFIG_TEMPLATE = `/** @type {import('tailwindcss').Config} */

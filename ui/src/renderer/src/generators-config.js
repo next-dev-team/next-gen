@@ -105,6 +105,10 @@ export const generators = [
           { name: "RN Reusables (Expo Nativewind)", value: "rnr-expo" },
           { name: "RN Reusables (Expo Uniwind)", value: "rnr-expo-uniwind" },
           { name: "Turbo Uniwind", value: "turbo-uniwind" },
+          {
+            name: "Antd Mobile + Tailwind (Vite)",
+            value: "antd-mobile-tailwind-vite-7",
+          },
         ],
       },
       {
