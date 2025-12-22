@@ -32,6 +32,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Get project root path
   getProjectRoot: () => ipcRenderer.invoke("get-project-root"),
 
+  // ======= PROJECT LAUNCHER =======
+
+  // Get all saved projects
+  getProjects: () => ipcRenderer.invoke("get-projects"),
+
+  // Save a project
+  saveProject: (project) => ipcRenderer.invoke("save-project", project),
+
+  // Delete a project
+  deleteProject: (projectId) => ipcRenderer.invoke("delete-project", projectId),
+
+  // Open project in IDE
+  openInIDE: (projectPath, ide) =>
+    ipcRenderer.invoke("open-in-ide", { projectPath, ide }),
+
+  // Check if path exists
+  checkPathExists: (path) => ipcRenderer.invoke("check-path-exists", path),
+
   // External links
   openExternal: (url) => {
     shell.openExternal(url);

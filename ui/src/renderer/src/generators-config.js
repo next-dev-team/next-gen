@@ -64,6 +64,12 @@ export const generators = [
     description: "Generate AI agent rule files",
     prompts: [
       {
+        type: "input",
+        name: "destination",
+        message: "Destination project path",
+        default: ".",
+      },
+      {
         type: "checkbox",
         name: "agents",
         message: "Which agent rules do you want to generate?",

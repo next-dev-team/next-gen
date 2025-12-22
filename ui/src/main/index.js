@@ -109,10 +109,28 @@ ipcMain.handle("select-folder", async (event, { title, defaultPath }) => {
   return result.filePaths[0];
 });
 
+// Helper to ensure path is absolute
+async function ensureAbsolutePath(targetPath) {
+  if (path.isAbsolute(targetPath)) {
+    return targetPath;
+  }
+
+  // Resolve relative to project root
+  let rootPath;
+  if (app.isPackaged) {
+    rootPath = path.join(process.resourcesPath);
+  } else {
+    rootPath = path.resolve(__dirname, "../../..");
+  }
+
+  return path.resolve(rootPath, targetPath);
+}
+
 // Open folder in file explorer
 ipcMain.handle("open-folder", async (event, folderPath) => {
   if (folderPath) {
-    shell.openPath(folderPath);
+    const absolutePath = await ensureAbsolutePath(folderPath);
+    shell.openPath(absolutePath);
     return true;
   }
   return false;
@@ -124,6 +142,112 @@ ipcMain.handle("get-project-root", async () => {
     return path.join(process.resourcesPath);
   }
   return path.resolve(__dirname, "../../..");
+});
+
+// ======= PROJECT LAUNCHER FEATURES =======
+
+// Get all saved projects
+ipcMain.handle("get-projects", async () => {
+  const currentStore = await getStore();
+  return currentStore.get("projects", []);
+});
+
+// Save a new project
+ipcMain.handle("save-project", async (event, project) => {
+  const currentStore = await getStore();
+  const projects = currentStore.get("projects", []);
+
+  // Check if project with same path already exists
+  const existingIndex = projects.findIndex((p) => p.path === project.path);
+  if (existingIndex >= 0) {
+    projects[existingIndex] = {
+      ...projects[existingIndex],
+      ...project,
+      updatedAt: new Date().toISOString(),
+    };
+  } else {
+    projects.push({
+      ...project,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  currentStore.set("projects", projects);
+  return projects;
+});
+
+// Delete a project
+ipcMain.handle("delete-project", async (event, projectId) => {
+  const currentStore = await getStore();
+  const projects = currentStore.get("projects", []);
+  const filtered = projects.filter((p) => p.id !== projectId);
+  currentStore.set("projects", filtered);
+  return filtered;
+});
+
+// Open project in IDE
+ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
+  const { exec } = require("child_process");
+
+  // Make path absolute
+  const absolutePath = await ensureAbsolutePath(projectPath);
+
+  // IDE commands for different editors
+  const ideCommands = {
+    cursor: "cursor",
+    vscode: "code",
+    "vs-code": "code",
+    code: "code",
+    webstorm: "webstorm",
+    idea: "idea",
+    sublime: "subl",
+    atom: "atom",
+    vim: "vim",
+    nvim: "nvim",
+    zed: "zed",
+    fleet: "fleet",
+    trae: "trae",
+  };
+
+  const command = ideCommands[ide.toLowerCase()] || ide;
+  const isWindows = process.platform === "win32";
+  const fullCommand = isWindows
+    ? `${command} "${absolutePath}"`
+    : `${command} "${absolutePath}"`;
+
+  return new Promise((resolve, reject) => {
+    exec(fullCommand, { shell: true }, (error, stdout, stderr) => {
+      if (error) {
+        // Try with .cmd extension on Windows
+        if (isWindows) {
+          exec(`${command}.cmd "${absolutePath}"`, { shell: true }, (err2) => {
+            if (err2) {
+              reject(new Error(`Failed to open in ${ide}: ${error.message}`));
+            } else {
+              resolve({ success: true });
+            }
+          });
+        } else {
+          reject(new Error(`Failed to open in ${ide}: ${error.message}`));
+        }
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
+});
+
+// Check if a path exists
+ipcMain.handle("check-path-exists", async (event, checkPath) => {
+  const fs = require("fs");
+  try {
+    await fs.promises.access(checkPath);
+    return true;
+  } catch {
+    return false;
+  }
 });
 
 ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {

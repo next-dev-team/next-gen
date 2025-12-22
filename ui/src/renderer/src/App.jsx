@@ -10,6 +10,7 @@ import {
   Tooltip,
   message,
   Space,
+  Segmented,
 } from "antd";
 import {
   RocketOutlined,
@@ -21,6 +22,7 @@ import {
   HomeOutlined,
   GithubOutlined,
   ReloadOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import { generators } from "./generators-config";
 import { darkTheme, templatePreviews, uiStackInfo } from "./theme";
@@ -30,6 +32,7 @@ import {
   PreviewStep,
   GenerateStep,
 } from "./components/WizardSteps";
+import { ProjectLauncher } from "./components/ProjectLauncher";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
@@ -58,6 +61,7 @@ const steps = [
 ];
 
 function App() {
+  const [activeTab, setActiveTab] = useState("generator"); // "generator" or "projects"
   const [currentStep, setCurrentStep] = useState(0);
   const [startOnBoot, setStartOnBoot] = useState(false);
   const [selectedGenerator, setSelectedGenerator] = useState(null);
@@ -177,7 +181,27 @@ function App() {
           },
         ]);
         setIsComplete(true);
-        setOutputPath(computeOutputPath());
+
+        const generatedPath = computeOutputPath();
+        setOutputPath(generatedPath);
+
+        // Save project to launcher
+        if (generatedPath && window.electronAPI?.saveProject) {
+          const projectName =
+            answers.name ||
+            answers.pluginSlug ||
+            answers.appName ||
+            selectedGenerator.name;
+          await window.electronAPI.saveProject({
+            name: projectName,
+            path: generatedPath,
+            generator: selectedGenerator.name,
+            framework: answers.frontend || selectedGenerator.name,
+            packageManager: answers.packageManager,
+            uiStack: answers.ui,
+          });
+        }
+
         message.success("Project generated successfully!");
       } else {
         throw new Error("Electron API not available");
@@ -390,137 +414,203 @@ function App() {
 
         {/* Main Content */}
         <Content style={{ padding: "24px 48px" }}>
-          {/* Steps Progress */}
+          {/* Tab Navigation */}
           <div
             style={{
-              background: "#1e293b",
-              borderRadius: 16,
-              padding: "24px 32px",
               marginBottom: 24,
-              border: "1px solid #334155",
+              display: "flex",
+              justifyContent: "center",
             }}
           >
-            <Steps
-              current={currentStep}
-              items={steps.map((step, index) => ({
-                title: (
-                  <span
-                    style={{
-                      color: index <= currentStep ? "#f1f5f9" : "#64748b",
-                    }}
-                  >
-                    {step.title}
-                  </span>
-                ),
-                description: (
-                  <span
-                    style={{
-                      color: index <= currentStep ? "#94a3b8" : "#475569",
-                    }}
-                  >
-                    {step.description}
-                  </span>
-                ),
-                icon: (
-                  <span
-                    style={{
-                      color:
-                        index < currentStep
-                          ? "#22c55e"
-                          : index === currentStep
-                          ? "#6366f1"
-                          : "#64748b",
-                    }}
-                  >
-                    {step.icon}
-                  </span>
-                ),
-              }))}
-              style={{ maxWidth: 800, margin: "0 auto" }}
+            <Segmented
+              value={activeTab}
+              onChange={setActiveTab}
+              size="large"
+              options={[
+                {
+                  label: (
+                    <div
+                      style={{
+                        padding: "4px 16px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <RocketOutlined />
+                      <span>Generator</span>
+                    </div>
+                  ),
+                  value: "generator",
+                },
+                {
+                  label: (
+                    <div
+                      style={{
+                        padding: "4px 16px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <AppstoreOutlined />
+                      <span>Projects</span>
+                    </div>
+                  ),
+                  value: "projects",
+                },
+              ]}
+              style={{
+                background: "#1e293b",
+                padding: 4,
+                borderRadius: 12,
+              }}
             />
           </div>
 
-          {/* Step Content */}
-          <div
-            style={{
-              background: "#1e293b",
-              borderRadius: 16,
-              padding: 32,
-              minHeight: 400,
-              border: "1px solid #334155",
-              marginBottom: 24,
-            }}
-          >
-            {renderStepContent()}
-          </div>
-
-          {/* Navigation Buttons */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <Button
-              icon={<HomeOutlined />}
-              onClick={resetWizard}
-              style={{
-                background: "#334155",
-                borderColor: "#475569",
-                color: "#94a3b8",
-              }}
-            >
-              Start Over
-            </Button>
-
-            <Space size={12}>
-              <Button
-                icon={<ArrowLeftOutlined />}
-                onClick={prevStep}
-                disabled={currentStep === 0}
+          {/* Generator View */}
+          {activeTab === "generator" && (
+            <>
+              {/* Steps Progress */}
+              <div
                 style={{
-                  background: currentStep === 0 ? "#1e293b" : "#334155",
-                  borderColor: "#475569",
-                  color: currentStep === 0 ? "#475569" : "#f1f5f9",
+                  background: "#1e293b",
+                  borderRadius: 16,
+                  padding: "24px 32px",
+                  marginBottom: 24,
+                  border: "1px solid #334155",
                 }}
               >
-                Previous
-              </Button>
+                <Steps
+                  current={currentStep}
+                  items={steps.map((step, index) => ({
+                    title: (
+                      <span
+                        style={{
+                          color: index <= currentStep ? "#f1f5f9" : "#64748b",
+                        }}
+                      >
+                        {step.title}
+                      </span>
+                    ),
+                    description: (
+                      <span
+                        style={{
+                          color: index <= currentStep ? "#94a3b8" : "#475569",
+                        }}
+                      >
+                        {step.description}
+                      </span>
+                    ),
+                    icon: (
+                      <span
+                        style={{
+                          color:
+                            index < currentStep
+                              ? "#22c55e"
+                              : index === currentStep
+                              ? "#6366f1"
+                              : "#64748b",
+                        }}
+                      >
+                        {step.icon}
+                      </span>
+                    ),
+                  }))}
+                  style={{ maxWidth: 800, margin: "0 auto" }}
+                />
+              </div>
 
-              {currentStep < steps.length - 1 ? (
+              {/* Step Content */}
+              <div
+                style={{
+                  background: "#1e293b",
+                  borderRadius: 16,
+                  padding: 32,
+                  minHeight: 400,
+                  border: "1px solid #334155",
+                  marginBottom: 24,
+                }}
+              >
+                {renderStepContent()}
+              </div>
+
+              {/* Navigation Buttons */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
                 <Button
-                  type="primary"
-                  onClick={nextStep}
-                  disabled={currentStep === 0 && !selectedGenerator}
+                  icon={<HomeOutlined />}
+                  onClick={resetWizard}
                   style={{
-                    background:
-                      "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-                    border: "none",
-                    boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
+                    background: "#334155",
+                    borderColor: "#475569",
+                    color: "#94a3b8",
                   }}
                 >
-                  Next
-                  <ArrowRightOutlined />
+                  Start Over
                 </Button>
-              ) : (
-                isComplete && (
+
+                <Space size={12}>
                   <Button
-                    type="primary"
-                    icon={<ReloadOutlined />}
-                    onClick={resetWizard}
+                    icon={<ArrowLeftOutlined />}
+                    onClick={prevStep}
+                    disabled={currentStep === 0}
                     style={{
-                      background:
-                        "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-                      border: "none",
+                      background: currentStep === 0 ? "#1e293b" : "#334155",
+                      borderColor: "#475569",
+                      color: currentStep === 0 ? "#475569" : "#f1f5f9",
                     }}
                   >
-                    Create Another
+                    Previous
                   </Button>
-                )
-              )}
-            </Space>
-          </div>
+
+                  {currentStep < steps.length - 1 ? (
+                    <Button
+                      type="primary"
+                      onClick={nextStep}
+                      disabled={currentStep === 0 && !selectedGenerator}
+                      style={{
+                        background:
+                          "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                        border: "none",
+                        boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
+                      }}
+                    >
+                      Next
+                      <ArrowRightOutlined />
+                    </Button>
+                  ) : (
+                    isComplete && (
+                      <Button
+                        type="primary"
+                        icon={<ReloadOutlined />}
+                        onClick={resetWizard}
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                          border: "none",
+                        }}
+                      >
+                        Create Another
+                      </Button>
+                    )
+                  )}
+                </Space>
+              </div>
+            </>
+          )}
+
+          {/* Projects View */}
+          {activeTab === "projects" && (
+            <ProjectLauncher
+              onNavigateToGenerator={() => setActiveTab("generator")}
+            />
+          )}
         </Content>
 
         {/* Footer */}
