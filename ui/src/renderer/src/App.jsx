@@ -1,38 +1,40 @@
 /** biome-ignore-all lint/a11y/noLabelWithoutControl: <explanation> */
-import React, { useEffect, useState, useCallback, useRef } from "react";
+
 import {
-  ConfigProvider,
-  Layout,
-  Steps,
-  Button,
-  Switch,
-  Typography,
-  Tooltip,
-  message,
-  Space,
-  Segmented,
-} from "antd";
-import {
-  RocketOutlined,
-  SettingOutlined,
-  EyeOutlined,
-  PlayCircleOutlined,
+  AppstoreOutlined,
   ArrowLeftOutlined,
   ArrowRightOutlined,
-  HomeOutlined,
+  EyeOutlined,
   GithubOutlined,
+  HomeOutlined,
+  PlayCircleOutlined,
   ReloadOutlined,
-  AppstoreOutlined,
+  RocketOutlined,
+  SettingOutlined,
+  TableOutlined,
 } from "@ant-design/icons";
+import {
+  Button,
+  ConfigProvider,
+  Layout,
+  message,
+  Segmented,
+  Space,
+  Steps,
+  Switch,
+  Tooltip,
+  Typography,
+} from "antd";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ProjectLauncher } from "./components/ProjectLauncher";
+import {
+  ConfigureOptions,
+  GenerateStep,
+  PreviewStep,
+  TemplateSelector,
+} from "./components/WizardSteps";
 import { generators } from "./generators-config";
 import { darkTheme, templatePreviews, uiStackInfo } from "./theme";
-import {
-  TemplateSelector,
-  ConfigureOptions,
-  PreviewStep,
-  GenerateStep,
-} from "./components/WizardSteps";
-import { ProjectLauncher } from "./components/ProjectLauncher";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
@@ -81,9 +83,9 @@ function App() {
 
   // Auto-scroll logs
   useEffect(() => {
-    if (logsEndRef.current) {
+    if (logs.length === 0) return;
+    if (logsEndRef.current)
       logsEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
   }, [logs]);
 
   // Listen for streaming logs
@@ -367,25 +369,38 @@ function App() {
                   border: startOnBoot
                     ? "1px solid #6366f1"
                     : "1px solid #475569",
-                  cursor: "pointer",
                   transition: "all 0.2s",
                 }}
-                onClick={() => handleStartOnBootChange(!startOnBoot)}
               >
-                <SettingOutlined
+                <button
+                  type="button"
+                  onClick={() => handleStartOnBootChange(!startOnBoot)}
                   style={{
-                    color: startOnBoot ? "#6366f1" : "#94a3b8",
-                    fontSize: 14,
-                  }}
-                />
-                <Text
-                  style={{
-                    color: startOnBoot ? "#f1f5f9" : "#94a3b8",
-                    fontSize: 13,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    cursor: "pointer",
+                    background: "transparent",
+                    border: "none",
+                    padding: 0,
+                    font: "inherit",
                   }}
                 >
-                  Auto-start
-                </Text>
+                  <SettingOutlined
+                    style={{
+                      color: startOnBoot ? "#6366f1" : "#94a3b8",
+                      fontSize: 14,
+                    }}
+                  />
+                  <Text
+                    style={{
+                      color: startOnBoot ? "#f1f5f9" : "#94a3b8",
+                      fontSize: 13,
+                    }}
+                  >
+                    Auto-start
+                  </Text>
+                </button>
                 <Switch
                   size="small"
                   checked={startOnBoot}
@@ -458,6 +473,22 @@ function App() {
                     </div>
                   ),
                   value: "projects",
+                },
+                {
+                  label: (
+                    <div
+                      style={{
+                        padding: "4px 16px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
+                      <TableOutlined />
+                      <span>Scrum Board</span>
+                    </div>
+                  ),
+                  value: "scrum-board",
                 },
               ]}
               style={{
@@ -610,6 +641,26 @@ function App() {
             <ProjectLauncher
               onNavigateToGenerator={() => setActiveTab("generator")}
             />
+          )}
+
+          {activeTab === "scrum-board" && (
+            <div
+              style={{
+                background: "#1e293b",
+                borderRadius: 16,
+                padding: 32,
+                minHeight: 400,
+                border: "1px solid #334155",
+              }}
+            >
+              <Title
+                level={3}
+                style={{ color: "#f1f5f9", marginTop: 0, marginBottom: 8 }}
+              >
+                Scrum Board
+              </Title>
+              <Text style={{ color: "#94a3b8" }}>Coming soon.</Text>
+            </div>
           )}
         </Content>
 
