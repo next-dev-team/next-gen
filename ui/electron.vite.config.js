@@ -1,6 +1,7 @@
 import { defineConfig } from "electron-vite";
 import { resolve } from "path";
 import react from "@vitejs/plugin-react";
+import { codeInspectorPlugin } from "code-inspector-plugin";
 
 export default defineConfig({
   main: {
@@ -27,7 +28,7 @@ export default defineConfig({
       port: 5175,
       strictPort: true,
     },
-    plugins: [react()],
+    plugins: [react(), codeInspectorPlugin({ bundler: "vite" })],
     build: {
       rollupOptions: {
         input: {
