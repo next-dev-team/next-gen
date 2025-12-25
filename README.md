@@ -2,6 +2,8 @@
 
 the next generation of template
 
+![Screenshot](./assets/screenshot.png)
+
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
 ## Path dir
