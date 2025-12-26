@@ -294,7 +294,7 @@ function App() {
         ...darkTheme,
       }}
     >
-      <Layout style={{ minHeight: "100vh", background: "#0f172a" }}>
+      <Layout style={{ height: "100vh", background: "#0f172a" }}>
         {/* Header */}
         <Header
           style={{
@@ -429,7 +429,7 @@ function App() {
         </Header>
 
         {/* Main Content */}
-        <Content style={{ padding: "24px 48px" }}>
+        <Content style={{ padding: "24px 48px", overflowY: "auto" }}>
           {/* Tab Navigation */}
           <div
             style={{
@@ -713,8 +713,7 @@ function App() {
           }}
         >
           <Text style={{ color: "#64748b" }}>
-            Next Gen Generator © {new Date().getFullYear()} | Built with ❤️
-            using Electron + React + Ant Design
+            Next Gen Generator © {new Date().getFullYear()}
           </Text>
         </Footer>
       </Layout>
