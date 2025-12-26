@@ -209,6 +209,7 @@ ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
     zed: "zed",
     fleet: "fleet",
     trae: "trae",
+    "google-antigravity": "antigravity",
   };
 
   const command = ideCommands[ide.toLowerCase()] || ide;

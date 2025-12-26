@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from "react";
 import {
-  Card,
-  Typography,
-  Button,
-  Row,
-  Col,
-  Tag,
-  Tooltip,
-  Space,
-  Empty,
-  Popconfirm,
-  Dropdown,
-  message,
-  Input,
-  Badge,
-} from "antd";
-import {
-  FolderOutlined,
-  FolderOpenOutlined,
-  DeleteOutlined,
-  CodeOutlined,
-  MoreOutlined,
-  SearchOutlined,
   AppstoreOutlined,
   ClockCircleOutlined,
-  ReloadOutlined,
+  CodeOutlined,
+  DeleteOutlined,
+  FolderOpenOutlined,
+  FolderOutlined,
+  MoreOutlined,
   PlusOutlined,
+  ReloadOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
+import {
+  Badge,
+  Button,
+  Card,
+  Col,
+  Dropdown,
+  Empty,
+  Input,
+  message,
+  Popconfirm,
+  Row,
+  Space,
+  Tag,
+  Tooltip,
+  Typography,
+} from "antd";
+import React, { useCallback, useEffect, useState } from "react";
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -34,14 +34,19 @@ const { Search } = Input;
 // Available IDEs with their icons/colors
 const IDE_OPTIONS = [
   { key: "cursor", label: "Cursor", icon: "🖱️", color: "#00D4FF" },
-  { key: "trae", label: "Trae", icon: "🖱️", color: "#00D4FF" },
+  { key: "trae", label: "Trae", icon: "🔷", color: "#3B82F6" },
+  {
+    key: "google-antigravity",
+    label: "Google Antigravity",
+    icon: "☁️",
+    color: "#4285F4",
+  },
   { key: "vscode", label: "VS Code", icon: "💙", color: "#007ACC" },
   { key: "webstorm", label: "WebStorm", icon: "🌊", color: "#00CDD7" },
   { key: "zed", label: "Zed", icon: "⚡", color: "#F5A623" },
   { key: "sublime", label: "Sublime Text", icon: "🧡", color: "#FF9800" },
   { key: "nvim", label: "Neovim", icon: "🌿", color: "#57A143" },
   { key: "fleet", label: "Fleet", icon: "🚀", color: "#8B5CF6" },
-  { key: "trae", label: "Trae", icon: "🔷", color: "#3B82F6" },
 ];
 
 // Get framework icon
@@ -91,23 +96,24 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
   const [defaultIDE, setDefaultIDE] = useState("cursor");
 
   // Load projects on mount
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     setLoading(true);
     try {
       if (window.electronAPI?.getProjects) {
         const savedProjects = await window.electronAPI.getProjects();
-        setProjects(savedProjects || []);
+        setProjects(savedProjects);
       }
     } catch (err) {
       console.error("Failed to load projects:", err);
+      message.error("Failed to load projects");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   const handleOpenInIDE = async (project, ide) => {
     try {
