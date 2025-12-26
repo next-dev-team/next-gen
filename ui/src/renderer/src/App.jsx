@@ -7,6 +7,7 @@ import {
   EyeOutlined,
   GithubOutlined,
   HomeOutlined,
+  LayoutOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
   RocketOutlined,
@@ -484,6 +485,22 @@ function App() {
                         gap: 8,
                       }}
                     >
+                      <LayoutOutlined />
+                      <span>UI</span>
+                    </div>
+                  ),
+                  value: "ui",
+                },
+                {
+                  label: (
+                    <div
+                      style={{
+                        padding: "4px 16px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
                       <TableOutlined />
                       <span>Scrum Board</span>
                     </div>
@@ -641,6 +658,28 @@ function App() {
             <ProjectLauncher
               onNavigateToGenerator={() => setActiveTab("generator")}
             />
+          )}
+
+          {activeTab === "ui" && (
+            <div
+              style={{
+                background: "#1e293b",
+                borderRadius: 16,
+                padding: 32,
+                minHeight: 400,
+                border: "1px solid #334155",
+              }}
+            >
+              <Title
+                level={3}
+                style={{ color: "#f1f5f9", marginTop: 0, marginBottom: 8 }}
+              >
+                UI Library
+              </Title>
+              <Text style={{ color: "#94a3b8" }}>
+                Browse and preview UI components. Coming soon.
+              </Text>
+            </div>
           )}
 
           {activeTab === "scrum-board" && (
