@@ -91,7 +91,7 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
             level={4}
             style={{ color: "var(--color-text-primary)", margin: 0 }}
           >
-            Next Gen
+            {activeTab === "ui" ? "UI Builder" : "Next Gen"}
           </Title>
           <Text
             style={{
@@ -215,14 +215,10 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
       </Header>
 
       {/* Main Content */}
-      <Content style={{ padding: "24px 48px", overflowY: "auto" }}>
+      <Content className="flex flex-col flex-1 overflow-hidden" style={{ padding: "0 48px 24px" }}>
         {/* Tab Navigation */}
         <div
-          style={{
-            marginBottom: 24,
-            display: "flex",
-            justifyContent: "center",
-          }}
+          className="flex justify-center py-6"
         >
           <Segmented
             value={activeTab}

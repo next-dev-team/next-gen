@@ -2,6 +2,7 @@ import { defineConfig } from "electron-vite";
 import { resolve } from "path";
 import react from "@vitejs/plugin-react";
 import { codeInspectorPlugin } from "code-inspector-plugin";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   main: {
@@ -24,17 +25,19 @@ export default defineConfig({
   },
   renderer: {
     root: "src/renderer",
+    resolve: {
+      alias: {
+        "@": resolve(__dirname, "src/renderer/src"),
+      },
+    },
     server: {
       port: 5175,
       strictPort: true,
     },
-    plugins: [react(), codeInspectorPlugin({ bundler: "vite" })],
-    build: {
-      rollupOptions: {
-        input: {
-          index: resolve(__dirname, "src/renderer/index.html"),
-        },
-      },
-    },
-  },
-});
+    plugins: [
+      react(),
+      tailwindcss(),
+      codeInspectorPlugin({ bundler: "vite" }),
+    ]
+  }
+})
