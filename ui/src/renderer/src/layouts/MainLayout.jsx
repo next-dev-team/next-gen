@@ -10,14 +10,7 @@ import {
   SunOutlined,
   TableOutlined,
 } from "@ant-design/icons";
-import {
-  Button,
-  Layout,
-  Segmented,
-  Switch,
-  Tooltip,
-  Typography,
-} from "antd";
+import { Button, Layout, Segmented, Switch, Tooltip, Typography } from "antd";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
@@ -26,22 +19,18 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [startOnBoot, setStartOnBoot] = useState(false);
-  const [activeTab, setActiveTab] = useState("generator");
+
+  // Derive active tab from pathname
+  const activeTab =
+    location.pathname === "/"
+      ? "generator"
+      : location.pathname.substring(1).split("/")[0];
 
   useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.getStartOnBoot().then(setStartOnBoot);
     }
   }, []);
-
-  // Sync activeTab with current location
-  useEffect(() => {
-    const path = location.pathname.substring(1); // remove leading slash
-    if (path === "" || path === "generator") setActiveTab("generator");
-    else if (path === "projects") setActiveTab("projects");
-    else if (path === "ui") setActiveTab("ui");
-    else if (path === "scrum-board") setActiveTab("scrum-board");
-  }, [location]);
 
   const handleStartOnBootChange = (checked) => {
     setStartOnBoot(checked);
@@ -51,7 +40,6 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
   };
 
   const handleTabChange = (value) => {
-    setActiveTab(value);
     navigate(`/${value}`);
   };
 
@@ -198,9 +186,7 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
 
           {/* Theme Toggle */}
           <Tooltip
-            title={
-              isDarkMode ? "Switch to light mode" : "Switch to dark mode"
-            }
+            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           >
             <Button
               type="text"
@@ -309,7 +295,6 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
               },
             ]}
             style={{
-              background: "var(--color-bg-elevated)",
               padding: 4,
               borderRadius: 12,
             }}

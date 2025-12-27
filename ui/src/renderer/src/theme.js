@@ -71,6 +71,14 @@ export const darkTheme = {
       contentBg: "#1e293b",
       headerBg: "#1e293b",
     },
+    Segmented: {
+      itemSelectedBg: "#6366f1", // Indigo 500
+      itemSelectedColor: "#ffffff",
+      trackBg: "#1e293b", // Slate 800
+      itemColor: "#94a3b8", // Slate 400
+      itemHoverColor: "#f1f5f9", // Slate 100
+      itemHoverBg: "rgba(255, 255, 255, 0.05)",
+    },
   },
 };
 

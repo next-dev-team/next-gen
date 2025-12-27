@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from "react";
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ConfigProvider, Spin } from "antd";
+import { ConfigProvider, Spin, theme } from "antd";
 import { darkTheme, lightTheme } from "./theme";
 import MainLayout from "./layouts/MainLayout";
 
@@ -28,7 +28,12 @@ function App() {
   }, [isDarkMode]);
 
   return (
-    <ConfigProvider theme={isDarkMode ? darkTheme : lightTheme}>
+    <ConfigProvider
+      theme={{
+        ...(isDarkMode ? darkTheme : lightTheme),
+        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+      }}
+    >
       <HashRouter>
         <Suspense
           fallback={
