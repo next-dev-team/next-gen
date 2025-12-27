@@ -11,4 +11,4 @@ apps/
 packages/
 my-turborepo
 .DS_Store
-ui/src/renderer/src/output.css
+# ui/src/renderer/src/output.css

@@ -27,6 +27,7 @@ import {
   Typography,
 } from "antd";
 import React, { useCallback, useEffect, useState } from "react";
+import { generators } from "../generators-config";
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -89,11 +90,43 @@ const getFrameworkColor = (framework) => {
   return colors[framework] || "#6366F1";
 };
 
+const generatorDescriptionsByName = generators.reduce((acc, generator) => {
+  if (generator?.name) {
+    acc[generator.name] = generator.description || "";
+  }
+  return acc;
+}, {});
+
+const getGeneratorDescription = (project) => {
+  if (!project?.generator) return "";
+  if (project.generator === "app-scaffold") {
+    const appScaffold = generators.find((g) => g.name === "app-scaffold");
+    const frontendPrompt = appScaffold?.prompts?.find(
+      (prompt) => prompt.name === "frontend"
+    );
+    const choice = frontendPrompt?.choices?.find(
+      (item) => item.value === project.framework
+    );
+    if (choice?.name) {
+      return `${choice.name} app created with App Scaffold`;
+    }
+  }
+  return generatorDescriptionsByName[project.generator] || "";
+};
+
 export const ProjectLauncher = ({ onNavigateToGenerator }) => {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [defaultIDE, setDefaultIDE] = useState("cursor");
+
+  const openExternal = (url) => {
+    if (window.electronAPI?.openExternal) {
+      window.electronAPI.openExternal(url);
+    } else {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  };
 
   // Load projects on mount
   const loadProjects = useCallback(async () => {
@@ -122,7 +155,58 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
         message.success(`Opening ${project.name} in ${ide}`);
       }
     } catch (err) {
-      message.error(`Failed to open in ${ide}: ${err.message}`);
+      const selectedIDE = IDE_OPTIONS.find((item) => item.key === ide);
+      const ideLabel = selectedIDE?.label || ide;
+      const lowerIde = (ide || "").toLowerCase();
+
+      if (["vscode", "vs-code", "code"].includes(lowerIde)) {
+        message.error({
+          content: (
+            <span>
+              Failed to open {project.name} in {ideLabel}.
+              <br />
+              Check that Visual Studio Code is installed and the{" "}
+              <code>code</code> command is available in your terminal.
+              <br />
+              <a
+                onClick={(e) => {
+                  e.preventDefault();
+                  openExternal("https://code.visualstudio.com/");
+                }}
+              >
+                Download VS Code
+              </a>{" "}
+              and enable the terminal integration from the Command Palette with
+              “Shell Command: Install 'code' command in PATH”.
+              {err?.message && (
+                <>
+                  <br />
+                  <span style={{ opacity: 0.7 }}>{err.message}</span>
+                </>
+              )}
+            </span>
+          ),
+          duration: 10,
+        });
+      } else {
+        message.error({
+          content: (
+            <span>
+              Failed to open {project.name} in {ideLabel}.
+              <br />
+              Check that this IDE is installed and its command is available in
+              your terminal.
+              {err?.message && (
+                <>
+                  <br />
+                  <span style={{ opacity: 0.7 }}>{err.message}</span>
+                </>
+              )}
+            </span>
+          ),
+          duration: 8,
+        });
+      }
     }
   };
 
@@ -428,6 +512,19 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                     >
                       {project.path}
                     </Text>
+                    {getGeneratorDescription(project) && (
+                      <Text
+                        style={{
+                          color: "#9ca3af",
+                          fontSize: 12,
+                          display: "block",
+                          marginTop: 2,
+                        }}
+                        ellipsis={{ tooltip: getGeneratorDescription(project) }}
+                      >
+                        {getGeneratorDescription(project)}
+                      </Text>
+                    )}
                   </div>
                   <Dropdown
                     menu={{ items: getIDEMenuItems(project) }}
