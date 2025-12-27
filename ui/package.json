@@ -31,6 +31,7 @@
   "dependencies": {
     "@ant-design/cssinjs": "^2.0.1",
     "@ant-design/icons": "^6.1.0",
+    "@measured/puck": "^0.20.2",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-scroll-area": "^1.2.10",
@@ -50,7 +51,8 @@
     "react-dom": "^19.2.1",
     "react-router-dom": "^7.11.0",
     "tailwind-merge": "^3.4.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "zustand": "^5.0.9"
   },
   "build": {
     "appId": "com.float-devtools-app.app",

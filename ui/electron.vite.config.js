@@ -34,6 +34,6 @@ export default defineConfig({
       port: 5175,
       strictPort: true,
     },
-    plugins: [react(), tailwindcss(), codeInspectorPlugin({ bundler: "vite" })],
+    plugins: [codeInspectorPlugin({ bundler: "vite" }), react(), tailwindcss()],
   },
 });
