@@ -37,7 +37,8 @@
     "electron-store": "^8.1.0",
     "is-obj": "^3.0.0",
     "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "react-dom": "^19.2.1",
+    "react-router-dom": "^7.11.0"
   },
   "build": {
     "appId": "com.float-devtools-app.app",
