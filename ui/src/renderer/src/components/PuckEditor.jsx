@@ -1,7 +1,8 @@
 import React, { useMemo } from "react";
-import { Puck } from "@measured/puck";
+import { Puck, Render } from "@measured/puck";
 import "@measured/puck/puck.css";
 import { usePuckStore } from "../stores/puckStore";
+import { components as componentLibrary } from "../data/components";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import {
@@ -250,14 +251,31 @@ const presetFactories = {
 
 const safePreset = (preset) => (presetFactories[preset] ? preset : "Card");
 
-export function PuckEditor() {
-  const puckData = usePuckStore((s) => s.puckData);
-  const setPuckData = usePuckStore((s) => s.setPuckData);
-  const fontFamily = usePuckStore((s) => s.designSystem.fontFamily);
-  const baseFontSize = usePuckStore((s) => s.designSystem.baseFontSize);
-  const blockRegistry = usePuckStore((s) => s.blockRegistry);
+const getLibraryKey = (component) => `Library__${component.id}`;
 
-  const config = useMemo(() => {
+const safeJsonObject = (value) => {
+  if (typeof value !== "string") return {};
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+  } catch {
+    return {};
+  }
+  return {};
+};
+
+const mergeClassName = (a, b) => {
+  const left = typeof a === "string" ? a.trim() : "";
+  const right = typeof b === "string" ? b.trim() : "";
+  if (!left) return right;
+  if (!right) return left;
+  return `${left} ${right}`;
+};
+
+function usePuckConfig(fontFamily, baseFontSize, blockRegistry) {
+  return useMemo(() => {
     const builtins = {
       HeadingBlock: {
         label: "Heading",
@@ -294,7 +312,7 @@ export function PuckEditor() {
         fields: {
           content: { type: "richtext", contentEditable: true },
         },
-        defaultProps: { content: "Write something…" },
+        defaultProps: { content: "Write something..." },
         render: ({ content }) => (
           <div
             className="leading-7"
@@ -319,6 +337,39 @@ export function PuckEditor() {
       InputBlock: { label: "Input", ...presetFactories.Input() },
     };
 
+    const library = (componentLibrary || []).reduce((acc, component) => {
+      const key = getLibraryKey(component);
+      acc[key] = {
+        label: component.name,
+        fields: {
+          childrenText: { type: "text" },
+          jsonProps: { type: "textarea" },
+        },
+        defaultProps: {
+          childrenText: "",
+          jsonProps: "",
+        },
+        render: ({ childrenText, jsonProps }) => {
+          const extraProps = safeJsonObject(jsonProps);
+          const element = component.preview;
+          if (!React.isValidElement(element)) return element;
+
+          const nextProps = {
+            ...extraProps,
+            className: mergeClassName(element.props?.className, extraProps.className),
+          };
+
+          const nextChildren =
+            typeof childrenText === "string" && childrenText.length > 0
+              ? childrenText
+              : element.props?.children;
+
+          return React.cloneElement(element, nextProps, nextChildren);
+        },
+      };
+      return acc;
+    }, {});
+
     const dynamic = Object.entries(blockRegistry || {}).reduce(
       (acc, [key, entry]) => {
         const preset = safePreset(entry?.preset);
@@ -342,6 +393,11 @@ export function PuckEditor() {
         render: ({ children }) => <div className="min-h-full">{children}</div>,
       },
       categories: {
+        library: {
+          title: "Components",
+          defaultExpanded: true,
+          components: (componentLibrary || []).map(getLibraryKey),
+        },
         layout: {
           title: "Layout",
           defaultExpanded: true,
@@ -365,10 +421,30 @@ export function PuckEditor() {
       },
       components: {
         ...builtins,
+        ...library,
         ...dynamic,
       },
     };
   }, [baseFontSize, blockRegistry, fontFamily]);
+}
+
+export function PuckPreview() {
+  const puckData = usePuckStore((s) => s.puckData);
+  const fontFamily = usePuckStore((s) => s.designSystem.fontFamily);
+  const baseFontSize = usePuckStore((s) => s.designSystem.baseFontSize);
+  const blockRegistry = usePuckStore((s) => s.blockRegistry);
+  const config = usePuckConfig(fontFamily, baseFontSize, blockRegistry);
+
+  return <Render config={config} data={puckData} />;
+}
+
+export function PuckEditor() {
+  const puckData = usePuckStore((s) => s.puckData);
+  const setPuckData = usePuckStore((s) => s.setPuckData);
+  const fontFamily = usePuckStore((s) => s.designSystem.fontFamily);
+  const baseFontSize = usePuckStore((s) => s.designSystem.baseFontSize);
+  const blockRegistry = usePuckStore((s) => s.blockRegistry);
+  const config = usePuckConfig(fontFamily, baseFontSize, blockRegistry);
 
   return (
     <div className="h-full w-full">

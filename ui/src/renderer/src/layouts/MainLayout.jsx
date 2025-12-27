@@ -71,6 +71,7 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
             display: "flex",
             alignItems: "center",
             gap: 16,
+            flex: 1,
             WebkitAppRegion: "no-drag",
           }}
         >
@@ -104,18 +105,102 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
           >
             v1.0
           </Text>
+        </div>
 
-          {/* Divider */}
-          <div
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            justifyContent: "center",
+            WebkitAppRegion: "no-drag",
+          }}
+        >
+          <Segmented
+            value={activeTab}
+            onChange={handleTabChange}
+            options={[
+              {
+                label: (
+                  <div
+                    style={{
+                      padding: "2px 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <RocketOutlined />
+                    <span>Generator</span>
+                  </div>
+                ),
+                value: "generator",
+              },
+              {
+                label: (
+                  <div
+                    style={{
+                      padding: "2px 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <AppstoreOutlined />
+                    <span>Projects</span>
+                  </div>
+                ),
+                value: "projects",
+              },
+              {
+                label: (
+                  <div
+                    style={{
+                      padding: "2px 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <LayoutOutlined />
+                    <span>UI</span>
+                  </div>
+                ),
+                value: "ui",
+              },
+              {
+                label: (
+                  <div
+                    style={{
+                      padding: "2px 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <TableOutlined />
+                    <span>Scrum Board</span>
+                  </div>
+                ),
+                value: "scrum-board",
+              },
+            ]}
             style={{
-              width: 1,
-              height: 24,
-              background: "var(--color-border)",
-              margin: "0 8px",
+              padding: 2,
+              borderRadius: 12,
             }}
           />
+        </div>
 
-          {/* Start on boot - moved to left side for visibility */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            alignItems: "center",
+            gap: 16,
+            flex: 1,
+            WebkitAppRegion: "no-drag",
+          }}
+        >
           <Tooltip title="Launch app when system starts">
             <div
               style={{
@@ -174,7 +259,6 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
             </div>
           </Tooltip>
 
-          {/* Divider */}
           <div
             style={{
               width: 1,
@@ -184,7 +268,6 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
             }}
           />
 
-          {/* Theme Toggle */}
           <Tooltip
             title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
           >
@@ -196,7 +279,6 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
             />
           </Tooltip>
 
-          {/* GitHub button - also on left */}
           <Tooltip title="View on GitHub">
             <Button
               type="text"
@@ -215,88 +297,10 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
       </Header>
 
       {/* Main Content */}
-      <Content className="flex flex-col flex-1 overflow-hidden" style={{ padding: "0 48px 24px" }}>
-        {/* Tab Navigation */}
-        <div
-          className="flex justify-center py-6"
-        >
-          <Segmented
-            value={activeTab}
-            onChange={handleTabChange}
-            size="large"
-            options={[
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "4px 16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <RocketOutlined />
-                    <span>Generator</span>
-                  </div>
-                ),
-                value: "generator",
-              },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "4px 16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <AppstoreOutlined />
-                    <span>Projects</span>
-                  </div>
-                ),
-                value: "projects",
-              },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "4px 16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <LayoutOutlined />
-                    <span>UI</span>
-                  </div>
-                ),
-                value: "ui",
-              },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "4px 16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <TableOutlined />
-                    <span>Scrum Board</span>
-                  </div>
-                ),
-                value: "scrum-board",
-              },
-            ]}
-            style={{
-              padding: 4,
-              borderRadius: 12,
-            }}
-          />
-        </div>
-
+      <Content
+        className="flex flex-col flex-1 overflow-hidden"
+        style={{ padding: "0 48px 24px" }}
+      >
         <Outlet />
       </Content>
 

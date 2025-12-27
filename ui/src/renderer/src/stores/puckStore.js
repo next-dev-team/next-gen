@@ -71,6 +71,30 @@ export const usePuckStore = create(
 
       setPuckData: (data) => set({ puckData: data }),
 
+      addContentBlock: (type, props = {}) =>
+        set((state) => {
+          const idBase = `${type}-${Date.now()}`;
+          const id =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? `${type}-${crypto.randomUUID()}`
+              : idBase;
+
+          const nextItem = {
+            type,
+            props: {
+              id,
+              ...(props || {}),
+            },
+          };
+
+          return {
+            puckData: {
+              ...(state.puckData || { root: { props: {} }, content: [] }),
+              content: [...((state.puckData?.content || []) ?? []), nextItem],
+            },
+          };
+        }),
+
       setDesignMode: (mode) =>
         set((state) => ({
           designSystem: { ...state.designSystem, mode },

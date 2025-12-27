@@ -121,3 +121,7 @@ body,
   padding: 0;
   overflow: hidden;
 }
+
+.puck-zoom-scope #frame-root {
+  zoom: var(--puck-zoom, 1);
+}

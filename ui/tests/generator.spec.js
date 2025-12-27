@@ -79,4 +79,55 @@ test.describe("Generator UI", () => {
       before === "true" ? "false" : "true"
     );
   });
+
+  test("should sync blocks and components to page builder", async () => {
+    const window = await electronApp.firstWindow();
+    await window.reload();
+
+    await window.evaluate(() => {
+      localStorage.removeItem("puck-store");
+    });
+    await window.reload();
+
+    await expect(window.locator(".ant-segmented")).toBeVisible();
+    await window
+      .locator(".ant-segmented")
+      .getByText("UI", { exact: true })
+      .click();
+    await expect(
+      window.getByRole("heading", { name: "UI Builder" })
+    ).toBeVisible();
+
+    await window.getByRole("tab", { name: "Blocks" }).click();
+    await window.getByPlaceholder("Block name").fill("My Card");
+    await window.getByRole("button", { name: "Add Block" }).click();
+
+    await expect
+      .poll(async () => {
+        const raw = await window.evaluate(() =>
+          localStorage.getItem("puck-store")
+        );
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        const content = parsed?.state?.puckData?.content || [];
+        return content.map((item) => item?.type).filter(Boolean);
+      })
+      .toContain("My-Card");
+
+    await window.getByRole("tab", { name: "Components" }).click();
+    await window.getByRole("button", { name: "Button" }).first().click();
+    await window.getByRole("button", { name: "Add to Builder" }).click();
+
+    await expect
+      .poll(async () => {
+        const raw = await window.evaluate(() =>
+          localStorage.getItem("puck-store")
+        );
+        if (!raw) return [];
+        const parsed = JSON.parse(raw);
+        const content = parsed?.state?.puckData?.content || [];
+        return content.map((item) => item?.type).filter(Boolean);
+      })
+      .toContain("Library__button");
+  });
 });
