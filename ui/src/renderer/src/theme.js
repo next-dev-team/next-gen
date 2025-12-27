@@ -74,6 +74,81 @@ export const darkTheme = {
   },
 };
 
+export const lightTheme = {
+  token: {
+    colorPrimary: "#4f46e5", // Indigo 600
+    colorSuccess: "#16a34a",
+    colorWarning: "#d97706",
+    colorError: "#dc2626",
+    colorInfo: "#2563eb",
+    colorBgBase: "#ffffff", // White
+    colorBgContainer: "#ffffff",
+    colorBgElevated: "#f8fafc", // Slate 50
+    colorBgLayout: "#f1f5f9", // Slate 100
+    colorBorder: "#e2e8f0", // Slate 200
+    colorBorderSecondary: "#cbd5e1", // Slate 300
+    colorText: "#0f172a", // Slate 900
+    colorTextSecondary: "#475569", // Slate 600
+    colorTextTertiary: "#64748b", // Slate 500
+    colorTextQuaternary: "#94a3b8",
+    borderRadius: 8,
+    fontFamily:
+      "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    fontSize: 14,
+    controlHeight: 40,
+    boxShadow:
+      "0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1)",
+    boxShadowSecondary:
+      "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)",
+  },
+  components: {
+    Card: {
+      colorBgContainer: "#ffffff",
+      borderRadiusLG: 12,
+      boxShadowTertiary: "0 1px 3px 0 rgba(0, 0, 0, 0.1)",
+    },
+    Button: {
+      primaryShadow: "0 2px 0 rgba(79, 70, 229, 0.1)",
+      borderRadius: 8,
+    },
+    Input: {
+      colorBgContainer: "#ffffff",
+      activeBorderColor: "#4f46e5",
+      hoverBorderColor: "#6366f1",
+    },
+    Select: {
+      colorBgContainer: "#ffffff",
+      colorBgElevated: "#ffffff",
+      optionSelectedBg: "#e0e7ff", // Indigo 100
+    },
+    Steps: {
+      colorPrimary: "#4f46e5",
+      colorTextDescription: "#64748b",
+    },
+    Message: {
+      contentBg: "#ffffff",
+    },
+    Layout: {
+      headerBg: "#ffffff",
+      siderBg: "#ffffff",
+      bodyBg: "#f1f5f9",
+    },
+    Menu: {
+      itemBg: "#ffffff",
+      itemSelectedBg: "#e0e7ff",
+    },
+    Table: {
+      colorBgContainer: "#ffffff",
+      headerBg: "#f8fafc",
+      rowHoverBg: "#f1f5f9",
+    },
+    Modal: {
+      contentBg: "#ffffff",
+      headerBg: "#ffffff",
+    },
+  },
+};
+
 // Template preview images configuration
 export const templatePreviews = {
   "nextjs-15": {

@@ -66,7 +66,10 @@ export const TemplateSelector = ({
   return (
     <div className="template-selector">
       <div style={{ marginBottom: 24, textAlign: "center" }}>
-        <Title level={3} style={{ color: "#f1f5f9", marginBottom: 8 }}>
+        <Title
+          level={3}
+          style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
+        >
           <RocketOutlined style={{ marginRight: 12, color: "#6366f1" }} />
           Choose Your Template
         </Title>
@@ -88,9 +91,11 @@ export const TemplateSelector = ({
                 background:
                   selectedGenerator?.name === gen.name
                     ? "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)"
-                    : "#1e293b",
+                    : "var(--color-bg-container)",
                 borderColor:
-                  selectedGenerator?.name === gen.name ? "#818cf8" : "#334155",
+                  selectedGenerator?.name === gen.name
+                    ? "#818cf8"
+                    : "var(--color-border)",
                 cursor: "pointer",
                 transition: "all 0.3s ease",
               }}
@@ -127,7 +132,7 @@ export const TemplateSelector = ({
                       color:
                         selectedGenerator?.name === gen.name
                           ? "#fff"
-                          : "#f1f5f9",
+                          : "var(--color-text-primary)",
                       display: "block",
                       marginBottom: 4,
                     }}
@@ -139,7 +144,7 @@ export const TemplateSelector = ({
                       color:
                         selectedGenerator?.name === gen.name
                           ? "rgba(255,255,255,0.8)"
-                          : "#94a3b8",
+                          : "var(--color-text-secondary)",
                       fontSize: 13,
                     }}
                   >
@@ -205,7 +210,10 @@ export const ConfigureOptions = ({
   return (
     <div className="configure-options">
       <div style={{ marginBottom: 24, textAlign: "center" }}>
-        <Title level={3} style={{ color: "#f1f5f9", marginBottom: 8 }}>
+        <Title
+          level={3}
+          style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
+        >
           <SettingOutlined style={{ marginRight: 12, color: "#6366f1" }} />
           Configure {selectedGenerator.name}
         </Title>
@@ -215,7 +223,10 @@ export const ConfigureOptions = ({
       <Row gutter={[24, 0]}>
         <Col xs={24} lg={24}>
           <Card
-            style={{ background: "#1e293b", borderColor: "#334155" }}
+            style={{
+              background: "var(--color-bg-container)",
+              borderColor: "var(--color-border)",
+            }}
             styles={{ body: { padding: 24 } }}
           >
             <Row gutter={[16, 24]}>
@@ -235,7 +246,7 @@ export const ConfigureOptions = ({
                           alignItems: "center",
                           gap: 8,
                           marginBottom: 8,
-                          color: "#f1f5f9",
+                          color: "var(--color-text-primary)",
                           fontWeight: 500,
                         }}
                       >
@@ -275,10 +286,10 @@ export const ConfigureOptions = ({
                             style={{
                               flex: 1,
                               padding: "10px 14px",
-                              background: "#0f172a",
-                              border: "1px solid #475569",
+                              background: "var(--color-bg-base)",
+                              border: "1px solid var(--color-border)",
                               borderRadius: 8,
-                              color: "#f1f5f9",
+                              color: "var(--color-text-primary)",
                               fontSize: 14,
                               outline: "none",
                               transition: "border-color 0.2s",
@@ -287,7 +298,8 @@ export const ConfigureOptions = ({
                               (e.target.style.borderColor = "#6366f1")
                             }
                             onBlur={(e) =>
-                              (e.target.style.borderColor = "#475569")
+                              (e.target.style.borderColor =
+                                "var(--color-border)")
                             }
                           />
                           {isPath && (
@@ -301,9 +313,9 @@ export const ConfigureOptions = ({
                                   )
                                 }
                                 style={{
-                                  background: "#334155",
-                                  borderColor: "#475569",
-                                  color: "#f1f5f9",
+                                  background: "var(--color-bg-elevated)",
+                                  borderColor: "var(--color-border)",
+                                  color: "var(--color-text-primary)",
                                   height: 42,
                                   width: 42,
                                 }}
@@ -322,10 +334,10 @@ export const ConfigureOptions = ({
                           style={{
                             width: "100%",
                             padding: "10px 14px",
-                            background: "#0f172a",
-                            border: "1px solid #475569",
+                            background: "var(--color-bg-base)",
+                            border: "1px solid var(--color-border)",
                             borderRadius: 8,
-                            color: "#f1f5f9",
+                            color: "var(--color-text-primary)",
                             fontSize: 14,
                             outline: "none",
                             cursor: "pointer",
@@ -366,11 +378,15 @@ export const ConfigureOptions = ({
                                   cursor: "pointer",
                                   padding: "6px 12px",
                                   borderRadius: 6,
-                                  background: isChecked ? "#4f46e5" : "#334155",
+                                  background: isChecked
+                                    ? "#4f46e5"
+                                    : "var(--color-bg-elevated)",
                                   borderColor: isChecked
                                     ? "#6366f1"
-                                    : "#475569",
-                                  color: isChecked ? "#fff" : "#94a3b8",
+                                    : "var(--color-border)",
+                                  color: isChecked
+                                    ? "#fff"
+                                    : "var(--color-text-secondary)",
                                   transition: "all 0.2s",
                                 }}
                               >
@@ -411,7 +427,10 @@ export const PreviewStep = ({
   return (
     <div className="preview-step">
       <div style={{ marginBottom: 24, textAlign: "center" }}>
-        <Title level={3} style={{ color: "#f1f5f9", marginBottom: 8 }}>
+        <Title
+          level={3}
+          style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
+        >
           <EyeOutlined style={{ marginRight: 12, color: "#6366f1" }} />
           Preview Your Project
         </Title>
@@ -425,20 +444,20 @@ export const PreviewStep = ({
         <Col xs={24} lg={12}>
           <Card
             title={
-              <span style={{ color: "#f1f5f9" }}>
+              <span style={{ color: "var(--color-text-primary)" }}>
                 <CodeOutlined style={{ marginRight: 8 }} />
                 Template Preview
               </span>
             }
             style={{
-              background: "#1e293b",
-              borderColor: "#334155",
+              background: "var(--color-bg-container)",
+              borderColor: "var(--color-border)",
               height: "100%",
             }}
             styles={{
               header: {
-                borderBottom: "1px solid #334155",
-                background: "#1e293b",
+                borderBottom: "1px solid var(--color-border)",
+                background: "var(--color-bg-container)",
               },
               body: { padding: 0 },
             }}
@@ -450,7 +469,7 @@ export const PreviewStep = ({
                   style={{
                     height: 200,
                     background:
-                      "linear-gradient(135deg, #1e293b 0%, #334155 50%, #1e293b 100%)",
+                      "linear-gradient(135deg, var(--color-bg-container) 0%, var(--color-bg-elevated) 50%, var(--color-bg-container) 100%)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -481,7 +500,12 @@ export const PreviewStep = ({
                       {preview.category === "Mobile" && "📱"}
                       {preview.category === "Monorepo" && "📦"}
                     </div>
-                    <Text style={{ color: "#94a3b8", fontSize: 12 }}>
+                    <Text
+                      style={{
+                        color: "var(--color-text-secondary)",
+                        fontSize: 12,
+                      }}
+                    >
                       {preview.category} Template
                     </Text>
                   </div>
@@ -489,11 +513,19 @@ export const PreviewStep = ({
                 <div style={{ padding: 20 }}>
                   <Title
                     level={4}
-                    style={{ color: "#f1f5f9", marginBottom: 8 }}
+                    style={{
+                      color: "var(--color-text-primary)",
+                      marginBottom: 8,
+                    }}
                   >
                     {preview.name}
                   </Title>
-                  <Paragraph style={{ color: "#94a3b8", marginBottom: 16 }}>
+                  <Paragraph
+                    style={{
+                      color: "var(--color-text-secondary)",
+                      marginBottom: 16,
+                    }}
+                  >
                     {preview.description}
                   </Paragraph>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -534,20 +566,20 @@ export const PreviewStep = ({
         <Col xs={24} lg={12}>
           <Card
             title={
-              <span style={{ color: "#f1f5f9" }}>
+              <span style={{ color: "var(--color-text-primary)" }}>
                 <SettingOutlined style={{ marginRight: 8 }} />
                 Configuration Summary
               </span>
             }
             style={{
-              background: "#1e293b",
-              borderColor: "#334155",
+              background: "var(--color-bg-container)",
+              borderColor: "var(--color-border)",
               height: "100%",
             }}
             styles={{
               header: {
-                borderBottom: "1px solid #334155",
-                background: "#1e293b",
+                borderBottom: "1px solid var(--color-border)",
+                background: "var(--color-bg-container)",
               },
               body: { padding: 20 },
             }}
@@ -558,9 +590,9 @@ export const PreviewStep = ({
                   key={key}
                   style={{
                     padding: 12,
-                    background: "#0f172a",
+                    background: "var(--color-bg-elevated)",
                     borderRadius: 8,
-                    border: "1px solid #334155",
+                    border: "1px solid var(--color-border)",
                   }}
                 >
                   <div
@@ -568,7 +600,7 @@ export const PreviewStep = ({
                   >
                     <Text
                       style={{
-                        color: "#64748b",
+                        color: "var(--color-text-secondary)",
                         fontSize: 12,
                         textTransform: "uppercase",
                       }}
@@ -598,14 +630,22 @@ export const PreviewStep = ({
                           ))
                         ) : (
                           <Text
-                            style={{ color: "#64748b", fontStyle: "italic" }}
+                            style={{
+                              color: "var(--color-text-secondary)",
+                              fontStyle: "italic",
+                            }}
                           >
                             None selected
                           </Text>
                         )}
                       </div>
                     ) : (
-                      <Text style={{ color: "#f1f5f9", fontWeight: 500 }}>
+                      <Text
+                        style={{
+                          color: "var(--color-text-primary)",
+                          fontWeight: 500,
+                        }}
+                      >
                         {templatePreviews[value]?.name || value || "-"}
                       </Text>
                     )}
@@ -615,7 +655,11 @@ export const PreviewStep = ({
 
               {Object.keys(answers).length === 0 && (
                 <div
-                  style={{ textAlign: "center", color: "#64748b", padding: 40 }}
+                  style={{
+                    textAlign: "center",
+                    color: "var(--color-text-secondary)",
+                    padding: 40,
+                  }}
                 >
                   No configuration options set
                 </div>
@@ -649,7 +693,10 @@ export const GenerateStep = ({
   return (
     <div className="generate-step">
       <div style={{ marginBottom: 24, textAlign: "center" }}>
-        <Title level={3} style={{ color: "#f1f5f9", marginBottom: 8 }}>
+        <Title
+          level={3}
+          style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
+        >
           <PlayCircleOutlined style={{ marginRight: 12, color: "#6366f1" }} />
           Generate Project
         </Title>
@@ -664,8 +711,8 @@ export const GenerateStep = ({
 
       <Card
         style={{
-          background: "#0f172a",
-          borderColor: "#334155",
+          background: "var(--color-bg-container)",
+          borderColor: "var(--color-border)",
           marginBottom: 24,
         }}
         styles={{ body: { padding: 0 } }}
@@ -674,8 +721,8 @@ export const GenerateStep = ({
         <div
           style={{
             padding: "12px 16px",
-            background: "#1e293b",
-            borderBottom: "1px solid #334155",
+            background: "var(--color-bg-elevated)",
+            borderBottom: "1px solid var(--color-border)",
             display: "flex",
             alignItems: "center",
             gap: 8,
@@ -707,7 +754,13 @@ export const GenerateStep = ({
               }}
             />
           </div>
-          <Text style={{ color: "#94a3b8", marginLeft: 8, fontSize: 13 }}>
+          <Text
+            style={{
+              color: "var(--color-text-secondary)",
+              marginLeft: 8,
+              fontSize: 13,
+            }}
+          >
             Terminal Output
           </Text>
           {loading && (
@@ -752,7 +805,11 @@ export const GenerateStep = ({
         >
           {logs.length === 0 ? (
             <div
-              style={{ color: "#64748b", textAlign: "center", paddingTop: 100 }}
+              style={{
+                color: "var(--color-text-secondary)",
+                textAlign: "center",
+                paddingTop: 100,
+              }}
             >
               <CodeOutlined
                 style={{ fontSize: 32, marginBottom: 16, opacity: 0.5 }}
@@ -771,7 +828,7 @@ export const GenerateStep = ({
                       ? "#22c55e"
                       : log.type === "info"
                       ? "#3b82f6"
-                      : "#94a3b8",
+                      : "var(--color-text-secondary)",
                   marginBottom: 4,
                 }}
               >
@@ -832,8 +889,8 @@ export const GenerateStep = ({
                   Output:{" "}
                   <code
                     style={{
-                      color: "#f1f5f9",
-                      background: "#334155",
+                      color: "var(--color-text-primary)",
+                      background: "var(--color-bg-elevated)",
                       padding: "2px 8px",
                       borderRadius: 4,
                     }}

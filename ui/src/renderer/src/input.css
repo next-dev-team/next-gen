@@ -3,6 +3,21 @@
 
 /* Base styles */
 :root {
+  /* Light Theme Variables */
+  --color-bg-base: #ffffff;
+  --color-bg-container: #ffffff;
+  --color-bg-elevated: #f8fafc;
+  --color-primary: #4f46e5;
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-border: #e2e8f0;
+}
+
+/* Dark Theme Variables */
+.dark {
   --color-bg-base: #0f172a;
   --color-bg-container: #1e293b;
   --color-bg-elevated: #334155;
@@ -36,11 +51,13 @@ body {
   color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Ensure Ant Design dark mode */
 .ant-app {
   background: var(--color-bg-base);
+  transition: background-color 0.3s ease;
 }
 
 /* Custom scrollbar */

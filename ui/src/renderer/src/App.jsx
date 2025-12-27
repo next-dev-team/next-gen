@@ -8,10 +8,12 @@ import {
   GithubOutlined,
   HomeOutlined,
   LayoutOutlined,
+  MoonOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
   RocketOutlined,
   SettingOutlined,
+  SunOutlined,
   TableOutlined,
 } from "@ant-design/icons";
 import {
@@ -35,7 +37,7 @@ import {
   TemplateSelector,
 } from "./components/WizardSteps";
 import { generators } from "./generators-config";
-import { darkTheme, templatePreviews, uiStackInfo } from "./theme";
+import { darkTheme, lightTheme, templatePreviews, uiStackInfo } from "./theme";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
@@ -64,6 +66,23 @@ const steps = [
 ];
 
 function App() {
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) return saved === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    if (isDarkMode) {
+      root.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      root.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [isDarkMode]);
+
   const [activeTab, setActiveTab] = useState("generator"); // "generator" or "projects"
   const [currentStep, setCurrentStep] = useState(0);
   const [startOnBoot, setStartOnBoot] = useState(false);
@@ -288,18 +307,19 @@ function App() {
   };
 
   return (
-    <ConfigProvider
-      theme={{
-        algorithm: undefined, // Using custom dark theme
-        ...darkTheme,
-      }}
-    >
-      <Layout style={{ height: "100vh", background: "#0f172a" }}>
+    <ConfigProvider theme={isDarkMode ? darkTheme : lightTheme}>
+      <Layout
+        style={{
+          height: "100vh",
+          background: "var(--color-bg-base)",
+          transition: "background 0.3s ease",
+        }}
+      >
         {/* Header */}
         <Header
           style={{
-            background: "linear-gradient(180deg, #1e293b 0%, #0f172a 100%)",
-            borderBottom: "1px solid #334155",
+            background: "var(--color-bg-container)",
+            borderBottom: "1px solid var(--color-border)",
             padding: "0 24px",
             paddingRight: 150, // Space for window control buttons
             display: "flex",
@@ -307,6 +327,7 @@ function App() {
             justifyContent: "space-between",
             height: 64,
             WebkitAppRegion: "drag", // Make header draggable
+            transition: "background 0.3s ease, border-color 0.3s ease",
           }}
         >
           <div
@@ -330,15 +351,18 @@ function App() {
             >
               <RocketOutlined style={{ color: "#fff", fontSize: 18 }} />
             </div>
-            <Title level={4} style={{ color: "#f1f5f9", margin: 0 }}>
+            <Title
+              level={4}
+              style={{ color: "var(--color-text-primary)", margin: 0 }}
+            >
               Next Gen
             </Title>
             <Text
               style={{
-                color: "#64748b",
+                color: "var(--color-text-secondary)",
                 fontSize: 12,
                 padding: "2px 8px",
-                background: "#334155",
+                background: "var(--color-bg-elevated)",
                 borderRadius: 4,
               }}
             >
@@ -350,7 +374,7 @@ function App() {
               style={{
                 width: 1,
                 height: 24,
-                background: "#475569",
+                background: "var(--color-border)",
                 margin: "0 8px",
               }}
             />
@@ -365,11 +389,11 @@ function App() {
                   padding: "6px 12px",
                   background: startOnBoot
                     ? "rgba(99, 102, 241, 0.2)"
-                    : "#334155",
+                    : "var(--color-bg-elevated)",
                   borderRadius: 8,
                   border: startOnBoot
                     ? "1px solid #6366f1"
-                    : "1px solid #475569",
+                    : "1px solid var(--color-border)",
                   transition: "all 0.2s",
                 }}
               >
@@ -389,13 +413,17 @@ function App() {
                 >
                   <SettingOutlined
                     style={{
-                      color: startOnBoot ? "#6366f1" : "#94a3b8",
+                      color: startOnBoot
+                        ? "#6366f1"
+                        : "var(--color-text-secondary)",
                       fontSize: 14,
                     }}
                   />
                   <Text
                     style={{
-                      color: startOnBoot ? "#f1f5f9" : "#94a3b8",
+                      color: startOnBoot
+                        ? "var(--color-text-primary)"
+                        : "var(--color-text-secondary)",
                       fontSize: 13,
                     }}
                   >
@@ -410,12 +438,36 @@ function App() {
               </div>
             </Tooltip>
 
+            {/* Divider */}
+            <div
+              style={{
+                width: 1,
+                height: 24,
+                background: "var(--color-border)",
+                margin: "0 8px",
+              }}
+            />
+
+            {/* Theme Toggle */}
+            <Tooltip
+              title={
+                isDarkMode ? "Switch to light mode" : "Switch to dark mode"
+              }
+            >
+              <Button
+                type="text"
+                icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                style={{ color: "var(--color-text-secondary)", fontSize: 18 }}
+              />
+            </Tooltip>
+
             {/* GitHub button - also on left */}
             <Tooltip title="View on GitHub">
               <Button
                 type="text"
                 icon={<GithubOutlined />}
-                style={{ color: "#94a3b8" }}
+                style={{ color: "var(--color-text-secondary)" }}
                 onClick={() => {
                   if (window.electronAPI?.openExternal) {
                     window.electronAPI.openExternal(
@@ -509,7 +561,7 @@ function App() {
                 },
               ]}
               style={{
-                background: "#1e293b",
+                background: "var(--color-bg-elevated)",
                 padding: 4,
                 borderRadius: 12,
               }}
@@ -522,11 +574,11 @@ function App() {
               {/* Steps Progress */}
               <div
                 style={{
-                  background: "#1e293b",
+                  background: "var(--color-bg-container)",
                   borderRadius: 16,
                   padding: "24px 32px",
                   marginBottom: 24,
-                  border: "1px solid #334155",
+                  border: "1px solid var(--color-border)",
                 }}
               >
                 <Steps
@@ -535,7 +587,10 @@ function App() {
                     title: (
                       <span
                         style={{
-                          color: index <= currentStep ? "#f1f5f9" : "#64748b",
+                          color:
+                            index <= currentStep
+                              ? "var(--color-text-primary)"
+                              : "var(--color-text-disabled)",
                         }}
                       >
                         {step.title}
@@ -544,7 +599,10 @@ function App() {
                     description: (
                       <span
                         style={{
-                          color: index <= currentStep ? "#94a3b8" : "#475569",
+                          color:
+                            index <= currentStep
+                              ? "var(--color-text-secondary)"
+                              : "var(--color-text-disabled)",
                         }}
                       >
                         {step.description}
@@ -558,7 +616,7 @@ function App() {
                               ? "#22c55e"
                               : index === currentStep
                               ? "#6366f1"
-                              : "#64748b",
+                              : "var(--color-text-disabled)",
                         }}
                       >
                         {step.icon}
@@ -572,11 +630,11 @@ function App() {
               {/* Step Content */}
               <div
                 style={{
-                  background: "#1e293b",
+                  background: "var(--color-bg-container)",
                   borderRadius: 16,
                   padding: 32,
                   minHeight: 400,
-                  border: "1px solid #334155",
+                  border: "1px solid var(--color-border)",
                   marginBottom: 24,
                 }}
               >
@@ -595,9 +653,9 @@ function App() {
                   icon={<HomeOutlined />}
                   onClick={resetWizard}
                   style={{
-                    background: "#334155",
-                    borderColor: "#475569",
-                    color: "#94a3b8",
+                    background: "var(--color-bg-elevated)",
+                    borderColor: "var(--color-border)",
+                    color: "var(--color-text-secondary)",
                   }}
                 >
                   Start Over
@@ -609,9 +667,15 @@ function App() {
                     onClick={prevStep}
                     disabled={currentStep === 0}
                     style={{
-                      background: currentStep === 0 ? "#1e293b" : "#334155",
-                      borderColor: "#475569",
-                      color: currentStep === 0 ? "#475569" : "#f1f5f9",
+                      background:
+                        currentStep === 0
+                          ? "var(--color-bg-container)"
+                          : "var(--color-bg-elevated)",
+                      borderColor: "var(--color-border)",
+                      color:
+                        currentStep === 0
+                          ? "var(--color-text-disabled)"
+                          : "var(--color-text-primary)",
                     }}
                   >
                     Previous
@@ -663,20 +727,24 @@ function App() {
           {activeTab === "ui" && (
             <div
               style={{
-                background: "#1e293b",
+                background: "var(--color-bg-container)",
                 borderRadius: 16,
                 padding: 32,
                 minHeight: 400,
-                border: "1px solid #334155",
+                border: "1px solid var(--color-border)",
               }}
             >
               <Title
                 level={3}
-                style={{ color: "#f1f5f9", marginTop: 0, marginBottom: 8 }}
+                style={{
+                  color: "var(--color-text-primary)",
+                  marginTop: 0,
+                  marginBottom: 8,
+                }}
               >
                 UI Library
               </Title>
-              <Text style={{ color: "#94a3b8" }}>
+              <Text style={{ color: "var(--color-text-secondary)" }}>
                 Browse and preview UI components. Coming soon.
               </Text>
             </div>
@@ -685,20 +753,26 @@ function App() {
           {activeTab === "scrum-board" && (
             <div
               style={{
-                background: "#1e293b",
+                background: "var(--color-bg-container)",
                 borderRadius: 16,
                 padding: 32,
                 minHeight: 400,
-                border: "1px solid #334155",
+                border: "1px solid var(--color-border)",
               }}
             >
               <Title
                 level={3}
-                style={{ color: "#f1f5f9", marginTop: 0, marginBottom: 8 }}
+                style={{
+                  color: "var(--color-text-primary)",
+                  marginTop: 0,
+                  marginBottom: 8,
+                }}
               >
                 Scrum Board
               </Title>
-              <Text style={{ color: "#94a3b8" }}>Coming soon.</Text>
+              <Text style={{ color: "var(--color-text-secondary)" }}>
+                Coming soon.
+              </Text>
             </div>
           )}
         </Content>
@@ -707,12 +781,12 @@ function App() {
         <Footer
           style={{
             background: "transparent",
-            borderTop: "1px solid #334155",
+            borderTop: "1px solid var(--color-border)",
             textAlign: "center",
             padding: "16px 24px",
           }}
         >
-          <Text style={{ color: "#64748b" }}>
+          <Text style={{ color: "var(--color-text-secondary)" }}>
             Next Gen Generator © {new Date().getFullYear()}
           </Text>
         </Footer>
@@ -726,14 +800,14 @@ function App() {
           height: 8px;
         }
         ::-webkit-scrollbar-track {
-          background: #1e293b;
+          background: var(--color-bg-base);
         }
         ::-webkit-scrollbar-thumb {
-          background: #475569;
+          background: var(--color-border);
           border-radius: 4px;
         }
         ::-webkit-scrollbar-thumb:hover {
-          background: #64748b;
+          background: var(--color-text-secondary);
         }
 
         /* Card hover effects */
@@ -782,8 +856,8 @@ function App() {
         }
 
         .ant-steps-item-wait .ant-steps-item-icon {
-          background: #334155 !important;
-          border-color: #475569 !important;
+          background: var(--color-bg-elevated) !important;
+          border-color: var(--color-border) !important;
         }
 
         /* Input focus states */
@@ -793,7 +867,8 @@ function App() {
 
         /* Message customization */
         .ant-message-notice-content {
-          background: #334155 !important;
+          background: var(--color-bg-elevated) !important;
+          color: var(--color-text-primary) !important;
         }
       `}</style>
     </ConfigProvider>
