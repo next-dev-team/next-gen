@@ -54,6 +54,12 @@ const normalizeKey = (key) =>
     .replace(/\s+/g, "-")
     .replace(/[^a-zA-Z0-9-_]/g, "");
 
+const createAuditEntryId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID)
+    return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
 export const usePuckStore = create(
   persist(
     (set, get) => ({
@@ -61,6 +67,13 @@ export const usePuckStore = create(
         content: [],
         root: { props: { title: "My Page" } },
       },
+      currentUser: {
+        id: "local",
+        name: "Local User",
+        role: "admin",
+      },
+      auditLog: [],
+      templates: [],
       designSystem: {
         mode: "light",
         fontFamily: "Inter, sans-serif",
@@ -69,9 +82,72 @@ export const usePuckStore = create(
       },
       blockRegistry: {},
 
-      setPuckData: (data) => set({ puckData: data }),
+      setCurrentUser: (patch) =>
+        set((state) => ({
+          currentUser: {
+            ...state.currentUser,
+            ...(patch || {}),
+          },
+        })),
 
-      addContentBlock: (type, props = {}) =>
+      logAuditEvent: (action, metadata) =>
+        set((state) => {
+          const entry = {
+            id: createAuditEntryId(),
+            timestamp: Date.now(),
+            user: state.currentUser?.name || "Unknown",
+            role: state.currentUser?.role || "unknown",
+            action: String(action || ""),
+            metadata:
+              metadata && typeof metadata === "object" ? metadata : undefined,
+          };
+
+          const next = [entry, ...(state.auditLog || [])];
+          return { auditLog: next.slice(0, 500) };
+        }),
+
+      clearAuditLog: () => set({ auditLog: [] }),
+
+      saveTemplate: (name, data) =>
+        set((state) => {
+          const trimmed = String(name || "").trim();
+          if (!trimmed) return {};
+
+          const id = createAuditEntryId();
+          const now = Date.now();
+          const entry = {
+            id,
+            name: trimmed,
+            data: data || state.puckData,
+            version: "1.0.0",
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          const next = [entry, ...(state.templates || [])];
+          return { templates: next.slice(0, 200) };
+        }),
+
+      deleteTemplate: (id) =>
+        set((state) => ({
+          templates: (state.templates || []).filter((t) => t.id !== id),
+        })),
+
+      loadTemplate: (id) => {
+        const tpl = (get().templates || []).find((t) => t.id === id);
+        if (!tpl?.data) return;
+        get().setPuckData(tpl.data);
+        get().logAuditEvent("template.load", { id, name: tpl.name });
+      },
+
+      setPuckData: (data) => {
+        set({ puckData: data });
+        get().logAuditEvent("page.update", {
+          contentCount: Array.isArray(data?.content) ? data.content.length : 0,
+        });
+      },
+
+      addContentBlock: (type, props = {}) => {
         set((state) => {
           const idBase = `${type}-${Date.now()}`;
           const id =
@@ -93,7 +169,11 @@ export const usePuckStore = create(
               content: [...((state.puckData?.content || []) ?? []), nextItem],
             },
           };
-        }),
+        });
+        get().logAuditEvent("content.addBlock", {
+          type: String(type || ""),
+        });
+      },
 
       setDesignMode: (mode) =>
         set((state) => ({
@@ -133,20 +213,32 @@ export const usePuckStore = create(
           },
         })),
 
-      registerBlock: (name, preset) =>
+      registerBlock: (name, preset) => {
+        const normalized = normalizeKey(name);
         set((state) => ({
           blockRegistry: {
             ...state.blockRegistry,
-            [normalizeKey(name)]: { name, preset },
+            [normalized]: {
+              name,
+              preset,
+              version: "1.0.0",
+              createdAt:
+                state.blockRegistry?.[normalized]?.createdAt || Date.now(),
+              updatedAt: Date.now(),
+            },
           },
-        })),
+        }));
+        get().logAuditEvent("block.register", { key: normalized, preset });
+      },
 
-      unregisterBlock: (key) =>
+      unregisterBlock: (key) => {
         set((state) => {
           const next = { ...state.blockRegistry };
           delete next[key];
           return { blockRegistry: next };
-        }),
+        });
+        get().logAuditEvent("block.unregister", { key });
+      },
 
       getActiveTokens: () => {
         const { mode, tokens } = get().designSystem;
@@ -155,21 +247,37 @@ export const usePuckStore = create(
     }),
     {
       name: "puck-store",
-      version: 2,
+      version: 3,
       partialize: (state) => ({
         puckData: state.puckData,
+        currentUser: state.currentUser,
+        auditLog: state.auditLog,
+        templates: state.templates,
         designSystem: state.designSystem,
         blockRegistry: state.blockRegistry,
       }),
       migrate: (persisted, version) => {
         if (!persisted) return persisted;
-        if (version >= 2) return persisted;
+        if (version >= 3) return persisted;
 
         const legacy = persisted;
         const legacyDesign = legacy.designSystem || {};
 
-        return {
+        const safe = {
           ...legacy,
+          currentUser: legacy.currentUser || {
+            id: "local",
+            name: "Local User",
+            role: "admin",
+          },
+          auditLog: Array.isArray(legacy.auditLog) ? legacy.auditLog : [],
+          templates: Array.isArray(legacy.templates) ? legacy.templates : [],
+        };
+
+        if (version >= 2) return safe;
+
+        return {
+          ...safe,
           designSystem: {
             mode: "light",
             fontFamily:

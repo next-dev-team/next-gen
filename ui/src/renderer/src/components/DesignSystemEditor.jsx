@@ -46,13 +46,15 @@ export function DesignSystemEditor() {
     updateDesignTokens(mode, { [key]: value });
   };
 
+  const activeTokens = designSystem.tokens?.[designSystem.mode] || {};
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Design System</h2>
           <p className="text-muted-foreground">
-            Shadcn-style tokens (raw HSL) and typography for production-ready theming.
+            Enterprise-grade design system manager with real-time accessibility checks.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -71,8 +73,8 @@ export function DesignSystemEditor() {
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="col-span-1">
           <CardHeader>
             <CardTitle>Typography</CardTitle>
             <CardDescription>Applies across blocks and components.</CardDescription>
@@ -99,21 +101,49 @@ export function DesignSystemEditor() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="col-span-1">
           <CardHeader>
             <CardTitle>Preview</CardTitle>
             <CardDescription>Quick sanity check for tokens.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="rounded-lg border p-4 bg-card text-card-foreground">
-              <div className="text-sm text-muted-foreground">Card</div>
+            <div className="rounded-lg border p-4 bg-card text-card-foreground shadow-sm">
+              <div className="text-sm text-muted-foreground">Card Surface</div>
               <div className="text-lg font-semibold">Enterprise Ready UI</div>
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
                 <Button>Primary</Button>
                 <Button variant="secondary">Secondary</Button>
                 <Button variant="outline">Outline</Button>
+                <Button variant="destructive">Destructive</Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="col-span-1">
+           <CardHeader>
+            <CardTitle>Accessibility Audit</CardTitle>
+            <CardDescription>WCAG 2.1 AA Contrast Checks</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[
+               ["Background", "foreground", "background"],
+               ["Primary", "primary-foreground", "primary"],
+               ["Secondary", "secondary-foreground", "secondary"],
+               ["Card", "card-foreground", "card"],
+            ].map(([label, fgKey, bgKey]) => {
+                const ratio = getContrastRatio(activeTokens[fgKey], activeTokens[bgKey]);
+                const status = getWCAGStatus(ratio);
+                return (
+                    <div key={label} className="flex items-center justify-between text-sm border-b pb-2 last:border-0 last:pb-0">
+                        <span>{label}</span>
+                        <div className="flex items-center gap-2">
+                            <span className="font-mono">{ratio ? ratio.toFixed(2) + ":1" : "N/A"}</span>
+                            <span className={`font-bold ${status.color}`}>{status.label}</span>
+                        </div>
+                    </div>
+                )
+            })}
           </CardContent>
         </Card>
       </div>

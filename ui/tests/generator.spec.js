@@ -98,6 +98,28 @@ test.describe("Generator UI", () => {
       window.getByRole("heading", { name: "UI Builder" })
     ).toBeVisible();
 
+    await expect(
+      window.getByRole("tab", { name: "Page Builder" })
+    ).toBeVisible();
+    await window.getByRole("tab", { name: "Page Builder" }).click();
+
+    await window.getByRole("button", { name: "Templates" }).click();
+    const templatesDialog = window.getByRole("dialog");
+    await expect(
+      templatesDialog.getByRole("heading", { name: "Templates" })
+    ).toBeVisible();
+    await templatesDialog
+      .getByRole("button", { name: "Close" })
+      .first()
+      .click();
+
+    await expect(
+      window.locator('button.bg-secondary:has-text("Undo")')
+    ).toBeVisible();
+    await expect(
+      window.locator('button.bg-secondary:has-text("Redo")')
+    ).toBeVisible();
+
     await window.getByRole("tab", { name: "Blocks" }).click();
     await window.getByPlaceholder("Block name").fill("My Card");
     await window.getByRole("button", { name: "Add Block" }).click();

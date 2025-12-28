@@ -8,6 +8,11 @@ import {
   Hammer,
   Book,
   Palette,
+  FileJson,
+  Shield,
+  History,
+  Download,
+  Upload,
 } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
@@ -20,7 +25,16 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
-import { Dialog, DialogContent, DialogTrigger } from "./ui/dialog";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "./ui/dialog";
 import { components } from "../data/components";
 import { PuckEditor, PuckPreview } from "./PuckEditor";
 import { DesignSystemEditor } from "./DesignSystemEditor";
@@ -39,11 +53,22 @@ export default function ComponentBuilder() {
   const [previewDevice, setPreviewDevice] = useState("desktop");
   const [newBlockName, setNewBlockName] = useState("");
   const [newBlockPreset, setNewBlockPreset] = useState("Card");
+  const [templateName, setTemplateName] = useState("");
+  const fileInputRef = useRef(null);
 
   const blockRegistry = usePuckStore((s) => s.blockRegistry);
   const registerBlock = usePuckStore((s) => s.registerBlock);
   const unregisterBlock = usePuckStore((s) => s.unregisterBlock);
   const addContentBlock = usePuckStore((s) => s.addContentBlock);
+  const auditLog = usePuckStore((s) => s.auditLog);
+  const clearAuditLog = usePuckStore((s) => s.clearAuditLog);
+  const puckData = usePuckStore((s) => s.puckData);
+  const setPuckData = usePuckStore((s) => s.setPuckData);
+  const templates = usePuckStore((s) => s.templates);
+  const saveTemplate = usePuckStore((s) => s.saveTemplate);
+  const loadTemplate = usePuckStore((s) => s.loadTemplate);
+  const deleteTemplate = usePuckStore((s) => s.deleteTemplate);
+  const logAuditEvent = usePuckStore((s) => s.logAuditEvent);
 
   const selectedComponent =
     components.find((c) => c.id === selectedId) || components[0];
@@ -161,6 +186,48 @@ export default function ComponentBuilder() {
     setBuilderMode("editor");
   };
 
+  const safeParseJson = (raw) => {
+    if (typeof raw !== "string") return null;
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      return null;
+    }
+  };
+
+  const exportPageJson = () => {
+    const data = puckData || { root: { props: {} }, content: [] };
+    const serialized = JSON.stringify(data, null, 2);
+    const blob = new Blob([serialized], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `page-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    logAuditEvent("page.export", { bytes: serialized.length });
+  };
+
+  const importPageJson = async (file) => {
+    if (!file) return;
+    const text = await file.text();
+    const parsed = safeParseJson(text);
+    if (!parsed || typeof parsed !== "object") return;
+    const next = {
+      root:
+        parsed.root && typeof parsed.root === "object"
+          ? parsed.root
+          : { props: {} },
+      content: Array.isArray(parsed.content) ? parsed.content : [],
+    };
+    setPuckData(next);
+    logAuditEvent("page.import", { bytes: text.length });
+  };
+
   return (
     <div className="flex flex-col h-full w-full overflow-hidden rounded-lg border bg-background shadow-sm">
       <Tabs
@@ -186,6 +253,10 @@ export default function ComponentBuilder() {
               <Palette className="h-4 w-4" />
               Design System
             </TabsTrigger>
+            <TabsTrigger value="audit" className="gap-2">
+              <History className="h-4 w-4" />
+              Audit
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -203,6 +274,150 @@ export default function ComponentBuilder() {
                 </TabsList>
 
                 <div className="flex items-center gap-2">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-8 gap-1"
+                      >
+                        <FileJson className="h-3.5 w-3.5" />
+                        Templates
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                      <DialogHeader>
+                        <DialogTitle>Templates</DialogTitle>
+                        <DialogDescription>
+                          Save, load, export, and import page templates.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-3">
+                          <div className="text-sm font-medium">
+                            Save Current Page
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={templateName}
+                              onChange={(e) =>
+                                setTemplateName(e.currentTarget.value)
+                              }
+                              placeholder="Template name"
+                            />
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                const trimmed = templateName.trim();
+                                if (!trimmed) return;
+                                saveTemplate(trimmed, puckData);
+                                logAuditEvent("template.save", {
+                                  name: trimmed,
+                                });
+                                setTemplateName("");
+                              }}
+                            >
+                              Save
+                            </Button>
+                          </div>
+
+                          <div className="text-sm font-medium">Page JSON</div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="gap-1"
+                              onClick={exportPageJson}
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                              Export
+                            </Button>
+                            <input
+                              ref={fileInputRef}
+                              type="file"
+                              accept="application/json"
+                              className="hidden"
+                              onChange={(e) =>
+                                importPageJson(e.currentTarget.files?.[0])
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              className="gap-1"
+                              onClick={() => fileInputRef.current?.click()}
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              Import
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="text-sm font-medium">
+                            Saved Templates
+                          </div>
+                          <div className="rounded-md border overflow-hidden">
+                            <ScrollArea className="h-[260px]">
+                              {!templates || templates.length === 0 ? (
+                                <div className="p-4 text-sm text-muted-foreground">
+                                  No templates saved.
+                                </div>
+                              ) : (
+                                <div className="divide-y">
+                                  {templates.map((t) => (
+                                    <div
+                                      key={t.id}
+                                      className="flex items-center justify-between gap-2 p-3"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="font-medium truncate">
+                                          {t.name}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                          {new Date(
+                                            t.updatedAt || t.createdAt
+                                          ).toLocaleString()}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          onClick={() => loadTemplate(t.id)}
+                                        >
+                                          Load
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="destructive"
+                                          onClick={() => deleteTemplate(t.id)}
+                                        >
+                                          Delete
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </ScrollArea>
+                          </div>
+                        </div>
+                      </div>
+
+                      <DialogFooter>
+                        <DialogClose asChild>
+                          <Button type="button" variant="secondary">
+                            Close
+                          </Button>
+                        </DialogClose>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+
                   <div className="flex items-center gap-1 rounded-md border bg-background p-1">
                     <Button
                       type="button"
@@ -566,6 +781,62 @@ export default function ComponentBuilder() {
           <ScrollArea className="h-full w-full">
             <DesignSystemEditor />
           </ScrollArea>
+        </TabsContent>
+
+        <TabsContent value="audit" className="flex-1 overflow-auto p-4">
+          <div className="max-w-4xl mx-auto space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold">Audit Log</h2>
+                <p className="text-muted-foreground">
+                  Track system changes and user actions.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={clearAuditLog}
+                disabled={!auditLog || auditLog.length === 0}
+              >
+                Clear
+              </Button>
+            </div>
+            <div className="rounded-md border">
+              <div className="grid grid-cols-4 gap-4 p-4 font-medium border-b bg-muted/50">
+                <div>Timestamp</div>
+                <div>User</div>
+                <div className="col-span-2">Action</div>
+              </div>
+              <ScrollArea className="h-[500px]">
+                {!auditLog || auditLog.length === 0 ? (
+                  <div className="p-8 text-sm text-muted-foreground text-center">
+                    No audit events yet.
+                  </div>
+                ) : (
+                  auditLog.map((log) => (
+                    <div
+                      key={log.id}
+                      className="grid grid-cols-4 gap-4 p-4 border-b last:border-0 text-sm"
+                    >
+                      <div className="text-muted-foreground">
+                        {new Date(log.timestamp).toLocaleString()}
+                      </div>
+                      <div className="font-medium">
+                        {log.user}
+                        {log.role ? (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {log.role}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="col-span-2">{log.action}</div>
+                    </div>
+                  ))
+                )}
+              </ScrollArea>
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
