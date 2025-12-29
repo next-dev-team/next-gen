@@ -422,12 +422,24 @@ export const useEditorStore = create(
     }),
     {
       name: "editor-store",
-      version: 1,
+      version: 2,
       partialize: (state) => ({
         canvas: {
           elements: state.canvas.elements,
         },
         ui: state.ui,
+      }),
+      // Deep merge to preserve non-persisted state like history, selectedIds, etc.
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        canvas: {
+          ...currentState.canvas,
+          elements: persistedState?.canvas?.elements || [],
+        },
+        ui: {
+          ...currentState.ui,
+          ...persistedState?.ui,
+        },
       }),
     }
   )
