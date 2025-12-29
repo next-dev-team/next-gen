@@ -457,10 +457,12 @@ export function CanvasContextMenu({ position, onAddElement, onClose }) {
 }
 
 /**
- * FreeformCanvas - True Figma-like canvas with absolute positioning
+ * FreeformCanvas - True Figma-like canvas with absolute positioning and drag-drop support
  */
 export function FreeformCanvas({ className = "" }) {
   const [contextMenu, setContextMenu] = useState(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [dropPosition, setDropPosition] = useState(null);
   const canvasRef = useRef(null);
   
   // Store state
@@ -497,7 +499,67 @@ export function FreeformCanvas({ className = "" }) {
     });
   };
 
-  // Add element at position
+  // ============ DRAG & DROP FROM SIDEBAR ============
+  
+  // Handle drag over
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragOver(true);
+    
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (rect) {
+      setDropPosition({
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      });
+    }
+  }, []);
+
+  // Handle drag leave
+  const handleDragLeave = useCallback((e) => {
+    // Only set to false if we're actually leaving the canvas
+    if (!canvasRef.current?.contains(e.relatedTarget)) {
+      setIsDragOver(false);
+      setDropPosition(null);
+    }
+  }, []);
+
+  // Handle drop from sidebar
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    setDropPosition(null);
+
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    // Get drop position on canvas
+    const dropX = e.clientX - rect.left;
+    const dropY = e.clientY - rect.top;
+
+    try {
+      const data = JSON.parse(e.dataTransfer.getData('application/json'));
+      
+      if (data && data.type) {
+        // Add element at drop position with absolute positioning
+        addElement({
+          type: data.type,
+          defaultProps: data.defaultProps || {},
+          props: data.defaultProps || {},
+          style: {
+            x: dropX,
+            y: dropY,
+            position: 'absolute',
+          },
+        });
+      }
+    } catch (err) {
+      console.error('Drop error:', err);
+    }
+  }, [addElement]);
+
+  // Add element at position (for context menu and toolbar)
   const handleAddElement = (type, defaultProps = {}, position = { x: 100, y: 100 }) => {
     addElement({
       type,
@@ -543,16 +605,33 @@ export function FreeformCanvas({ className = "" }) {
   return (
     <div 
       ref={canvasRef}
-      className={`relative w-full h-full min-h-[800px] bg-[#0a0a0a] ${className}`}
+      className={`relative w-full h-full min-h-[800px] bg-[#0a0a0a] ${className} ${isDragOver ? 'ring-2 ring-primary ring-inset' : ''}`}
       style={{
         backgroundImage: `radial-gradient(circle, #333 1px, transparent 1px)`,
         backgroundSize: '20px 20px',
       }}
       onClick={handleCanvasClick}
       onContextMenu={handleContextMenu}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {/* Canvas background */}
-      <div className="canvas-background absolute inset-0" />
+      <div className="canvas-background absolute inset-0 pointer-events-none" />
+      
+      {/* Drop indicator */}
+      {isDragOver && dropPosition && (
+        <div 
+          className="absolute w-4 h-4 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50"
+          style={{ left: dropPosition.x, top: dropPosition.y }}
+        >
+          <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-75" />
+          <div className="absolute inset-0 bg-primary rounded-full" />
+          <div className="absolute left-1/2 top-6 -translate-x-1/2 bg-primary text-primary-foreground text-xs px-2 py-1 rounded whitespace-nowrap">
+            Drop here ({Math.round(dropPosition.x)}, {Math.round(dropPosition.y)})
+          </div>
+        </div>
+      )}
       
       {/* Floating toolbar */}
       <FloatingToolbar 
@@ -587,11 +666,21 @@ export function FreeformCanvas({ className = "" }) {
       />
 
       {/* Help text */}
-      {elements.length === 0 && (
+      {elements.length === 0 && !isDragOver && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="text-center">
-            <p className="text-muted-foreground text-lg mb-2">Click "Add Element" or right-click to add shadcn components</p>
-            <p className="text-muted-foreground/60 text-sm">Drag elements to move • Drag corners to resize</p>
+            <p className="text-muted-foreground text-lg mb-2">Drag components from sidebar or click "Add Element"</p>
+            <p className="text-muted-foreground/60 text-sm">Drag elements to move • Drag corners to resize • Right-click for menu</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Drag over help text */}
+      {isDragOver && elements.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center bg-primary/10 border-2 border-dashed border-primary rounded-lg p-8">
+            <p className="text-primary text-lg font-medium mb-1">Drop to add element</p>
+            <p className="text-primary/70 text-sm">Element will be placed at cursor position</p>
           </div>
         </div>
       )}
