@@ -24,7 +24,9 @@ import {
   SelectValue,
 } from "../../ui/select";
 import { InlineEditable, EditableHeading, EditableParagraph } from "./InlineEditable";
+import { EditableText, EditableButtonGroup, EditableList, AddContentButton } from "./EditableBlock";
 import { useEditorStore } from "../../../stores/editorStore";
+import { Plus, Trash2 } from "lucide-react";
 import {
   Zap,
   Shield,
@@ -340,76 +342,104 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   },
 
   // ============ HERO BLOCKS ============
-  "hero-centered": ({ element, props, style }) => (
-    <section
-      className={`w-full px-6 py-24 ${props.showGradient ? "bg-gradient-to-b from-background to-muted/30" : ""} ${props.className || ""}`}
-      style={style}
-    >
-      <div className="mx-auto max-w-4xl text-center">
-        {props.subheading && (
-          <p className="text-sm font-semibold text-primary mb-4">
-            {isSelected ? (
-              <InlineEditable
-                value={props.subheading}
-                onChange={(v) => updateElement(element.id, { props: { subheading: v } })}
-              />
-            ) : (
-              props.subheading
-            )}
-          </p>
-        )}
-        <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-          {isSelected ? (
-            <InlineEditable
-              value={props.heading || "Hero Heading"}
-              onChange={(v) => updateElement(element.id, { props: { heading: v } })}
-            />
-          ) : (
-            props.heading || "Hero Heading"
-          )}
-        </h1>
-        <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
-          {isSelected ? (
-            <InlineEditable
-              value={props.description || ""}
-              onChange={(v) => updateElement(element.id, { props: { description: v } })}
-              multiline
-            />
-          ) : (
-            props.description || "Hero description goes here."
-          )}
-        </p>
-        <div className="mt-10 flex items-center justify-center gap-4 flex-wrap">
-          <Button size="lg" asChild>
-            <a href={props.primaryHref || "#"}>
+  "hero-centered": ({ element, props, style }) => {
+    // Convert legacy props to buttons array if needed
+    const getButtonsArray = () => {
+      if (props.buttons && Array.isArray(props.buttons)) {
+        return props.buttons;
+      }
+      // Convert legacy primaryButton/secondaryButton to array
+      const buttons = [];
+      if (props.primaryButton) {
+        buttons.push({
+          id: "primary",
+          label: props.primaryButton,
+          href: props.primaryHref || "#",
+          variant: "default",
+        });
+      }
+      if (props.secondaryButton) {
+        buttons.push({
+          id: "secondary",
+          label: props.secondaryButton,
+          href: props.secondaryHref || "#",
+          variant: "outline",
+        });
+      }
+      if (buttons.length === 0) {
+        buttons.push({
+          id: "btn-1",
+          label: "Get Started Free",
+          href: "#",
+          variant: "default",
+        });
+      }
+      return buttons;
+    };
+
+    const buttons = getButtonsArray();
+
+    return (
+      <section
+        className={`w-full px-6 py-24 ${props.showGradient ? "bg-gradient-to-b from-background to-muted/30" : ""} ${props.className || ""}`}
+        style={style}
+      >
+        <div className="mx-auto max-w-4xl text-center">
+          {/* Subheading */}
+          {(props.subheading || isSelected) && (
+            <p className="text-sm font-semibold text-primary mb-4">
               {isSelected ? (
-                <InlineEditable
-                  value={props.primaryButton || "Get Started"}
-                  onChange={(v) => updateElement(element.id, { props: { primaryButton: v } })}
+                <EditableText
+                  value={props.subheading || ""}
+                  onChange={(v) => updateElement(element.id, { props: { subheading: v } })}
+                  placeholder="Add subheading..."
                 />
               ) : (
-                props.primaryButton || "Get Started"
+                props.subheading
               )}
-            </a>
-          </Button>
-          {props.secondaryButton && (
-            <Button size="lg" variant="outline" asChild>
-              <a href={props.secondaryHref || "#"}>
-                {isSelected ? (
-                  <InlineEditable
-                    value={props.secondaryButton}
-                    onChange={(v) => updateElement(element.id, { props: { secondaryButton: v } })}
-                  />
-                ) : (
-                  props.secondaryButton
-                )}
-              </a>
-            </Button>
+            </p>
           )}
+
+          {/* Main Heading */}
+          <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
+            {isSelected ? (
+              <EditableText
+                value={props.heading || "Hero Heading"}
+                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+                placeholder="Enter heading..."
+              />
+            ) : (
+              props.heading || "Hero Heading"
+            )}
+          </h1>
+
+          {/* Description */}
+          <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
+            {isSelected ? (
+              <EditableText
+                value={props.description || ""}
+                onChange={(v) => updateElement(element.id, { props: { description: v } })}
+                placeholder="Add description..."
+                multiline
+              />
+            ) : (
+              props.description || "Hero description goes here."
+            )}
+          </p>
+
+          {/* Buttons - dynamically add/remove */}
+          <div className="mt-10">
+            <EditableButtonGroup
+              buttons={buttons}
+              onChange={(newButtons) => updateElement(element.id, { props: { buttons: newButtons } })}
+              isSelected={isSelected}
+              align="center"
+            />
+          </div>
         </div>
-      </div>
-    </section>
-  ),
+      </section>
+    );
+  },
 
   hero: ({ element, props, style }) => (
     <section className={`w-full px-6 py-24 ${props.className || ""}`} style={style}>

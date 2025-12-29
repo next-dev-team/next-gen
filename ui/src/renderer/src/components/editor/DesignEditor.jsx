@@ -1,20 +1,16 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   PanelLeft,
   PanelRight,
   ZoomIn,
   ZoomOut,
-  Maximize,
   Monitor,
   Tablet,
   Smartphone,
   Code,
-  Copy,
-  Check,
   Undo2,
   Redo2,
   Trash2,
-  Download,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
@@ -23,10 +19,11 @@ import { DesignPanel } from "./panels/DesignPanel";
 import { PropertiesPanel } from "./panels/PropertiesPanel";
 import { Canvas } from "./canvas/Canvas";
 import { CodeExportDialog } from "./export/CodeExportDialog";
+import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
+import { KeyboardShortcutsDialog } from "./dialogs/KeyboardShortcutsDialog";
 
 export function DesignEditor() {
   const [codeDialogOpen, setCodeDialogOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   // UI state
   const zoom = useEditorStore((s) => s.ui.zoom);
@@ -45,72 +42,17 @@ export function DesignEditor() {
   const setDevicePreview = useEditorStore((s) => s.setDevicePreview);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
-  const clearCanvas = useEditorStore((s) => s.clearCanvas);
   const deleteElements = useEditorStore((s) => s.deleteElements);
   const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
   const history = useEditorStore((s) => s.canvas.history);
 
-  const canUndo = history.past.length > 0;
-  const canRedo = history.future.length > 0;
+  const canUndo = history?.past?.length > 0;
+  const canRedo = history?.future?.length > 0;
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      // Don't trigger if typing in input
-      if (
-        e.target.tagName === "INPUT" ||
-        e.target.tagName === "TEXTAREA" ||
-        e.target.isContentEditable
-      ) {
-        return;
-      }
-
-      const isMod = e.ctrlKey || e.metaKey;
-
-      // Delete selected
-      if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedIds.length > 0) {
-          e.preventDefault();
-          deleteElements(selectedIds);
-        }
-      }
-
-      // Undo
-      if (isMod && e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        undo();
-      }
-
-      // Redo
-      if ((isMod && e.key === "z" && e.shiftKey) || (isMod && e.key === "y")) {
-        e.preventDefault();
-        redo();
-      }
-
-      // Zoom
-      if (isMod && (e.key === "+" || e.key === "=")) {
-        e.preventDefault();
-        zoomIn();
-      }
-      if (isMod && e.key === "-") {
-        e.preventDefault();
-        zoomOut();
-      }
-      if (isMod && e.key === "0") {
-        e.preventDefault();
-        zoomReset();
-      }
-
-      // Export code
-      if (isMod && e.key === "e") {
-        e.preventDefault();
-        setCodeDialogOpen(true);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIds, deleteElements, undo, redo, zoomIn, zoomOut, zoomReset]);
+  // Enhanced keyboard shortcuts hook (Figma-like)
+  useKeyboardShortcuts({
+    onExportCode: () => setCodeDialogOpen(true),
+  });
 
   const zoomPercent = `${Math.round(zoom * 100)}%`;
 
@@ -131,7 +73,7 @@ export function DesignEditor() {
             variant={leftSidebarOpen ? "secondary" : "ghost"}
             size="sm"
             onClick={toggleLeftSidebar}
-            title="Toggle left panel"
+            title="Toggle left panel (Ctrl+/)"
           >
             <PanelLeft className="h-4 w-4" />
           </Button>
@@ -161,7 +103,7 @@ export function DesignEditor() {
         {/* Center: Zoom & Device controls */}
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-1 rounded-md border bg-background p-1">
-            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={zoomOut}>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={zoomOut} title="Zoom out (Ctrl+-)">
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <Button
@@ -169,10 +111,11 @@ export function DesignEditor() {
               size="sm"
               className="h-7 px-3 font-mono text-xs min-w-[60px]"
               onClick={zoomReset}
+              title="Reset zoom (Ctrl+0)"
             >
               {zoomPercent}
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={zoomIn}>
+            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={zoomIn} title="Zoom in (Ctrl++)">
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -185,7 +128,7 @@ export function DesignEditor() {
               size="sm"
               className="h-7 px-2"
               onClick={() => setDevicePreview("desktop")}
-              title="Desktop"
+              title="Desktop (1)"
             >
               <Monitor className="h-3.5 w-3.5" />
             </Button>
@@ -194,7 +137,7 @@ export function DesignEditor() {
               size="sm"
               className="h-7 px-2"
               onClick={() => setDevicePreview("tablet")}
-              title="Tablet"
+              title="Tablet (2)"
             >
               <Tablet className="h-3.5 w-3.5" />
             </Button>
@@ -203,7 +146,7 @@ export function DesignEditor() {
               size="sm"
               className="h-7 px-2"
               onClick={() => setDevicePreview("mobile")}
-              title="Mobile"
+              title="Mobile (3)"
             >
               <Smartphone className="h-3.5 w-3.5" />
             </Button>
@@ -221,12 +164,15 @@ export function DesignEditor() {
               }
             }}
             disabled={selectedIds.length === 0}
-            title="Delete selected"
+            title="Delete selected (Del)"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
 
           <Separator orientation="vertical" className="h-6 mx-1" />
+
+          {/* Keyboard Shortcuts Help */}
+          <KeyboardShortcutsDialog />
 
           <Button
             variant="default"
@@ -244,7 +190,7 @@ export function DesignEditor() {
             variant={rightSidebarOpen ? "secondary" : "ghost"}
             size="sm"
             onClick={toggleRightSidebar}
-            title="Toggle right panel"
+            title="Toggle right panel (Ctrl+.)"
           >
             <PanelRight className="h-4 w-4" />
           </Button>
@@ -276,6 +222,11 @@ export function DesignEditor() {
             >
               <Canvas />
             </div>
+          </div>
+          
+          {/* Zoom indicator overlay */}
+          <div className="absolute bottom-4 right-4 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded border">
+            Ctrl+Scroll to zoom • Click Shortcuts for help
           </div>
         </div>
 
