@@ -11,6 +11,8 @@ import {
   Undo2,
   Redo2,
   Trash2,
+  LayoutGrid,
+  MousePointer2,
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
@@ -18,12 +20,14 @@ import { useEditorStore } from "../../stores/editorStore";
 import { DesignPanel } from "./panels/DesignPanel";
 import { PropertiesPanel } from "./panels/PropertiesPanel";
 import { Canvas } from "./canvas/Canvas";
+import { FreeformCanvas } from "./canvas/FreeformCanvas";
 import { CodeExportDialog } from "./export/CodeExportDialog";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { KeyboardShortcutsDialog } from "./dialogs/KeyboardShortcutsDialog";
 
 export function DesignEditor() {
   const [codeDialogOpen, setCodeDialogOpen] = useState(false);
+  const [canvasMode, setCanvasMode] = useState("layout"); // "layout" | "freeform"
 
   // UI state
   const zoom = useEditorStore((s) => s.ui.zoom);
@@ -43,6 +47,7 @@ export function DesignEditor() {
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const deleteElements = useEditorStore((s) => s.deleteElements);
+  const clearCanvas = useEditorStore((s) => s.clearCanvas);
   const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
   const history = useEditorStore((s) => s.canvas.history);
 
@@ -98,6 +103,32 @@ export function DesignEditor() {
           >
             <Redo2 className="h-4 w-4" />
           </Button>
+
+          <Separator orientation="vertical" className="h-6 mx-1" />
+
+          {/* Canvas Mode Toggle */}
+          <div className="flex items-center gap-0.5 rounded-md border bg-background p-0.5">
+            <Button
+              variant={canvasMode === "layout" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-2 gap-1"
+              onClick={() => setCanvasMode("layout")}
+              title="Layout Mode - drag blocks in order"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              <span className="text-xs">Layout</span>
+            </Button>
+            <Button
+              variant={canvasMode === "freeform" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 px-2 gap-1"
+              onClick={() => setCanvasMode("freeform")}
+              title="Freeform Mode - Figma-like free positioning"
+            >
+              <MousePointer2 className="h-3.5 w-3.5" />
+              <span className="text-xs">Freeform</span>
+            </Button>
+          </div>
         </div>
 
         {/* Center: Zoom & Device controls */}
@@ -120,37 +151,41 @@ export function DesignEditor() {
             </Button>
           </div>
 
-          <Separator orientation="vertical" className="h-6 mx-2" />
+          {canvasMode === "layout" && (
+            <>
+              <Separator orientation="vertical" className="h-6 mx-2" />
 
-          <div className="flex items-center gap-1 rounded-md border bg-background p-1">
-            <Button
-              variant={devicePreview === "desktop" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-7 px-2"
-              onClick={() => setDevicePreview("desktop")}
-              title="Desktop (1)"
-            >
-              <Monitor className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant={devicePreview === "tablet" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-7 px-2"
-              onClick={() => setDevicePreview("tablet")}
-              title="Tablet (2)"
-            >
-              <Tablet className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              variant={devicePreview === "mobile" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-7 px-2"
-              onClick={() => setDevicePreview("mobile")}
-              title="Mobile (3)"
-            >
-              <Smartphone className="h-3.5 w-3.5" />
-            </Button>
-          </div>
+              <div className="flex items-center gap-1 rounded-md border bg-background p-1">
+                <Button
+                  variant={devicePreview === "desktop" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setDevicePreview("desktop")}
+                  title="Desktop (1)"
+                >
+                  <Monitor className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={devicePreview === "tablet" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setDevicePreview("tablet")}
+                  title="Tablet (2)"
+                >
+                  <Tablet className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant={devicePreview === "mobile" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setDevicePreview("mobile")}
+                  title="Mobile (3)"
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right: Export & sidebar toggle */}
@@ -211,22 +246,40 @@ export function DesignEditor() {
 
         {/* Center - Canvas */}
         <div className="flex-1 relative overflow-hidden bg-[#0a0a0a]">
-          <div className="absolute inset-0 overflow-auto p-8">
-            <div
-              className="mx-auto bg-background rounded-lg border shadow-2xl min-h-full"
+          {canvasMode === "layout" ? (
+            /* Layout Mode - Original Canvas */
+            <div className="absolute inset-0 overflow-auto p-8">
+              <div
+                className="mx-auto bg-background rounded-lg border shadow-2xl min-h-full"
+                style={{
+                  maxWidth: canvasMaxWidth,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top center",
+                }}
+              >
+                <Canvas />
+              </div>
+            </div>
+          ) : (
+            /* Freeform Mode - Figma-like Canvas */
+            <div 
+              className="absolute inset-0"
               style={{
-                maxWidth: canvasMaxWidth,
                 transform: `scale(${zoom})`,
-                transformOrigin: "top center",
+                transformOrigin: "top left",
               }}
             >
-              <Canvas />
+              <FreeformCanvas />
             </div>
-          </div>
+          )}
           
-          {/* Zoom indicator overlay */}
+          {/* Mode indicator overlay */}
           <div className="absolute bottom-4 right-4 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded border">
-            Ctrl+Scroll to zoom • Click Shortcuts for help
+            {canvasMode === "freeform" ? (
+              "Freeform: Click Add Element • Right-click to add • Drag to move"
+            ) : (
+              "Layout: Drag blocks from sidebar • Ctrl+Scroll to zoom"
+            )}
           </div>
         </div>
 

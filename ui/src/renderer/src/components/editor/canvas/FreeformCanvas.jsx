@@ -1,0 +1,600 @@
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { 
+  Plus, Move, Type, LayoutGrid, Image, Square, MousePointerClick, 
+  Search, ChevronRight, ChevronDown, FormInput, Table, Bell, Menu, Layers 
+} from "lucide-react";
+import { Button } from "../../ui/button";
+import { Input } from "../../ui/input";
+import { ScrollArea } from "../../ui/scroll-area";
+import { useEditorStore } from "../../../stores/editorStore";
+import { shadcnComponents, shadcnCategories } from "../../../data/shadcnComponents";
+import { blocks, blockCategories } from "../../../data/blocks";
+import { ComponentRenderer } from "./ComponentRenderer";
+
+// Icon mapping for categories
+const categoryIcons = {
+  inputs: FormInput,
+  layout: LayoutGrid,
+  "data-display": Table,
+  feedback: Bell,
+  navigation: Menu,
+  overlay: Layers,
+  typography: Type,
+};
+
+/**
+ * DraggableElement - Makes any element draggable and resizable on canvas
+ */
+export function DraggableElement({ 
+  element, 
+  children, 
+  isSelected, 
+  onSelect,
+  onPositionChange,
+  onSizeChange,
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const [resizeHandle, setResizeHandle] = useState(null);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [elementStart, setElementStart] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const elementRef = useRef(null);
+
+  // Get position from element style or default
+  const x = element.style?.x ?? element.style?.left ?? 0;
+  const y = element.style?.y ?? element.style?.top ?? 0;
+  const width = element.style?.width;
+  const height = element.style?.height;
+
+  // Handle mouse down on element (start drag)
+  const handleMouseDown = useCallback((e) => {
+    if (e.target.closest('.resize-handle') || e.target.closest('input') || e.target.closest('textarea')) {
+      return;
+    }
+    
+    e.stopPropagation();
+    onSelect?.(e);
+    
+    if (isSelected) {
+      setIsDragging(true);
+      setDragStart({ x: e.clientX, y: e.clientY });
+      setElementStart({ x, y, width: elementRef.current?.offsetWidth || 0, height: elementRef.current?.offsetHeight || 0 });
+    }
+  }, [isSelected, onSelect, x, y]);
+
+  // Handle resize start
+  const handleResizeStart = useCallback((e, handle) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setIsResizing(true);
+    setResizeHandle(handle);
+    setDragStart({ x: e.clientX, y: e.clientY });
+    setElementStart({ 
+      x, 
+      y, 
+      width: elementRef.current?.offsetWidth || 200, 
+      height: elementRef.current?.offsetHeight || 100 
+    });
+  }, [x, y]);
+
+  // Handle mouse move
+  useEffect(() => {
+    if (!isDragging && !isResizing) return;
+
+    const handleMouseMove = (e) => {
+      const deltaX = e.clientX - dragStart.x;
+      const deltaY = e.clientY - dragStart.y;
+
+      if (isDragging) {
+        onPositionChange?.({
+          x: Math.max(0, elementStart.x + deltaX),
+          y: Math.max(0, elementStart.y + deltaY),
+        });
+      }
+
+      if (isResizing) {
+        let newWidth = elementStart.width;
+        let newHeight = elementStart.height;
+        let newX = elementStart.x;
+        let newY = elementStart.y;
+
+        if (resizeHandle.includes('e')) newWidth = Math.max(50, elementStart.width + deltaX);
+        if (resizeHandle.includes('w')) {
+          newWidth = Math.max(50, elementStart.width - deltaX);
+          newX = elementStart.x + deltaX;
+        }
+        if (resizeHandle.includes('s')) newHeight = Math.max(30, elementStart.height + deltaY);
+        if (resizeHandle.includes('n')) {
+          newHeight = Math.max(30, elementStart.height - deltaY);
+          newY = elementStart.y + deltaY;
+        }
+
+        onSizeChange?.({ width: newWidth, height: newHeight });
+        if (resizeHandle.includes('w') || resizeHandle.includes('n')) {
+          onPositionChange?.({ x: newX, y: newY });
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setIsResizing(false);
+      setResizeHandle(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, isResizing, dragStart, elementStart, resizeHandle, onPositionChange, onSizeChange]);
+
+  return (
+    <div
+      ref={elementRef}
+      className={`absolute transition-shadow ${isSelected ? 'ring-2 ring-primary z-20' : 'hover:ring-1 hover:ring-primary/50 z-10'} ${isDragging ? 'cursor-grabbing opacity-80' : isSelected ? 'cursor-grab' : 'cursor-pointer'}`}
+      style={{
+        left: x,
+        top: y,
+        width: width || 'auto',
+        height: height || 'auto',
+        minWidth: 50,
+        minHeight: 30,
+      }}
+      onMouseDown={handleMouseDown}
+      data-element-id={element.id}
+    >
+      {children}
+      
+      {/* Resize handles */}
+      {isSelected && (
+        <>
+          {/* Corners */}
+          <div className="resize-handle absolute -top-1 -left-1 w-3 h-3 bg-primary rounded-full cursor-nw-resize z-30" onMouseDown={(e) => handleResizeStart(e, 'nw')} />
+          <div className="resize-handle absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full cursor-ne-resize z-30" onMouseDown={(e) => handleResizeStart(e, 'ne')} />
+          <div className="resize-handle absolute -bottom-1 -left-1 w-3 h-3 bg-primary rounded-full cursor-sw-resize z-30" onMouseDown={(e) => handleResizeStart(e, 'sw')} />
+          <div className="resize-handle absolute -bottom-1 -right-1 w-3 h-3 bg-primary rounded-full cursor-se-resize z-30" onMouseDown={(e) => handleResizeStart(e, 'se')} />
+          
+          {/* Edges */}
+          <div className="resize-handle absolute top-1/2 -left-1 w-3 h-3 bg-primary rounded-full cursor-w-resize z-30 -translate-y-1/2" onMouseDown={(e) => handleResizeStart(e, 'w')} />
+          <div className="resize-handle absolute top-1/2 -right-1 w-3 h-3 bg-primary rounded-full cursor-e-resize z-30 -translate-y-1/2" onMouseDown={(e) => handleResizeStart(e, 'e')} />
+          <div className="resize-handle absolute -top-1 left-1/2 w-3 h-3 bg-primary rounded-full cursor-n-resize z-30 -translate-x-1/2" onMouseDown={(e) => handleResizeStart(e, 'n')} />
+          <div className="resize-handle absolute -bottom-1 left-1/2 w-3 h-3 bg-primary rounded-full cursor-s-resize z-30 -translate-x-1/2" onMouseDown={(e) => handleResizeStart(e, 's')} />
+          
+          {/* Move indicator */}
+          <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-primary text-primary-foreground text-[10px] px-2 py-0.5 rounded flex items-center gap-1 z-30 whitespace-nowrap">
+            <Move className="h-3 w-3" />
+            {element.type} • {Math.round(x)}, {Math.round(y)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * FloatingToolbar - Add shadcn elements anywhere on canvas
+ */
+export function FloatingToolbar({ onAddElement, position = { x: 20, y: 20 } }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("components"); // "components" | "blocks"
+  const [expandedCategories, setExpandedCategories] = useState({});
+
+  const toggleCategory = (categoryId) => {
+    setExpandedCategories(prev => ({
+      ...prev,
+      [categoryId]: !prev[categoryId]
+    }));
+  };
+
+  // Filter components based on search
+  const filteredComponents = shadcnComponents.filter(comp =>
+    comp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    comp.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Filter blocks based on search
+  const filteredBlocks = blocks.filter(block =>
+    block.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    block.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Group filtered components by category
+  const groupedComponents = shadcnCategories.map(cat => ({
+    ...cat,
+    components: filteredComponents.filter(c => c.category === cat.id)
+  })).filter(cat => cat.components.length > 0);
+
+  // Group filtered blocks by category
+  const groupedBlocks = blockCategories.map(cat => ({
+    ...cat,
+    blocks: filteredBlocks.filter(b => b.category === cat.id)
+  })).filter(cat => cat.blocks.length > 0);
+
+  const handleAddComponent = (component) => {
+    onAddElement?.(component.id, component.defaultProps || {}, { x: 100, y: 100 });
+    setIsOpen(false);
+    setSearchQuery("");
+  };
+
+  const handleAddBlock = (block) => {
+    onAddElement?.(block.id, block.defaultProps || {}, { x: 100, y: 100 });
+    setIsOpen(false);
+    setSearchQuery("");
+  };
+
+  return (
+    <div className="fixed z-50" style={{ left: position.x, top: position.y }}>
+      <Button
+        variant={isOpen ? "secondary" : "default"}
+        size="sm"
+        className="gap-1.5 shadow-lg"
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        <Plus className="h-4 w-4" />
+        Add Element
+      </Button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setIsOpen(false); setSearchQuery(""); }} />
+          <div className="absolute top-full left-0 mt-2 bg-popover border rounded-lg shadow-xl z-50 w-[320px] max-h-[500px] flex flex-col">
+            {/* Search */}
+            <div className="p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search components and blocks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-8"
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b">
+              <button
+                className={`flex-1 px-4 py-2 text-sm font-medium ${activeTab === "components" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                onClick={() => setActiveTab("components")}
+              >
+                Components ({filteredComponents.length})
+              </button>
+              <button
+                className={`flex-1 px-4 py-2 text-sm font-medium ${activeTab === "blocks" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`}
+                onClick={() => setActiveTab("blocks")}
+              >
+                Blocks ({filteredBlocks.length})
+              </button>
+            </div>
+
+            {/* Content */}
+            <ScrollArea className="flex-1 max-h-[380px]">
+              <div className="p-2">
+                {activeTab === "components" ? (
+                  /* Components */
+                  groupedComponents.length > 0 ? (
+                    groupedComponents.map(category => {
+                      const Icon = categoryIcons[category.id] || LayoutGrid;
+                      const isExpanded = expandedCategories[category.id] ?? true;
+                      
+                      return (
+                        <div key={category.id} className="mb-2">
+                          <button
+                            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:bg-muted rounded"
+                            onClick={() => toggleCategory(category.id)}
+                          >
+                            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            <Icon className="h-3 w-3" />
+                            {category.name}
+                            <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">{category.components.length}</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-1 space-y-0.5">
+                              {category.components.map(comp => (
+                                <button
+                                  key={comp.id}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-muted transition-colors text-left"
+                                  onClick={() => handleAddComponent(comp)}
+                                >
+                                  <span className="flex-1">{comp.name}</span>
+                                  <Plus className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">No components found</p>
+                  )
+                ) : (
+                  /* Blocks */
+                  groupedBlocks.length > 0 ? (
+                    groupedBlocks.map(category => {
+                      const isExpanded = expandedCategories[`block-${category.id}`] ?? true;
+                      
+                      return (
+                        <div key={category.id} className="mb-2">
+                          <button
+                            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:bg-muted rounded"
+                            onClick={() => toggleCategory(`block-${category.id}`)}
+                          >
+                            {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            {category.name}
+                            <span className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">{category.blocks.length}</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="mt-1 space-y-0.5">
+                              {category.blocks.map(block => (
+                                <button
+                                  key={block.id}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm rounded hover:bg-muted transition-colors text-left"
+                                  onClick={() => handleAddBlock(block)}
+                                >
+                                  <span className="flex-1">{block.name}</span>
+                                  <Plus className="h-3 w-3 text-muted-foreground" />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">No blocks found</p>
+                  )
+                )}
+              </div>
+            </ScrollArea>
+
+            {/* Quick hint */}
+            <div className="p-2 border-t bg-muted/30 text-[10px] text-muted-foreground">
+              Right-click on canvas to add at cursor position
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * CanvasContextMenu - Right-click menu for adding elements at cursor position
+ */
+export function CanvasContextMenu({ position, onAddElement, onClose }) {
+  const [searchQuery, setSearchQuery] = useState("");
+  const inputRef = useRef(null);
+  
+  useEffect(() => {
+    if (position) {
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [position]);
+
+  if (!position) return null;
+
+  // Get top shadcn components and blocks for quick add
+  const quickComponents = shadcnComponents.slice(0, 8);
+  const quickBlocks = blocks.slice(0, 4);
+
+  // Filter if searching
+  const filteredComponents = searchQuery
+    ? shadcnComponents.filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 8)
+    : quickComponents;
+  
+  const filteredBlocks = searchQuery
+    ? blocks.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 4)
+    : quickBlocks;
+
+  const handleAdd = (item) => {
+    onAddElement?.(item.id, item.defaultProps || {}, position);
+    onClose();
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} onContextMenu={(e) => { e.preventDefault(); onClose(); }} />
+      <div 
+        className="fixed z-50 bg-popover border rounded-lg shadow-xl w-[280px] max-h-[400px] flex flex-col"
+        style={{ left: position.x, top: position.y }}
+      >
+        {/* Search */}
+        <div className="p-2 border-b">
+          <div className="relative">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 h-7 text-sm"
+            />
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1 max-h-[320px]">
+          <div className="p-1">
+            {/* Components */}
+            <div className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              Components
+            </div>
+            {filteredComponents.map(comp => (
+              <button
+                key={comp.id}
+                className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded transition-colors flex items-center gap-2"
+                onClick={() => handleAdd(comp)}
+              >
+                <Plus className="h-3 w-3 text-muted-foreground" />
+                {comp.name}
+              </button>
+            ))}
+
+            {/* Blocks */}
+            <div className="px-2 py-1 mt-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+              Blocks
+            </div>
+            {filteredBlocks.map(block => (
+              <button
+                key={block.id}
+                className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted rounded transition-colors flex items-center gap-2"
+                onClick={() => handleAdd(block)}
+              >
+                <Plus className="h-3 w-3 text-muted-foreground" />
+                {block.name}
+              </button>
+            ))}
+          </div>
+        </ScrollArea>
+      </div>
+    </>
+  );
+}
+
+/**
+ * FreeformCanvas - True Figma-like canvas with absolute positioning
+ */
+export function FreeformCanvas({ className = "" }) {
+  const [contextMenu, setContextMenu] = useState(null);
+  const canvasRef = useRef(null);
+  
+  // Store state
+  const elements = useEditorStore((s) => s.canvas.elements);
+  const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
+  const hoveredId = useEditorStore((s) => s.canvas.hoveredId);
+  
+  // Store actions
+  const addElement = useEditorStore((s) => s.addElement);
+  const updateElement = useEditorStore((s) => s.updateElement);
+  const setSelection = useEditorStore((s) => s.setSelection);
+  const addToSelection = useEditorStore((s) => s.addToSelection);
+  const clearSelection = useEditorStore((s) => s.clearSelection);
+  const setHovered = useEditorStore((s) => s.setHovered);
+
+  // Handle canvas click (deselect)
+  const handleCanvasClick = (e) => {
+    if (e.target === canvasRef.current || e.target.classList.contains('canvas-background')) {
+      clearSelection();
+    }
+  };
+
+  // Handle canvas context menu
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      canvasX: e.clientX - rect.left,
+      canvasY: e.clientY - rect.top,
+    });
+  };
+
+  // Add element at position
+  const handleAddElement = (type, defaultProps = {}, position = { x: 100, y: 100 }) => {
+    addElement({
+      type,
+      defaultProps,
+      props: defaultProps,
+      style: {
+        x: position.canvasX || position.x || 100,
+        y: position.canvasY || position.y || 100,
+        position: 'absolute',
+      },
+    });
+  };
+
+  // Handle element selection
+  const handleElementSelect = (elementId, e) => {
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      addToSelection(elementId);
+    } else {
+      setSelection([elementId]);
+    }
+  };
+
+  // Handle position change
+  const handlePositionChange = (elementId, position) => {
+    updateElement(elementId, { 
+      style: { 
+        x: position.x, 
+        y: position.y 
+      } 
+    });
+  };
+
+  // Handle size change
+  const handleSizeChange = (elementId, size) => {
+    updateElement(elementId, { 
+      style: { 
+        width: size.width, 
+        height: size.height 
+      } 
+    });
+  };
+
+  return (
+    <div 
+      ref={canvasRef}
+      className={`relative w-full h-full min-h-[800px] bg-[#0a0a0a] ${className}`}
+      style={{
+        backgroundImage: `radial-gradient(circle, #333 1px, transparent 1px)`,
+        backgroundSize: '20px 20px',
+      }}
+      onClick={handleCanvasClick}
+      onContextMenu={handleContextMenu}
+    >
+      {/* Canvas background */}
+      <div className="canvas-background absolute inset-0" />
+      
+      {/* Floating toolbar */}
+      <FloatingToolbar 
+        onAddElement={handleAddElement}
+        position={{ x: 20, y: 20 }}
+      />
+
+      {/* Elements */}
+      {elements.map((element) => (
+        <DraggableElement
+          key={element.id}
+          element={element}
+          isSelected={selectedIds.includes(element.id)}
+          onSelect={(e) => handleElementSelect(element.id, e)}
+          onPositionChange={(pos) => handlePositionChange(element.id, pos)}
+          onSizeChange={(size) => handleSizeChange(element.id, size)}
+        >
+          <div className="bg-background border rounded-md shadow-sm overflow-hidden">
+            <ComponentRenderer 
+              element={element} 
+              isSelected={selectedIds.includes(element.id)} 
+            />
+          </div>
+        </DraggableElement>
+      ))}
+
+      {/* Context menu */}
+      <CanvasContextMenu 
+        position={contextMenu}
+        onAddElement={handleAddElement}
+        onClose={() => setContextMenu(null)}
+      />
+
+      {/* Help text */}
+      {elements.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="text-center">
+            <p className="text-muted-foreground text-lg mb-2">Click "Add Element" or right-click to add shadcn components</p>
+            <p className="text-muted-foreground/60 text-sm">Drag elements to move • Drag corners to resize</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
