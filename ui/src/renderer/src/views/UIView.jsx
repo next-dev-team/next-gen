@@ -1,10 +1,10 @@
 import React from "react";
-import ComponentBuilder from "../components/ComponentBuilder";
+import { DesignEditor } from "../components/editor/DesignEditor";
 
 export default function UIView() {
   return (
-    <div className="h-full w-full p-4">
-      <ComponentBuilder />
+    <div className="h-full w-full">
+      <DesignEditor />
     </div>
   );
 }
