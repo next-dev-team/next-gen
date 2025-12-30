@@ -1,38 +1,49 @@
-import * as React from "react"
+import * as React from "react";
 import {
+  Book,
   Plus,
   Trash2,
   Pencil,
   X,
   GripVertical,
   LayoutGrid,
-} from "lucide-react"
+} from "lucide-react";
 
-import { cn } from "../lib/utils"
-import { Badge } from "../components/ui/badge"
-import { Button } from "../components/ui/button"
-import { Card, CardContent } from "../components/ui/card"
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog"
-import { Input } from "../components/ui/input"
-import { Label } from "../components/ui/label"
+import { cn } from "../lib/utils";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { Card, CardContent } from "../components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { ScrollArea } from "../components/ui/scroll-area";
+import { Separator } from "../components/ui/separator";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../components/ui/select"
+} from "../components/ui/select";
 
 const createId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
     ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-const nowIso = () => new Date().toISOString()
+const nowIso = () => new Date().toISOString();
 
 const defaultState = () => {
-  const boardId = createId()
-  const listNames = ["Backlog", "Todo", "In Progress", "Done"]
+  const boardId = createId();
+  const listNames = ["Backlog", "Todo", "In Progress", "Done"];
   return {
     version: 1,
     activeBoardId: boardId,
@@ -51,104 +62,114 @@ const defaultState = () => {
         })),
       },
     ],
-  }
-}
+  };
+};
 
 const safeParse = (value) => {
   try {
-    return JSON.parse(value)
+    return JSON.parse(value);
   } catch {
-    return null
+    return null;
   }
-}
+};
 
 const getLocalState = () => {
-  const raw = localStorage.getItem("scrum-state")
-  const parsed = raw ? safeParse(raw) : null
-  if (!parsed?.boards?.length) return defaultState()
-  return parsed
-}
+  const raw = localStorage.getItem("scrum-state");
+  const parsed = raw ? safeParse(raw) : null;
+  if (!parsed?.boards?.length) return defaultState();
+  return parsed;
+};
 
 const setLocalState = (state) => {
-  localStorage.setItem("scrum-state", JSON.stringify(state))
-  return state
-}
+  localStorage.setItem("scrum-state", JSON.stringify(state));
+  return state;
+};
 
 const getPersistedState = async () => {
   if (window.electronAPI?.getScrumState) {
-    const state = await window.electronAPI.getScrumState()
-    if (state?.boards?.length) return state
-    const seed = defaultState()
-    await window.electronAPI.setScrumState(seed)
-    return seed
+    const state = await window.electronAPI.getScrumState();
+    if (state?.boards?.length) return state;
+    const seed = defaultState();
+    await window.electronAPI.setScrumState(seed);
+    return seed;
   }
-  return getLocalState()
-}
+  return getLocalState();
+};
 
 const setPersistedState = async (state) => {
   if (window.electronAPI?.setScrumState) {
-    return window.electronAPI.setScrumState(state)
+    return window.electronAPI.setScrumState(state);
   }
-  return setLocalState(state)
-}
+  return setLocalState(state);
+};
 
 const findBoard = (state, boardId) =>
-  state.boards.find((b) => b.id === boardId) || null
+  state.boards.find((b) => b.id === boardId) || null;
 
 const updateBoardInState = (state, boardId, updater) => {
   const boards = state.boards.map((b) => {
-    if (b.id !== boardId) return b
-    const next = updater(b)
-    return { ...next, updatedAt: nowIso() }
-  })
-  return { ...state, boards }
-}
+    if (b.id !== boardId) return b;
+    const next = updater(b);
+    return { ...next, updatedAt: nowIso() };
+  });
+  return { ...state, boards };
+};
 
 const moveCardInBoard = ({ board, cardId, fromListId, toListId, toIndex }) => {
-  let movingCard = null
+  let movingCard = null;
   const listsAfterRemove = board.lists.map((list) => {
-    if (list.id !== fromListId) return list
+    if (list.id !== fromListId) return list;
     const nextCards = list.cards.filter((c) => {
-      if (c.id !== cardId) return true
-      movingCard = c
-      return false
-    })
-    return { ...list, cards: nextCards, updatedAt: nowIso() }
-  })
+      if (c.id !== cardId) return true;
+      movingCard = c;
+      return false;
+    });
+    return { ...list, cards: nextCards, updatedAt: nowIso() };
+  });
 
-  if (!movingCard) return board
-  const normalizedToIndex = Math.max(0, Number.isFinite(toIndex) ? toIndex : 0)
+  if (!movingCard) return board;
+  const normalizedToIndex = Math.max(0, Number.isFinite(toIndex) ? toIndex : 0);
   const listsAfterInsert = listsAfterRemove.map((list) => {
-    if (list.id !== toListId) return list
-    const nextCards = [...list.cards]
-    const safeIndex = Math.min(normalizedToIndex, nextCards.length)
-    nextCards.splice(safeIndex, 0, { ...movingCard, updatedAt: nowIso() })
-    return { ...list, cards: nextCards, updatedAt: nowIso() }
-  })
+    if (list.id !== toListId) return list;
+    const nextCards = [...list.cards];
+    const safeIndex = Math.min(normalizedToIndex, nextCards.length);
+    nextCards.splice(safeIndex, 0, { ...movingCard, updatedAt: nowIso() });
+    return { ...list, cards: nextCards, updatedAt: nowIso() };
+  });
 
-  return { ...board, lists: listsAfterInsert, updatedAt: nowIso() }
-}
+  return { ...board, lists: listsAfterInsert, updatedAt: nowIso() };
+};
 
-const CardEditorDialog = ({ open, onOpenChange, initial, onSave, onDelete }) => {
-  const [title, setTitle] = React.useState(initial?.title || "")
-  const [description, setDescription] = React.useState(initial?.description || "")
-  const [assignee, setAssignee] = React.useState(initial?.assignee || "")
+const CardEditorDialog = ({
+  open,
+  onOpenChange,
+  initial,
+  onSave,
+  onDelete,
+}) => {
+  const [title, setTitle] = React.useState(initial?.title || "");
+  const [description, setDescription] = React.useState(
+    initial?.description || ""
+  );
+  const [assignee, setAssignee] = React.useState(initial?.assignee || "");
   const [points, setPoints] = React.useState(
     typeof initial?.points === "number" ? String(initial.points) : ""
-  )
+  );
   const [labels, setLabels] = React.useState(
     Array.isArray(initial?.labels) ? initial.labels.join(", ") : ""
-  )
+  );
 
   React.useEffect(() => {
-    setTitle(initial?.title || "")
-    setDescription(initial?.description || "")
-    setAssignee(initial?.assignee || "")
-    setPoints(typeof initial?.points === "number" ? String(initial.points) : "")
-    setLabels(Array.isArray(initial?.labels) ? initial.labels.join(", ") : "")
-  }, [initial])
+    setTitle(initial?.title || "");
+    setDescription(initial?.description || "");
+    setAssignee(initial?.assignee || "");
+    setPoints(
+      typeof initial?.points === "number" ? String(initial.points) : ""
+    );
+    setLabels(Array.isArray(initial?.labels) ? initial.labels.join(", ") : "");
+  }, [initial]);
 
-  const canSave = title.trim().length > 0
+  const canSave = title.trim().length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -171,7 +192,10 @@ const CardEditorDialog = ({ open, onOpenChange, initial, onSave, onDelete }) => 
           </div>
           <div className="grid gap-2">
             <Label>Assignee</Label>
-            <Input value={assignee} onChange={(e) => setAssignee(e.target.value)} />
+            <Input
+              value={assignee}
+              onChange={(e) => setAssignee(e.target.value)}
+            />
           </div>
           <div className="grid gap-2">
             <Label>Story Points</Label>
@@ -203,19 +227,25 @@ const CardEditorDialog = ({ open, onOpenChange, initial, onSave, onDelete }) => 
               Delete
             </Button>
           ) : null}
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
             Cancel
           </Button>
           <Button
             type="button"
             disabled={!canSave}
             onClick={() => {
-              const parsedPoints = points.trim() === "" ? null : Number(points)
-              const nextPoints = Number.isFinite(parsedPoints) ? parsedPoints : null
+              const parsedPoints = points.trim() === "" ? null : Number(points);
+              const nextPoints = Number.isFinite(parsedPoints)
+                ? parsedPoints
+                : null;
               const nextLabels = labels
                 .split(",")
                 .map((l) => l.trim())
-                .filter(Boolean)
+                .filter(Boolean);
 
               onSave({
                 title: title.trim(),
@@ -223,7 +253,7 @@ const CardEditorDialog = ({ open, onOpenChange, initial, onSave, onDelete }) => 
                 assignee: assignee.trim(),
                 points: nextPoints,
                 labels: nextLabels,
-              })
+              });
             }}
           >
             Save
@@ -231,70 +261,70 @@ const CardEditorDialog = ({ open, onOpenChange, initial, onSave, onDelete }) => 
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
-}
+  );
+};
 
 export default function ScrumBoardView() {
-  const [state, setState] = React.useState(null)
-  const [loading, setLoading] = React.useState(true)
-  const [activeBoardId, setActiveBoardId] = React.useState(null)
-  const [newBoardName, setNewBoardName] = React.useState("")
-  const [isNewBoardOpen, setIsNewBoardOpen] = React.useState(false)
+  const [state, setState] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [activeBoardId, setActiveBoardId] = React.useState(null);
+  const [newBoardName, setNewBoardName] = React.useState("");
+  const [isNewBoardOpen, setIsNewBoardOpen] = React.useState(false);
 
-  const [cardDialogOpen, setCardDialogOpen] = React.useState(false)
-  const [cardDialogContext, setCardDialogContext] = React.useState(null)
+  const [cardDialogOpen, setCardDialogOpen] = React.useState(false);
+  const [cardDialogContext, setCardDialogContext] = React.useState(null);
 
-  const [dragState, setDragState] = React.useState(null)
+  const [dragState, setDragState] = React.useState(null);
 
   React.useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      setLoading(true)
-      const loaded = await getPersistedState()
-      if (cancelled) return
-      setState(loaded)
-      setActiveBoardId(loaded.activeBoardId || loaded.boards?.[0]?.id || null)
-      setLoading(false)
-    })()
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const loaded = await getPersistedState();
+      if (cancelled) return;
+      setState(loaded);
+      setActiveBoardId(loaded.activeBoardId || loaded.boards?.[0]?.id || null);
+      setLoading(false);
+    })();
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   const persist = React.useCallback(async (next) => {
-    const saved = await setPersistedState(next)
-    setState(saved)
-    setActiveBoardId(saved.activeBoardId || saved.boards?.[0]?.id || null)
-  }, [])
+    const saved = await setPersistedState(next);
+    setState(saved);
+    setActiveBoardId(saved.activeBoardId || saved.boards?.[0]?.id || null);
+  }, []);
 
   const mutate = React.useCallback(
     async (updater) => {
       setState((prev) => {
-        if (!prev) return prev
-        const next = updater(prev)
-        void persist(next)
-        return next
-      })
+        if (!prev) return prev;
+        const next = updater(prev);
+        void persist(next);
+        return next;
+      });
     },
     [persist]
-  )
+  );
 
-  const activeId = activeBoardId || state?.activeBoardId || null
-  const activeBoard = state ? findBoard(state, activeId) : null
+  const activeId = activeBoardId || state?.activeBoardId || null;
+  const activeBoard = state ? findBoard(state, activeId) : null;
 
   const openNewCard = (listId) => {
-    setCardDialogContext({ boardId: activeId, listId, card: null })
-    setCardDialogOpen(true)
-  }
+    setCardDialogContext({ boardId: activeId, listId, card: null });
+    setCardDialogOpen(true);
+  };
 
   const openEditCard = (listId, card) => {
-    setCardDialogContext({ boardId: activeId, listId, card })
-    setCardDialogOpen(true)
-  }
+    setCardDialogContext({ boardId: activeId, listId, card });
+    setCardDialogOpen(true);
+  };
 
   const addList = async (name) => {
-    const trimmed = name.trim()
-    if (!trimmed) return
+    const trimmed = name.trim();
+    if (!trimmed) return;
     await mutate((prev) =>
       updateBoardInState(prev, activeId, (board) => ({
         ...board,
@@ -309,12 +339,12 @@ export default function ScrumBoardView() {
           },
         ],
       }))
-    )
-  }
+    );
+  };
 
   const renameList = async (listId, name) => {
-    const trimmed = name.trim()
-    if (!trimmed) return
+    const trimmed = name.trim();
+    if (!trimmed) return;
     await mutate((prev) =>
       updateBoardInState(prev, activeId, (board) => ({
         ...board,
@@ -322,8 +352,8 @@ export default function ScrumBoardView() {
           l.id === listId ? { ...l, name: trimmed, updatedAt: nowIso() } : l
         ),
       }))
-    )
-  }
+    );
+  };
 
   const deleteList = async (listId) => {
     await mutate((prev) =>
@@ -331,15 +361,15 @@ export default function ScrumBoardView() {
         ...board,
         lists: board.lists.filter((l) => l.id !== listId),
       }))
-    )
-  }
+    );
+  };
 
   const upsertCard = async ({ listId, cardId, patch }) => {
     await mutate((prev) =>
       updateBoardInState(prev, activeId, (board) => ({
         ...board,
         lists: board.lists.map((list) => {
-          if (list.id !== listId) return list
+          if (list.id !== listId) return list;
           if (!cardId) {
             const card = {
               id: createId(),
@@ -350,8 +380,12 @@ export default function ScrumBoardView() {
               labels: Array.isArray(patch.labels) ? patch.labels : [],
               createdAt: nowIso(),
               updatedAt: nowIso(),
-            }
-            return { ...list, cards: [card, ...list.cards], updatedAt: nowIso() }
+            };
+            return {
+              ...list,
+              cards: [card, ...list.cards],
+              updatedAt: nowIso(),
+            };
           }
           return {
             ...list,
@@ -365,11 +399,11 @@ export default function ScrumBoardView() {
                 : c
             ),
             updatedAt: nowIso(),
-          }
+          };
         }),
       }))
-    )
-  }
+    );
+  };
 
   const deleteCard = async ({ listId, cardId }) => {
     await mutate((prev) =>
@@ -377,17 +411,21 @@ export default function ScrumBoardView() {
         ...board,
         lists: board.lists.map((l) =>
           l.id === listId
-            ? { ...l, cards: l.cards.filter((c) => c.id !== cardId), updatedAt: nowIso() }
+            ? {
+                ...l,
+                cards: l.cards.filter((c) => c.id !== cardId),
+                updatedAt: nowIso(),
+              }
             : l
         ),
       }))
-    )
-  }
+    );
+  };
 
   const createBoard = async () => {
-    const name = newBoardName.trim()
-    if (!name) return
-    const boardId = createId()
+    const name = newBoardName.trim();
+    if (!name) return;
+    const boardId = createId();
     const next = {
       ...state,
       activeBoardId: boardId,
@@ -399,52 +437,79 @@ export default function ScrumBoardView() {
           createdAt: nowIso(),
           updatedAt: nowIso(),
           lists: [
-            { id: createId(), name: "Backlog", createdAt: nowIso(), updatedAt: nowIso(), cards: [] },
-            { id: createId(), name: "Todo", createdAt: nowIso(), updatedAt: nowIso(), cards: [] },
-            { id: createId(), name: "In Progress", createdAt: nowIso(), updatedAt: nowIso(), cards: [] },
-            { id: createId(), name: "Done", createdAt: nowIso(), updatedAt: nowIso(), cards: [] },
+            {
+              id: createId(),
+              name: "Backlog",
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              cards: [],
+            },
+            {
+              id: createId(),
+              name: "Todo",
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              cards: [],
+            },
+            {
+              id: createId(),
+              name: "In Progress",
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              cards: [],
+            },
+            {
+              id: createId(),
+              name: "Done",
+              createdAt: nowIso(),
+              updatedAt: nowIso(),
+              cards: [],
+            },
           ],
         },
       ],
-    }
-    setNewBoardName("")
-    setIsNewBoardOpen(false)
-    await persist(next)
-  }
+    };
+    setNewBoardName("");
+    setIsNewBoardOpen(false);
+    await persist(next);
+  };
 
   const deleteBoard = async (boardId) => {
     await mutate((prev) => {
-      const remaining = prev.boards.filter((b) => b.id !== boardId)
-      const nextActive = prev.activeBoardId === boardId ? remaining[0]?.id || null : prev.activeBoardId
-      const next = { ...prev, boards: remaining, activeBoardId: nextActive }
-      if (!next.boards.length) return defaultState()
-      return next
-    })
-  }
+      const remaining = prev.boards.filter((b) => b.id !== boardId);
+      const nextActive =
+        prev.activeBoardId === boardId
+          ? remaining[0]?.id || null
+          : prev.activeBoardId;
+      const next = { ...prev, boards: remaining, activeBoardId: nextActive };
+      if (!next.boards.length) return defaultState();
+      return next;
+    });
+  };
 
   const onDragStartCard = (e, listId, cardId) => {
-    const payload = { type: "scrum-card", listId, cardId }
-    e.dataTransfer.setData("application/json", JSON.stringify(payload))
-    e.dataTransfer.effectAllowed = "move"
-    setDragState({ listId, cardId })
-  }
+    const payload = { type: "scrum-card", listId, cardId };
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = "move";
+    setDragState({ listId, cardId });
+  };
 
   const onDropCardToList = async (e, toListId, toIndex) => {
-    e.preventDefault()
-    const payload = safeParse(e.dataTransfer.getData("application/json"))
-    if (!payload || payload.type !== "scrum-card") return
-    const fromListId = payload.listId
-    const cardId = payload.cardId
-    if (!fromListId || !cardId) return
+    e.preventDefault();
+    const payload = safeParse(e.dataTransfer.getData("application/json"));
+    if (!payload || payload.type !== "scrum-card") return;
+    const fromListId = payload.listId;
+    const cardId = payload.cardId;
+    if (!fromListId || !cardId) return;
 
     await mutate((prev) =>
       updateBoardInState(prev, activeId, (board) =>
         moveCardInBoard({ board, cardId, fromListId, toListId, toIndex })
       )
-    )
+    );
 
-    setDragState(null)
-  }
+    setDragState(null);
+  };
 
   if (loading || !state) {
     return (
@@ -452,7 +517,7 @@ export default function ScrumBoardView() {
         <div className="h-6 w-36 bg-muted rounded mb-3" />
         <div className="h-4 w-64 bg-muted rounded" />
       </div>
-    )
+    );
   }
 
   return (
@@ -470,8 +535,8 @@ export default function ScrumBoardView() {
             <Select
               value={activeId || ""}
               onValueChange={async (value) => {
-                setActiveBoardId(value)
-                await persist({ ...state, activeBoardId: value })
+                setActiveBoardId(value);
+                await persist({ ...state, activeBoardId: value });
               }}
             >
               <SelectTrigger>
@@ -487,8 +552,78 @@ export default function ScrumBoardView() {
             </Select>
           </div>
 
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline">
+                <Book className="h-4 w-4 mr-2" />
+                Docs
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[80vh]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Book className="h-5 w-5" />
+                  Scrum Board Usage
+                </DialogTitle>
+                <DialogDescription>
+                  How to create boards, manage lists, and move cards.
+                </DialogDescription>
+              </DialogHeader>
+
+              <ScrollArea className="max-h-[60vh] pr-4">
+                <div className="space-y-5 text-sm">
+                  <section className="space-y-2">
+                    <h3 className="font-semibold">Boards</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                      <li>Select a board from the dropdown.</li>
+                      <li>Use New Board to create another board.</li>
+                      <li>Use Delete Board to remove the current board.</li>
+                    </ul>
+                  </section>
+
+                  <Separator />
+
+                  <section className="space-y-2">
+                    <h3 className="font-semibold">Lists</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                      <li>Use Add list to create a new list.</li>
+                      <li>Click a list name to rename it.</li>
+                      <li>Use the trash icon in a list to delete it.</li>
+                    </ul>
+                  </section>
+
+                  <Separator />
+
+                  <section className="space-y-2">
+                    <h3 className="font-semibold">Cards</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                      <li>Use the + button in a list to add a card.</li>
+                      <li>Click a card (or pencil) to edit details.</li>
+                      <li>Drag and drop cards to reorder or move lists.</li>
+                    </ul>
+                  </section>
+
+                  <Separator />
+
+                  <section className="space-y-2">
+                    <h3 className="font-semibold">Saving</h3>
+                    <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
+                      <li>Changes persist automatically.</li>
+                      <li>When running in Electron, state is saved via IPC.</li>
+                      <li>Otherwise, state falls back to localStorage.</li>
+                    </ul>
+                  </section>
+                </div>
+              </ScrollArea>
+            </DialogContent>
+          </Dialog>
+
           <Dialog open={isNewBoardOpen} onOpenChange={setIsNewBoardOpen}>
-            <Button type="button" variant="outline" onClick={() => setIsNewBoardOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsNewBoardOpen(true)}
+            >
               <Plus className="h-4 w-4 mr-2" />
               New Board
             </Button>
@@ -498,13 +633,24 @@ export default function ScrumBoardView() {
               </DialogHeader>
               <div className="grid gap-2">
                 <Label>Name</Label>
-                <Input value={newBoardName} onChange={(e) => setNewBoardName(e.target.value)} />
+                <Input
+                  value={newBoardName}
+                  onChange={(e) => setNewBoardName(e.target.value)}
+                />
               </div>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsNewBoardOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsNewBoardOpen(false)}
+                >
                   Cancel
                 </Button>
-                <Button type="button" onClick={createBoard} disabled={!newBoardName.trim()}>
+                <Button
+                  type="button"
+                  onClick={createBoard}
+                  disabled={!newBoardName.trim()}
+                >
                   Create
                 </Button>
               </DialogFooter>
@@ -535,9 +681,13 @@ export default function ScrumBoardView() {
               onEditCard={(card) => openEditCard(list.id, card)}
               onRename={(name) => renameList(list.id, name)}
               onDelete={() => deleteList(list.id)}
-              onDragStartCard={(e, cardId) => onDragStartCard(e, list.id, cardId)}
+              onDragStartCard={(e, cardId) =>
+                onDragStartCard(e, list.id, cardId)
+              }
               onDropToIndex={(e, index) => onDropCardToList(e, list.id, index)}
-              onDropToEnd={(e) => onDropCardToList(e, list.id, list.cards.length)}
+              onDropToEnd={(e) =>
+                onDropCardToList(e, list.id, list.cards.length)
+              }
             />
           ))}
 
@@ -548,32 +698,32 @@ export default function ScrumBoardView() {
       <CardEditorDialog
         open={cardDialogOpen}
         onOpenChange={(open) => {
-          setCardDialogOpen(open)
-          if (!open) setCardDialogContext(null)
+          setCardDialogOpen(open);
+          if (!open) setCardDialogContext(null);
         }}
         initial={cardDialogContext?.card}
         onSave={async (patch) => {
-          const listId = cardDialogContext?.listId
-          if (!listId) return
+          const listId = cardDialogContext?.listId;
+          if (!listId) return;
           await upsertCard({
             listId,
             cardId: cardDialogContext?.card?.id || null,
             patch,
-          })
-          setCardDialogOpen(false)
-          setCardDialogContext(null)
+          });
+          setCardDialogOpen(false);
+          setCardDialogContext(null);
         }}
         onDelete={async () => {
-          const listId = cardDialogContext?.listId
-          const cardId = cardDialogContext?.card?.id
-          if (!listId || !cardId) return
-          await deleteCard({ listId, cardId })
-          setCardDialogOpen(false)
-          setCardDialogContext(null)
+          const listId = cardDialogContext?.listId;
+          const cardId = cardDialogContext?.card?.id;
+          if (!listId || !cardId) return;
+          await deleteCard({ listId, cardId });
+          setCardDialogOpen(false);
+          setCardDialogContext(null);
         }}
       />
     </div>
-  )
+  );
 }
 
 const ListColumn = ({
@@ -587,13 +737,13 @@ const ListColumn = ({
   onDropToIndex,
   onDropToEnd,
 }) => {
-  const [isEditingName, setIsEditingName] = React.useState(false)
-  const [nameDraft, setNameDraft] = React.useState(list.name)
-  const isDragFromHere = dragState?.listId === list.id
+  const [isEditingName, setIsEditingName] = React.useState(false);
+  const [nameDraft, setNameDraft] = React.useState(list.name);
+  const isDragFromHere = dragState?.listId === list.id;
 
   React.useEffect(() => {
-    setNameDraft(list.name)
-  }, [list.name])
+    setNameDraft(list.name);
+  }, [list.name]);
 
   return (
     <div
@@ -611,12 +761,12 @@ const ListColumn = ({
               onChange={(e) => setNameDraft(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  onRename(nameDraft)
-                  setIsEditingName(false)
+                  onRename(nameDraft);
+                  setIsEditingName(false);
                 }
                 if (e.key === "Escape") {
-                  setNameDraft(list.name)
-                  setIsEditingName(false)
+                  setNameDraft(list.name);
+                  setIsEditingName(false);
                 }
               }}
               autoFocus
@@ -627,8 +777,8 @@ const ListColumn = ({
               variant="ghost"
               className="h-8 w-8"
               onClick={() => {
-                onRename(nameDraft)
-                setIsEditingName(false)
+                onRename(nameDraft);
+                setIsEditingName(false);
               }}
             >
               <Plus className="h-4 w-4" />
@@ -639,8 +789,8 @@ const ListColumn = ({
               variant="ghost"
               className="h-8 w-8"
               onClick={() => {
-                setNameDraft(list.name)
-                setIsEditingName(false)
+                setNameDraft(list.name);
+                setIsEditingName(false);
               }}
             >
               <X className="h-4 w-4" />
@@ -660,11 +810,23 @@ const ListColumn = ({
           {list.cards.length}
         </Badge>
 
-        <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={onAddCard}>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          onClick={onAddCard}
+        >
           <Plus className="h-4 w-4" />
         </Button>
 
-        <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={onDelete}>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8"
+          onClick={onDelete}
+        >
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
@@ -683,14 +845,17 @@ const ListColumn = ({
             />
           </React.Fragment>
         ))}
-        <DropZone isActive={!isDragFromHere} onDrop={(e) => onDropToIndex(e, list.cards.length)} />
+        <DropZone
+          isActive={!isDragFromHere}
+          onDrop={(e) => onDropToIndex(e, list.cards.length)}
+        />
       </div>
     </div>
-  )
-}
+  );
+};
 
 const DropZone = ({ isActive, onDrop }) => {
-  const [over, setOver] = React.useState(false)
+  const [over, setOver] = React.useState(false);
   return (
     <div
       className={cn(
@@ -699,18 +864,18 @@ const DropZone = ({ isActive, onDrop }) => {
         over ? "bg-primary/30" : "bg-transparent"
       )}
       onDragOver={(e) => {
-        e.preventDefault()
-        if (!isActive) return
-        setOver(true)
+        e.preventDefault();
+        if (!isActive) return;
+        setOver(true);
       }}
       onDragLeave={() => setOver(false)}
       onDrop={(e) => {
-        setOver(false)
-        onDrop(e)
+        setOver(false);
+        onDrop(e);
       }}
     />
-  )
-}
+  );
+};
 
 const ScrumCard = ({ card, onClick, onDragStart }) => {
   return (
@@ -721,11 +886,7 @@ const ScrumCard = ({ card, onClick, onDragStart }) => {
     >
       <CardContent className="p-3">
         <div className="flex items-start gap-2">
-          <button
-            type="button"
-            className="flex-1 text-left"
-            onClick={onClick}
-          >
+          <button type="button" className="flex-1 text-left" onClick={onClick}>
             <div className="font-medium text-sm text-foreground leading-snug">
               {card.title}
             </div>
@@ -735,12 +896,18 @@ const ScrumCard = ({ card, onClick, onDragStart }) => {
               </div>
             ) : null}
           </button>
-          <Button type="button" size="icon" variant="ghost" className="h-8 w-8" onClick={onClick}>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={onClick}
+          >
             <Pencil className="h-4 w-4" />
           </Button>
         </div>
 
-        {(card.assignee || card.points || (card.labels && card.labels.length)) ? (
+        {card.assignee || card.points || (card.labels && card.labels.length) ? (
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             {typeof card.points === "number" ? (
               <Badge variant="secondary" className="text-[10px]">
@@ -763,12 +930,12 @@ const ScrumCard = ({ card, onClick, onDragStart }) => {
         ) : null}
       </CardContent>
     </Card>
-  )
-}
+  );
+};
 
 const AddListColumn = ({ onAdd }) => {
-  const [open, setOpen] = React.useState(false)
-  const [name, setName] = React.useState("")
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState("");
 
   return (
     <div className="w-[320px]">
@@ -780,13 +947,13 @@ const AddListColumn = ({ onAdd }) => {
             placeholder="List name"
             onKeyDown={(e) => {
               if (e.key === "Enter") {
-                onAdd(name)
-                setName("")
-                setOpen(false)
+                onAdd(name);
+                setName("");
+                setOpen(false);
               }
               if (e.key === "Escape") {
-                setName("")
-                setOpen(false)
+                setName("");
+                setOpen(false);
               }
             }}
             autoFocus
@@ -797,9 +964,9 @@ const AddListColumn = ({ onAdd }) => {
               className="flex-1"
               disabled={!name.trim()}
               onClick={() => {
-                onAdd(name)
-                setName("")
-                setOpen(false)
+                onAdd(name);
+                setName("");
+                setOpen(false);
               }}
             >
               Add
@@ -809,8 +976,8 @@ const AddListColumn = ({ onAdd }) => {
               variant="outline"
               className="flex-1"
               onClick={() => {
-                setName("")
-                setOpen(false)
+                setName("");
+                setOpen(false);
               }}
             >
               Cancel
@@ -829,5 +996,5 @@ const AddListColumn = ({ onAdd }) => {
         </Button>
       )}
     </div>
-  )
-}
+  );
+};
