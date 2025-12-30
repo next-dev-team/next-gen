@@ -50,6 +50,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Check if path exists
   checkPathExists: (path) => ipcRenderer.invoke("check-path-exists", path),
 
+  // ======= SCRUM BOARD =======
+
+  getScrumState: () => ipcRenderer.invoke("get-scrum-state"),
+  setScrumState: (nextState) => ipcRenderer.invoke("set-scrum-state", nextState),
+
   // External links
   openExternal: (url) => {
     shell.openExternal(url);

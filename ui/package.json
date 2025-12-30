@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "postinstall": "electron-builder install-app-deps",
     "build:win": "npm run build && electron-builder --win",
-    "test": "playwright test"
+    "test": "playwright test",
+    "mcp:scrum": "node scripts/scrum-mcp-server.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",
@@ -32,6 +33,7 @@
     "@ant-design/cssinjs": "^2.0.1",
     "@ant-design/icons": "^6.1.0",
     "@measured/puck": "^0.20.2",
+    "@modelcontextprotocol/sdk": "^1.25.1",
     "@radix-ui/react-collapsible": "^1.1.7",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
@@ -55,6 +57,7 @@
     "react-router-dom": "^7.11.0",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.2.1",
     "zustand": "^5.0.9"
   },
   "build": {

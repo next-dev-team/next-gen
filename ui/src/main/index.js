@@ -8,6 +8,9 @@ const {
 } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
+const Conf = require("conf");
+
+const scrumStore = new Conf({ projectName: "next-gen-scrum" });
 
 let store;
 
@@ -249,6 +252,15 @@ ipcMain.handle("check-path-exists", async (event, checkPath) => {
   } catch {
     return false;
   }
+});
+
+ipcMain.handle("get-scrum-state", async () => {
+  return scrumStore.get("scrumState", null);
+});
+
+ipcMain.handle("set-scrum-state", async (event, nextState) => {
+  scrumStore.set("scrumState", nextState);
+  return scrumStore.get("scrumState", null);
 });
 
 ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {

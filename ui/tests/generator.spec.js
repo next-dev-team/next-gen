@@ -62,7 +62,8 @@ test.describe("Generator UI", () => {
     await expect(
       window.getByRole("heading", { name: "Scrum Board" })
     ).toBeVisible();
-    await expect(window.getByText("Coming soon.")).toBeVisible();
+    await expect(window.getByRole("button", { name: "New Board" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Add list" })).toBeVisible();
   });
 
   test("should handle start on boot setting", async () => {
@@ -99,9 +100,9 @@ test.describe("Generator UI", () => {
     ).toBeVisible();
 
     await expect(
-      window.getByRole("tab", { name: "Page Builder" })
-    ).toBeVisible();
-    await window.getByRole("tab", { name: "Page Builder" }).click();
+      window.getByRole("tab", { name: /Page Builder/i })
+    ).toBeVisible({ timeout: 15000 });
+    await window.getByRole("tab", { name: /Page Builder/i }).click();
 
     await window.getByRole("button", { name: "Templates" }).click();
     const templatesDialog = window.getByRole("dialog");
