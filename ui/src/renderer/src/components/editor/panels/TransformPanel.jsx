@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Move,
   Maximize2,
@@ -11,25 +11,96 @@ import {
   AlignEndVertical,
   FlipHorizontal,
   FlipVertical,
-  Copy,
-  Lock,
-  Unlock,
   CornerUpLeft,
   CornerUpRight,
+  ArrowUp,
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  Lock,
+  Unlock,
+  Grid3X3,
+  Crosshair,
+  MoveHorizontal,
+  MoveVertical,
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
 import { Label } from "../../ui/label";
 import { Separator } from "../../ui/separator";
 import { Slider } from "../../ui/slider";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../ui/tabs";
+import { Badge } from "../../ui/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../../ui/tooltip";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../../ui/select";
 import { useEditorStore } from "../../../stores/editorStore";
+
+// Nudge amounts
+const NUDGE_SMALL = 1;
+const NUDGE_MEDIUM = 10;
+const NUDGE_LARGE = 50;
+
+// Canvas default size (can be made dynamic)
+const CANVAS_WIDTH = 1200;
+const CANVAS_HEIGHT = 800;
+
+// Preset positions
+const presetPositions = [
+  { id: "top-left", label: "Top Left", x: 0, y: 0 },
+  {
+    id: "top-center",
+    label: "Top Center",
+    getX: (w) => (CANVAS_WIDTH - w) / 2,
+    y: 0,
+  },
+  { id: "top-right", label: "Top Right", getX: (w) => CANVAS_WIDTH - w, y: 0 },
+  {
+    id: "center-left",
+    label: "Center Left",
+    x: 0,
+    getY: (h) => (CANVAS_HEIGHT - h) / 2,
+  },
+  {
+    id: "center",
+    label: "Center",
+    getX: (w) => (CANVAS_WIDTH - w) / 2,
+    getY: (h) => (CANVAS_HEIGHT - h) / 2,
+  },
+  {
+    id: "center-right",
+    label: "Center Right",
+    getX: (w) => CANVAS_WIDTH - w,
+    getY: (h) => (CANVAS_HEIGHT - h) / 2,
+  },
+  {
+    id: "bottom-left",
+    label: "Bottom Left",
+    x: 0,
+    getY: (h) => CANVAS_HEIGHT - h,
+  },
+  {
+    id: "bottom-center",
+    label: "Bottom Center",
+    getX: (w) => (CANVAS_WIDTH - w) / 2,
+    getY: (h) => CANVAS_HEIGHT - h,
+  },
+  {
+    id: "bottom-right",
+    label: "Bottom Right",
+    getX: (w) => CANVAS_WIDTH - w,
+    getY: (h) => CANVAS_HEIGHT - h,
+  },
+];
 
 // Input with label and unit
 function DimensionInput({
@@ -116,6 +187,88 @@ function LinkedDimensions({ width, height, onChange, locked, onLockToggle }) {
         />
       </div>
     </div>
+  );
+}
+
+// Nudge buttons for quick positioning
+function NudgeButtons({ onNudge, nudgeAmount }) {
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div className="grid grid-cols-3 gap-1 w-24 mx-auto">
+        {/* Top row */}
+        <div />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onNudge(0, -nudgeAmount)}
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            <p>Move Up ({nudgeAmount}px)</p>
+          </TooltipContent>
+        </Tooltip>
+        <div />
+
+        {/* Middle row */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onNudge(-nudgeAmount, 0)}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <p>Move Left ({nudgeAmount}px)</p>
+          </TooltipContent>
+        </Tooltip>
+        <div className="h-8 w-8 flex items-center justify-center">
+          <Crosshair className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onNudge(nudgeAmount, 0)}
+            >
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            <p>Move Right ({nudgeAmount}px)</p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Bottom row */}
+        <div />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onNudge(0, nudgeAmount)}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Move Down ({nudgeAmount}px)</p>
+          </TooltipContent>
+        </Tooltip>
+        <div />
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -228,6 +381,74 @@ function AlignmentButtons({ onAlign }) {
   );
 }
 
+// Quick position preset grid (visual 9-point grid)
+function PositionPresetGrid({ onSelectPreset, currentPosition }) {
+  const grid = [
+    ["top-left", "top-center", "top-right"],
+    ["center-left", "center", "center-right"],
+    ["bottom-left", "bottom-center", "bottom-right"],
+  ];
+
+  // Determine which preset is closest to current position
+  const getActivePreset = () => {
+    if (!currentPosition) return null;
+    const { x, y, width = 200, height = 100 } = currentPosition;
+
+    for (const preset of presetPositions) {
+      const presetX = preset.getX ? preset.getX(width) : preset.x;
+      const presetY = preset.getY ? preset.getY(height) : preset.y;
+
+      if (Math.abs(x - presetX) < 10 && Math.abs(y - presetY) < 10) {
+        return preset.id;
+      }
+    }
+    return null;
+  };
+
+  const activePreset = getActivePreset();
+
+  return (
+    <TooltipProvider delayDuration={200}>
+      <div className="space-y-1">
+        {grid.map((row, rowIndex) => (
+          <div key={rowIndex} className="flex gap-1 justify-center">
+            {row.map((presetId) => {
+              const preset = presetPositions.find((p) => p.id === presetId);
+              const isActive = activePreset === presetId;
+
+              return (
+                <Tooltip key={presetId}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      className={`h-6 w-6 p-0 ${
+                        isActive ? "" : "hover:bg-primary/20"
+                      }`}
+                      onClick={() => onSelectPreset(preset)}
+                    >
+                      <div
+                        className={`h-2 w-2 rounded-full ${
+                          isActive
+                            ? "bg-primary-foreground"
+                            : "bg-muted-foreground"
+                        }`}
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    <p>{preset?.label}</p>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </TooltipProvider>
+  );
+}
+
 // Transform actions (flip, rotate)
 function TransformActions({ onFlipH, onFlipV, onRotateCW, onRotateCCW }) {
   return (
@@ -306,6 +527,7 @@ function TransformActions({ onFlipH, onFlipV, onRotateCW, onRotateCCW }) {
 // Main Transform Panel component
 export function TransformPanel() {
   const [aspectLocked, setAspectLocked] = useState(false);
+  const [nudgeAmount, setNudgeAmount] = useState(NUDGE_MEDIUM);
 
   // Store state
   const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
@@ -319,18 +541,18 @@ export function TransformPanel() {
     return getElementById(selectedIds[0]);
   }, [selectedIds, getElementById]);
 
-  // Get canvas bounds for alignment
-  const canvasBounds = { width: 1200, height: 800 }; // Default canvas size
-
   // Handle position change
-  const handlePositionChange = (updates) => {
-    if (!selectedElement) return;
-    updateElement(selectedElement.id, {
-      style: {
-        ...updates,
-      },
-    });
-  };
+  const handlePositionChange = useCallback(
+    (updates) => {
+      if (!selectedElement) return;
+      updateElement(selectedElement.id, {
+        style: {
+          ...updates,
+        },
+      });
+    },
+    [selectedElement, updateElement]
+  );
 
   // Handle size change
   const handleSizeChange = (updates) => {
@@ -356,6 +578,78 @@ export function TransformPanel() {
     });
   };
 
+  // Handle nudge (move by amount)
+  const handleNudge = useCallback(
+    (deltaX, deltaY) => {
+      if (!selectedElement) return;
+      const style = selectedElement.style || {};
+      const currentX = style.x ?? 0;
+      const currentY = style.y ?? 0;
+
+      handlePositionChange({
+        x: Math.max(0, currentX + deltaX),
+        y: Math.max(0, currentY + deltaY),
+      });
+    },
+    [selectedElement, handlePositionChange]
+  );
+
+  // Handle preset position
+  const handlePresetPosition = useCallback(
+    (preset) => {
+      if (!selectedElement || !preset) return;
+
+      const style = selectedElement.style || {};
+      const width = style.width || 200;
+      const height = style.height || 100;
+
+      const newX = preset.getX ? preset.getX(width) : preset.x;
+      const newY = preset.getY ? preset.getY(height) : preset.y;
+
+      handlePositionChange({ x: Math.max(0, newX), y: Math.max(0, newY) });
+    },
+    [selectedElement, handlePositionChange]
+  );
+
+  // Keyboard arrow key support
+  useEffect(() => {
+    if (!selectedElement) return;
+
+    const handleKeyDown = (e) => {
+      // Don't handle if typing in an input
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")
+        return;
+
+      const amount = e.shiftKey
+        ? NUDGE_LARGE
+        : e.altKey
+        ? NUDGE_SMALL
+        : NUDGE_MEDIUM;
+
+      switch (e.key) {
+        case "ArrowUp":
+          e.preventDefault();
+          handleNudge(0, -amount);
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          handleNudge(0, amount);
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          handleNudge(-amount, 0);
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          handleNudge(amount, 0);
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedElement, handleNudge]);
+
   // Handle alignment
   const handleAlign = (alignment) => {
     if (!selectedElement) return;
@@ -374,19 +668,19 @@ export function TransformPanel() {
         newX = 0;
         break;
       case "center-h":
-        newX = (canvasBounds.width - width) / 2;
+        newX = (CANVAS_WIDTH - width) / 2;
         break;
       case "right":
-        newX = canvasBounds.width - width;
+        newX = CANVAS_WIDTH - width;
         break;
       case "top":
         newY = 0;
         break;
       case "center-v":
-        newY = (canvasBounds.height - height) / 2;
+        newY = (CANVAS_HEIGHT - height) / 2;
         break;
       case "bottom":
-        newY = canvasBounds.height - height;
+        newY = CANVAS_HEIGHT - height;
         break;
     }
 
@@ -434,6 +728,9 @@ export function TransformPanel() {
         <p className="text-xs text-muted-foreground text-center">
           Select an element to transform
         </p>
+        <p className="text-[10px] text-muted-foreground/70 text-center mt-1">
+          Use arrow keys to move selected elements
+        </p>
       </div>
     );
   }
@@ -448,10 +745,58 @@ export function TransformPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Position */}
+      {/* Quick Position Presets */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium flex items-center gap-1.5">
+            <Grid3X3 className="h-3 w-3 text-muted-foreground" />
+            Quick Position
+          </span>
+          <Badge variant="secondary" className="text-[10px]">
+            Click to snap
+          </Badge>
+        </div>
+        <PositionPresetGrid
+          onSelectPreset={handlePresetPosition}
+          currentPosition={{ x, y, width, height }}
+        />
+      </div>
+
+      <Separator />
+
+      {/* Nudge Controls */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium flex items-center gap-1.5">
+            <Move className="h-3 w-3 text-muted-foreground" />
+            Move
+          </span>
+          <Select
+            value={String(nudgeAmount)}
+            onValueChange={(v) => setNudgeAmount(Number(v))}
+          >
+            <SelectTrigger className="h-6 w-20 text-[10px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={String(NUDGE_SMALL)}>1px</SelectItem>
+              <SelectItem value={String(NUDGE_MEDIUM)}>10px</SelectItem>
+              <SelectItem value={String(NUDGE_LARGE)}>50px</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <NudgeButtons onNudge={handleNudge} nudgeAmount={nudgeAmount} />
+        <p className="text-[10px] text-muted-foreground text-center">
+          Arrow keys: Move • Shift: 50px • Alt: 1px
+        </p>
+      </div>
+
+      <Separator />
+
+      {/* Position Input */}
       <div className="space-y-2">
         <div className="flex items-center gap-1.5">
-          <Move className="h-3 w-3 text-muted-foreground" />
+          <Crosshair className="h-3 w-3 text-muted-foreground" />
           <span className="text-xs font-medium">Position</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
@@ -527,7 +872,7 @@ export function TransformPanel() {
 
       {/* Alignment */}
       <div className="space-y-2">
-        <span className="text-xs font-medium">Alignment</span>
+        <span className="text-xs font-medium">Canvas Alignment</span>
         <AlignmentButtons onAlign={handleAlign} />
       </div>
 
@@ -535,7 +880,7 @@ export function TransformPanel() {
 
       {/* Transform Actions */}
       <div className="space-y-2">
-        <span className="text-xs font-medium">Actions</span>
+        <span className="text-xs font-medium">Flip & Rotate</span>
         <TransformActions
           onFlipH={handleFlipH}
           onFlipV={handleFlipV}

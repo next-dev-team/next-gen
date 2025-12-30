@@ -101,6 +101,133 @@ function SnapGuides({ guides }) {
 }
 
 /**
+ * QuickMoveToolbar - Floating toolbar for quick element movement
+ */
+function QuickMoveToolbar({ onMove, position }) {
+  const MOVE_AMOUNT = 10;
+
+  const handleMove = (e, dx, dy) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onMove(dx, dy);
+  };
+
+  return (
+    <div
+      className="absolute z-50 flex items-center gap-0.5 bg-popover border rounded-lg shadow-lg p-0.5"
+      style={{
+        left: position.x,
+        top: position.y + position.height + 8,
+        transform: "translateX(-50%)",
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
+      {/* Left */}
+      <button
+        className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted transition-colors"
+        onClick={(e) => handleMove(e, -MOVE_AMOUNT, 0)}
+        title="Move Left (←)"
+      >
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15 19l-7-7 7-7"
+          />
+        </svg>
+      </button>
+
+      {/* Up */}
+      <button
+        className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted transition-colors"
+        onClick={(e) => handleMove(e, 0, -MOVE_AMOUNT)}
+        title="Move Up (↑)"
+      >
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M5 15l7-7 7 7"
+          />
+        </svg>
+      </button>
+
+      {/* Down */}
+      <button
+        className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted transition-colors"
+        onClick={(e) => handleMove(e, 0, MOVE_AMOUNT)}
+        title="Move Down (↓)"
+      >
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </button>
+
+      {/* Right */}
+      <button
+        className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted transition-colors"
+        onClick={(e) => handleMove(e, MOVE_AMOUNT, 0)}
+        title="Move Right (→)"
+      >
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 5l7 7-7 7"
+          />
+        </svg>
+      </button>
+
+      <div className="w-px h-5 bg-border mx-0.5" />
+
+      {/* Center */}
+      <button
+        className="h-7 px-2 flex items-center justify-center rounded hover:bg-muted transition-colors text-[10px] font-medium"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          // Center horizontally on canvas (assuming 1200px width)
+          const canvasWidth = 1200;
+          const newX = (canvasWidth - (position.width || 200)) / 2;
+          onMove(newX - position.x, 0);
+        }}
+        title="Center Horizontally"
+      >
+        Center
+      </button>
+    </div>
+  );
+}
+
+/**
  * DraggableElement - Makes any element draggable and resizable on canvas
  */
 export function DraggableElement({
@@ -364,6 +491,22 @@ export function DraggableElement({
               </>
             )}
           </div>
+
+          {/* Quick Move Toolbar */}
+          <QuickMoveToolbar
+            position={{
+              x: (width || elementRef.current?.offsetWidth || 200) / 2,
+              y: 0,
+              width: width || elementRef.current?.offsetWidth || 200,
+              height: height || elementRef.current?.offsetHeight || 100,
+            }}
+            onMove={(dx, dy) => {
+              onPositionChange?.({
+                x: Math.max(0, x + dx),
+                y: Math.max(0, y + dy),
+              });
+            }}
+          />
         </>
       )}
     </div>
