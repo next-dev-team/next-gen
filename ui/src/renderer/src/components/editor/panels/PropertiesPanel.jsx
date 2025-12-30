@@ -571,9 +571,55 @@ export function PropertiesPanel() {
                 </div>
               )}
 
-              {/* Dynamic properties from schema */}
-              {Object.keys(propSchema).length > 0
-                ? Object.entries(propSchema).map(([key, schema]) => (
+              {/* Group properties by their 'group' attribute */}
+              {(() => {
+                const groups = {};
+                const ungrouped = [];
+
+                // Separate properties by group
+                Object.entries(propSchema).forEach(([key, schema]) => {
+                  const group = schema.group || "other";
+                  if (!groups[group]) groups[group] = [];
+                  groups[group].push({ key, schema });
+                });
+
+                // Define group order and labels
+                const groupConfig = {
+                  content: {
+                    label: "Content",
+                    icon: "Type",
+                    defaultOpen: true,
+                  },
+                  visibility: {
+                    label: "Visibility",
+                    icon: "Eye",
+                    defaultOpen: true,
+                  },
+                  style: {
+                    label: "Style",
+                    icon: "Palette",
+                    defaultOpen: false,
+                  },
+                  other: {
+                    label: "Other Properties",
+                    icon: "Settings",
+                    defaultOpen: true,
+                  },
+                };
+
+                const orderedGroups = [
+                  "content",
+                  "visibility",
+                  "style",
+                  "other",
+                ].filter((g) => groups[g]?.length > 0);
+
+                if (
+                  orderedGroups.length === 0 &&
+                  Object.keys(propSchema).length > 0
+                ) {
+                  // No groups defined, show all props directly
+                  return Object.entries(propSchema).map(([key, schema]) => (
                     <PropertyEditor
                       key={key}
                       propKey={key}
@@ -581,44 +627,122 @@ export function PropertiesPanel() {
                       value={selectedElement.props?.[key]}
                       onChange={(v) => handlePropChange(key, v)}
                     />
-                  ))
-                : // Fallback: show all current props as text fields
-                  Object.keys(selectedElement.props || {}).length > 0 && (
-                    <>
-                      {Object.entries(selectedElement.props).map(
-                        ([key, value]) => {
-                          if (typeof value === "object") {
-                            return (
-                              <ArrayProperty
-                                key={key}
-                                label={key}
-                                value={value}
-                                onChange={(v) => handlePropChange(key, v)}
+                  ));
+                }
+
+                return orderedGroups.map((groupKey) => {
+                  const config = groupConfig[groupKey];
+                  const groupProps = groups[groupKey];
+
+                  return (
+                    <Collapsible
+                      key={groupKey}
+                      defaultOpen={config.defaultOpen}
+                    >
+                      <CollapsibleTrigger className="flex items-center justify-between w-full text-xs font-medium hover:text-primary transition-colors py-1">
+                        <span className="flex items-center gap-1.5">
+                          {groupKey === "visibility" && (
+                            <svg
+                              className="h-3 w-3"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
                               />
-                            );
-                          }
-                          if (typeof value === "boolean") {
-                            return (
-                              <BooleanProperty
-                                key={key}
-                                label={key}
-                                value={value}
-                                onChange={(v) => handlePropChange(key, v)}
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                               />
-                            );
-                          }
+                            </svg>
+                          )}
+                          {groupKey === "content" && (
+                            <svg
+                              className="h-3 w-3"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M4 6h16M4 12h16m-7 6h7"
+                              />
+                            </svg>
+                          )}
+                          {groupKey === "style" && (
+                            <Palette className="h-3 w-3" />
+                          )}
+                          {config.label}
+                        </span>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {groupProps.length}
+                        </Badge>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2 space-y-3 pb-3 border-b">
+                        {groupProps.map(({ key, schema }) => (
+                          <PropertyEditor
+                            key={key}
+                            propKey={key}
+                            schema={schema}
+                            value={selectedElement.props?.[key]}
+                            onChange={(v) => handlePropChange(key, v)}
+                          />
+                        ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                });
+              })()}
+
+              {/* Fallback: show all current props as text fields when no schema */}
+              {Object.keys(propSchema).length === 0 &&
+                Object.keys(selectedElement.props || {}).length > 0 && (
+                  <>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Current properties (no schema defined):
+                    </p>
+                    {Object.entries(selectedElement.props).map(
+                      ([key, value]) => {
+                        if (typeof value === "object") {
                           return (
-                            <TextProperty
+                            <ArrayProperty
                               key={key}
                               label={key}
-                              value={String(value || "")}
+                              value={value}
                               onChange={(v) => handlePropChange(key, v)}
                             />
                           );
                         }
-                      )}
-                    </>
-                  )}
+                        if (typeof value === "boolean") {
+                          return (
+                            <BooleanProperty
+                              key={key}
+                              label={key}
+                              value={value}
+                              onChange={(v) => handlePropChange(key, v)}
+                            />
+                          );
+                        }
+                        return (
+                          <TextProperty
+                            key={key}
+                            label={key}
+                            value={String(value || "")}
+                            onChange={(v) => handlePropChange(key, v)}
+                          />
+                        );
+                      }
+                    )}
+                  </>
+                )}
 
               {Object.keys(propSchema).length === 0 &&
                 Object.keys(selectedElement.props || {}).length === 0 && (

@@ -38,7 +38,7 @@ export const useEditorStore = create(
       // Canvas State
       canvas: { ...initialCanvasState },
 
-      // UI State  
+      // UI State
       ui: { ...initialUIState },
 
       // ============ CANVAS ACTIONS ============
@@ -56,7 +56,7 @@ export const useEditorStore = create(
 
         set((state) => {
           const elements = [...state.canvas.elements];
-          
+
           if (parentId) {
             // Add as child of parent
             const addToParent = (els) =>
@@ -80,14 +80,14 @@ export const useEditorStore = create(
               },
             };
           }
-          
+
           // Add to root level
           if (index !== null) {
             elements.splice(index, 0, newElement);
           } else {
             elements.push(newElement);
           }
-          
+
           return {
             canvas: {
               ...state.canvas,
@@ -107,10 +107,23 @@ export const useEditorStore = create(
           const updateInTree = (els) =>
             els.map((el) => {
               if (el.id === id) {
+                // Deep merge props if provided
+                const newProps = updates.props
+                  ? { ...el.props, ...updates.props }
+                  : el.props;
+
+                // Deep merge style if provided
+                const newStyle = updates.style
+                  ? { ...el.style, ...updates.style }
+                  : el.style;
+
                 return {
                   ...el,
-                  props: { ...el.props, ...updates.props },
-                  style: { ...el.style, ...updates.style },
+                  props: newProps,
+                  style: newStyle,
+                  // Allow updating other fields like type, children
+                  ...(updates.type ? { type: updates.type } : {}),
+                  ...(updates.children ? { children: updates.children } : {}),
                 };
               }
               return { ...el, children: updateInTree(el.children) };
@@ -149,7 +162,7 @@ export const useEditorStore = create(
       moveElement: (id, newParentId, newIndex) => {
         set((state) => {
           let movedElement = null;
-          
+
           // Remove element from current position
           const removeElement = (els) =>
             els.filter((el) => {
@@ -162,7 +175,7 @@ export const useEditorStore = create(
             });
 
           const elements = removeElement([...state.canvas.elements]);
-          
+
           if (!movedElement) return state;
 
           // Add to new position
@@ -257,7 +270,7 @@ export const useEditorStore = create(
         const { selectedIds, elements } = get().canvas;
         const findElements = (els, ids) =>
           els.filter((el) => ids.includes(el.id)).map(deepCloneWithNewIds);
-        
+
         set((state) => ({
           canvas: {
             ...state.canvas,
@@ -300,7 +313,10 @@ export const useEditorStore = create(
               history: {
                 past: newPast,
                 future: [
-                  { elements: state.canvas.elements, selectedIds: state.canvas.selectedIds },
+                  {
+                    elements: state.canvas.elements,
+                    selectedIds: state.canvas.selectedIds,
+                  },
                   ...future,
                 ],
               },
@@ -325,7 +341,10 @@ export const useEditorStore = create(
               history: {
                 past: [
                   ...past,
-                  { elements: state.canvas.elements, selectedIds: state.canvas.selectedIds },
+                  {
+                    elements: state.canvas.elements,
+                    selectedIds: state.canvas.selectedIds,
+                  },
                 ],
                 future: newFuture,
               },

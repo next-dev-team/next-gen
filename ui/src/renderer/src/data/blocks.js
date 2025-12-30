@@ -2,6 +2,7 @@
 // Each block is a complete, customizable section
 
 export const blockCategories = [
+  { id: "containers", name: "Containers", icon: "Layout" },
   { id: "hero", name: "Hero Sections", icon: "Image" },
   { id: "features", name: "Features", icon: "Grid3X3" },
   { id: "content", name: "Content", icon: "FileText" },
@@ -18,6 +19,268 @@ export const blockCategories = [
 ];
 
 export const blocks = [
+  // ============ CONTAINERS (Figma-like nestable containers) ============
+  {
+    id: "section-container",
+    name: "Section Container",
+    category: "containers",
+    description: "Empty section - drag any elements inside",
+    cli: "",
+    canAcceptChildren: true,
+    defaultProps: {
+      layout: "vertical",
+      maxWidth: "6xl",
+      padding: "16",
+      background: "transparent",
+      align: "center",
+    },
+    propSchema: {
+      layout: {
+        type: "select",
+        label: "Layout",
+        group: "style",
+        options: [
+          { value: "vertical", label: "Vertical (Stack)" },
+          { value: "horizontal", label: "Horizontal (Row)" },
+          { value: "grid-2", label: "Grid 2 Columns" },
+          { value: "grid-3", label: "Grid 3 Columns" },
+        ],
+      },
+      maxWidth: {
+        type: "select",
+        label: "Max Width",
+        group: "style",
+        options: [
+          { value: "sm", label: "Small" },
+          { value: "md", label: "Medium" },
+          { value: "lg", label: "Large" },
+          { value: "4xl", label: "Extra Large" },
+          { value: "6xl", label: "Wide" },
+          { value: "full", label: "Full Width" },
+        ],
+      },
+      padding: {
+        type: "select",
+        label: "Padding",
+        group: "style",
+        options: [
+          { value: "0", label: "None" },
+          { value: "8", label: "Small" },
+          { value: "16", label: "Medium" },
+          { value: "24", label: "Large" },
+        ],
+      },
+      background: {
+        type: "select",
+        label: "Background",
+        group: "style",
+        options: [
+          { value: "transparent", label: "None" },
+          { value: "muted", label: "Muted" },
+          { value: "gradient", label: "Gradient" },
+          { value: "primary", label: "Primary" },
+        ],
+      },
+      align: {
+        type: "select",
+        label: "Content Align",
+        group: "style",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ],
+      },
+    },
+  },
+  {
+    id: "flex-row",
+    name: "Flex Row",
+    category: "containers",
+    description: "Horizontal flex container - buttons, badges, icons",
+    cli: "",
+    canAcceptChildren: true,
+    defaultProps: {
+      gap: "4",
+      align: "center",
+      justify: "start",
+      wrap: true,
+    },
+    propSchema: {
+      gap: {
+        type: "select",
+        label: "Gap",
+        group: "style",
+        options: [
+          { value: "2", label: "Small" },
+          { value: "4", label: "Medium" },
+          { value: "6", label: "Large" },
+          { value: "8", label: "Extra Large" },
+        ],
+      },
+      justify: {
+        type: "select",
+        label: "Justify",
+        group: "style",
+        options: [
+          { value: "start", label: "Start" },
+          { value: "center", label: "Center" },
+          { value: "end", label: "End" },
+          { value: "between", label: "Space Between" },
+        ],
+      },
+      align: {
+        type: "select",
+        label: "Align Items",
+        group: "style",
+        options: [
+          { value: "start", label: "Top" },
+          { value: "center", label: "Center" },
+          { value: "end", label: "Bottom" },
+        ],
+      },
+      wrap: { type: "boolean", label: "Wrap Items", group: "style" },
+    },
+  },
+  {
+    id: "flex-column",
+    name: "Flex Column",
+    category: "containers",
+    description: "Vertical flex container - stack elements",
+    cli: "",
+    canAcceptChildren: true,
+    defaultProps: {
+      gap: "4",
+      align: "stretch",
+    },
+    propSchema: {
+      gap: {
+        type: "select",
+        label: "Gap",
+        group: "style",
+        options: [
+          { value: "2", label: "Small" },
+          { value: "4", label: "Medium" },
+          { value: "6", label: "Large" },
+          { value: "8", label: "Extra Large" },
+        ],
+      },
+      align: {
+        type: "select",
+        label: "Align Items",
+        group: "style",
+        options: [
+          { value: "start", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "end", label: "Right" },
+          { value: "stretch", label: "Stretch" },
+        ],
+      },
+    },
+  },
+  {
+    id: "card-root",
+    name: "Card (Root)",
+    category: "containers",
+    description: "Empty Card wrapper - drag Header, Content, Footer inside",
+    cli: "npx shadcn@latest add card",
+    canAcceptChildren: true,
+    defaultProps: {
+      className: "w-[350px]",
+    },
+    propSchema: {
+      width: {
+        type: "select",
+        label: "Width",
+        options: [
+          { value: "w-full", label: "Full" },
+          { value: "w-[350px]", label: "Fixed (350px)" },
+          { value: "max-w-sm", label: "Max Small" },
+          { value: "max-w-md", label: "Max Medium" },
+        ],
+        group: "style",
+      },
+    },
+  },
+  {
+    id: "card-header",
+    name: "Card Header",
+    category: "containers",
+    description: "Header section for Card",
+    canAcceptChildren: true,
+    defaultProps: {},
+    propSchema: {},
+  },
+  {
+    id: "card-content",
+    name: "Card Content",
+    category: "containers",
+    description: "Main content area for Card",
+    canAcceptChildren: true,
+    defaultProps: {
+      className: "grid gap-4",
+    },
+    propSchema: {
+      layout: {
+        type: "select",
+        label: "Layout",
+        options: [
+          { value: "stack", label: "Stack" },
+          { value: "grid", label: "Grid" },
+        ],
+        group: "style",
+      },
+    },
+  },
+  {
+    id: "card-footer",
+    name: "Card Footer",
+    category: "containers",
+    description: "Footer area - great for buttons",
+    canAcceptChildren: true,
+    defaultProps: {
+      className: "flex justify-between",
+    },
+    propSchema: {
+      justify: {
+        type: "select",
+        label: "Justify",
+        options: [
+          { value: "start", label: "Start" },
+          { value: "end", label: "End" },
+          { value: "between", label: "Between" },
+          { value: "center", label: "Center" },
+        ],
+        group: "style",
+      },
+    },
+  },
+  {
+    id: "card-title",
+    name: "Card Title",
+    category: "content",
+    description: "Title for Card Header",
+    defaultProps: {
+      text: "Card Title",
+      level: 3,
+    },
+    propSchema: {
+      text: { type: "text", label: "Text", group: "content" },
+    },
+  },
+  {
+    id: "card-description",
+    name: "Card Description",
+    category: "content",
+    description: "Description text for Card Header",
+    defaultProps: {
+      text: "Card description goes here",
+    },
+    propSchema: {
+      text: { type: "text", label: "Text", group: "content" },
+    },
+  },
+
   // ============ HERO SECTIONS ============
   {
     id: "hero-centered",
@@ -26,25 +289,115 @@ export const blocks = [
     description: "Centered hero with gradient background",
     cli: "npx shadcn@latest add button",
     defaultProps: {
+      // Content
       heading: "Build something amazing",
       subheading: "The modern platform for developers",
-      description: "Create beautiful, production-ready pages with our low-code editor. No coding required.",
+      description:
+        "Create beautiful, production-ready pages with our low-code editor. No coding required.",
       primaryButton: "Get Started Free",
       primaryHref: "#",
       secondaryButton: "View Demo",
       secondaryHref: "#",
+      // Visibility toggles (Figma-like show/hide)
+      showHeading: true,
+      showSubheading: true,
+      showDescription: true,
+      showPrimaryButton: true,
+      showSecondaryButton: true,
       showGradient: true,
+      // Styling
+      headingSize: "5xl",
+      textAlign: "center",
+      paddingY: "20",
     },
-    editableProps: ["heading", "subheading", "description", "primaryButton", "secondaryButton"],
+    editableProps: [
+      "heading",
+      "subheading",
+      "description",
+      "primaryButton",
+      "secondaryButton",
+    ],
     propSchema: {
-      heading: { type: "text", label: "Heading" },
-      subheading: { type: "text", label: "Subheading" },
-      description: { type: "textarea", label: "Description" },
-      primaryButton: { type: "text", label: "Primary Button" },
-      primaryHref: { type: "text", label: "Primary URL" },
-      secondaryButton: { type: "text", label: "Secondary Button" },
-      secondaryHref: { type: "text", label: "Secondary URL" },
-      showGradient: { type: "boolean", label: "Show Gradient" },
+      // Content section
+      heading: { type: "text", label: "Heading", group: "content" },
+      subheading: { type: "text", label: "Subheading", group: "content" },
+      description: { type: "textarea", label: "Description", group: "content" },
+      primaryButton: {
+        type: "text",
+        label: "Primary Button",
+        group: "content",
+      },
+      primaryHref: { type: "text", label: "Primary URL", group: "content" },
+      secondaryButton: {
+        type: "text",
+        label: "Secondary Button",
+        group: "content",
+      },
+      secondaryHref: { type: "text", label: "Secondary URL", group: "content" },
+      // Visibility toggles
+      showHeading: {
+        type: "boolean",
+        label: "Show Heading",
+        group: "visibility",
+      },
+      showSubheading: {
+        type: "boolean",
+        label: "Show Subheading",
+        group: "visibility",
+      },
+      showDescription: {
+        type: "boolean",
+        label: "Show Description",
+        group: "visibility",
+      },
+      showPrimaryButton: {
+        type: "boolean",
+        label: "Show Primary Button",
+        group: "visibility",
+      },
+      showSecondaryButton: {
+        type: "boolean",
+        label: "Show Secondary Button",
+        group: "visibility",
+      },
+      showGradient: {
+        type: "boolean",
+        label: "Show Gradient",
+        group: "visibility",
+      },
+      // Styling options
+      headingSize: {
+        type: "select",
+        label: "Heading Size",
+        group: "style",
+        options: [
+          { value: "3xl", label: "Small" },
+          { value: "4xl", label: "Medium" },
+          { value: "5xl", label: "Large" },
+          { value: "6xl", label: "Extra Large" },
+        ],
+      },
+      textAlign: {
+        type: "select",
+        label: "Text Align",
+        group: "style",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "center", label: "Center" },
+          { value: "right", label: "Right" },
+        ],
+      },
+      paddingY: {
+        type: "select",
+        label: "Vertical Padding",
+        group: "style",
+        options: [
+          { value: "10", label: "Small" },
+          { value: "16", label: "Medium" },
+          { value: "20", label: "Large" },
+          { value: "32", label: "Extra Large" },
+        ],
+      },
     },
   },
   {
@@ -55,14 +408,89 @@ export const blocks = [
     cli: "npx shadcn@latest add button",
     defaultProps: {
       heading: "Accelerate your workflow",
-      description: "Automate repetitive tasks and focus on what matters. Our platform helps teams ship faster.",
+      description:
+        "Automate repetitive tasks and focus on what matters. Our platform helps teams ship faster.",
       primaryButton: "Start Building",
       primaryHref: "#",
       secondaryButton: "Learn More",
       secondaryHref: "#",
       imagePlaceholder: true,
+      // Visibility toggles
+      showHeading: true,
+      showDescription: true,
+      showPrimaryButton: true,
+      showSecondaryButton: true,
+      showImage: true,
+      // Style options
+      imagePosition: "right",
+      paddingY: "20",
     },
-    editableProps: ["heading", "description", "primaryButton", "secondaryButton"],
+    editableProps: [
+      "heading",
+      "description",
+      "primaryButton",
+      "secondaryButton",
+    ],
+    propSchema: {
+      // Content section
+      heading: { type: "text", label: "Heading", group: "content" },
+      description: { type: "textarea", label: "Description", group: "content" },
+      primaryButton: {
+        type: "text",
+        label: "Primary Button",
+        group: "content",
+      },
+      primaryHref: { type: "text", label: "Primary URL", group: "content" },
+      secondaryButton: {
+        type: "text",
+        label: "Secondary Button",
+        group: "content",
+      },
+      secondaryHref: { type: "text", label: "Secondary URL", group: "content" },
+      // Visibility toggles
+      showHeading: {
+        type: "boolean",
+        label: "Show Heading",
+        group: "visibility",
+      },
+      showDescription: {
+        type: "boolean",
+        label: "Show Description",
+        group: "visibility",
+      },
+      showPrimaryButton: {
+        type: "boolean",
+        label: "Show Primary Button",
+        group: "visibility",
+      },
+      showSecondaryButton: {
+        type: "boolean",
+        label: "Show Secondary Button",
+        group: "visibility",
+      },
+      showImage: { type: "boolean", label: "Show Image", group: "visibility" },
+      // Style options
+      imagePosition: {
+        type: "select",
+        label: "Image Position",
+        group: "style",
+        options: [
+          { value: "left", label: "Left" },
+          { value: "right", label: "Right" },
+        ],
+      },
+      paddingY: {
+        type: "select",
+        label: "Vertical Padding",
+        group: "style",
+        options: [
+          { value: "10", label: "Small" },
+          { value: "16", label: "Medium" },
+          { value: "20", label: "Large" },
+          { value: "32", label: "Extra Large" },
+        ],
+      },
+    },
   },
   {
     id: "hero-video",
@@ -91,20 +519,70 @@ export const blocks = [
       description: "A complete toolkit for modern development.",
       columns: 3,
       features: [
-        { icon: "Zap", title: "Lightning Fast", description: "Optimized for speed. Your pages load in milliseconds." },
-        { icon: "Shield", title: "Secure by Default", description: "Enterprise-grade security built into every layer." },
-        { icon: "Code", title: "Developer First", description: "Clean APIs and comprehensive documentation." },
-        { icon: "Puzzle", title: "Extensible", description: "Plugins and integrations for every use case." },
-        { icon: "Globe", title: "Global Scale", description: "Deploy to 200+ edge locations worldwide." },
-        { icon: "Headphones", title: "24/7 Support", description: "Expert help whenever you need it." },
+        {
+          icon: "Zap",
+          title: "Lightning Fast",
+          description: "Optimized for speed. Your pages load in milliseconds.",
+        },
+        {
+          icon: "Shield",
+          title: "Secure by Default",
+          description: "Enterprise-grade security built into every layer.",
+        },
+        {
+          icon: "Code",
+          title: "Developer First",
+          description: "Clean APIs and comprehensive documentation.",
+        },
+        {
+          icon: "Puzzle",
+          title: "Extensible",
+          description: "Plugins and integrations for every use case.",
+        },
+        {
+          icon: "Globe",
+          title: "Global Scale",
+          description: "Deploy to 200+ edge locations worldwide.",
+        },
+        {
+          icon: "Headphones",
+          title: "24/7 Support",
+          description: "Expert help whenever you need it.",
+        },
       ],
+      // Visibility toggles
+      showHeading: true,
+      showDescription: true,
+      showIcons: true,
     },
     editableProps: ["heading", "description"],
     propSchema: {
-      heading: { type: "text", label: "Heading" },
-      description: { type: "textarea", label: "Description" },
-      columns: { type: "select", label: "Columns", options: [{ value: 2, label: "2" }, { value: 3, label: "3" }, { value: 4, label: "4" }] },
-      features: { type: "array", label: "Features" },
+      heading: { type: "text", label: "Heading", group: "content" },
+      description: { type: "textarea", label: "Description", group: "content" },
+      features: { type: "array", label: "Features", group: "content" },
+      // Visibility toggles
+      showHeading: {
+        type: "boolean",
+        label: "Show Heading",
+        group: "visibility",
+      },
+      showDescription: {
+        type: "boolean",
+        label: "Show Description",
+        group: "visibility",
+      },
+      showIcons: { type: "boolean", label: "Show Icons", group: "visibility" },
+      // Style options
+      columns: {
+        type: "select",
+        label: "Columns",
+        group: "style",
+        options: [
+          { value: 2, label: "2" },
+          { value: 3, label: "3" },
+          { value: 4, label: "4" },
+        ],
+      },
     },
   },
   {
@@ -116,9 +594,18 @@ export const blocks = [
     defaultProps: {
       heading: "Why choose us",
       features: [
-        { title: "Easy to use", description: "Intuitive interface that anyone can learn in minutes." },
-        { title: "Powerful integrations", description: "Connect with 100+ tools you already use." },
-        { title: "Real-time collaboration", description: "Work together with your team seamlessly." },
+        {
+          title: "Easy to use",
+          description: "Intuitive interface that anyone can learn in minutes.",
+        },
+        {
+          title: "Powerful integrations",
+          description: "Connect with 100+ tools you already use.",
+        },
+        {
+          title: "Real-time collaboration",
+          description: "Work together with your team seamlessly.",
+        },
       ],
     },
     editableProps: ["heading"],
@@ -131,8 +618,17 @@ export const blocks = [
     cli: "npx shadcn@latest add card button",
     defaultProps: {
       features: [
-        { heading: "Design with ease", description: "Drag and drop components to build beautiful interfaces.", imageSide: "right" },
-        { heading: "Export clean code", description: "Get production-ready React code with one click.", imageSide: "left" },
+        {
+          heading: "Design with ease",
+          description:
+            "Drag and drop components to build beautiful interfaces.",
+          imageSide: "right",
+        },
+        {
+          heading: "Export clean code",
+          description: "Get production-ready React code with one click.",
+          imageSide: "left",
+        },
       ],
     },
   },
@@ -146,7 +642,8 @@ export const blocks = [
     cli: "",
     defaultProps: {
       heading: "Our Story",
-      content: "We started with a simple idea: make development accessible to everyone. Today, thousands of teams use our platform to build amazing products.\n\nOur mission is to democratize software development. We believe that great ideas shouldn't be limited by technical barriers.",
+      content:
+        "We started with a simple idea: make development accessible to everyone. Today, thousands of teams use our platform to build amazing products.\n\nOur mission is to democratize software development. We believe that great ideas shouldn't be limited by technical barriers.",
     },
     editableProps: ["heading", "content"],
   },
@@ -158,11 +655,18 @@ export const blocks = [
     cli: "",
     defaultProps: {
       leftHeading: "For Designers",
-      leftContent: "Create pixel-perfect designs and hand off clean specifications to developers.",
+      leftContent:
+        "Create pixel-perfect designs and hand off clean specifications to developers.",
       rightHeading: "For Developers",
-      rightContent: "Build faster with pre-built components and automatic code generation.",
+      rightContent:
+        "Build faster with pre-built components and automatic code generation.",
     },
-    editableProps: ["leftHeading", "leftContent", "rightHeading", "rightContent"],
+    editableProps: [
+      "leftHeading",
+      "leftContent",
+      "rightHeading",
+      "rightContent",
+    ],
   },
 
   // ============ PRICING ============
@@ -181,7 +685,12 @@ export const blocks = [
           price: "$0",
           period: "/month",
           description: "For individuals getting started",
-          features: ["5 projects", "Basic components", "Community support", "1GB storage"],
+          features: [
+            "5 projects",
+            "Basic components",
+            "Community support",
+            "1GB storage",
+          ],
           buttonText: "Get Started",
           buttonVariant: "outline",
           popular: false,
@@ -191,7 +700,14 @@ export const blocks = [
           price: "$29",
           period: "/month",
           description: "For growing teams",
-          features: ["Unlimited projects", "All components", "Priority support", "100GB storage", "Custom domains", "Analytics"],
+          features: [
+            "Unlimited projects",
+            "All components",
+            "Priority support",
+            "100GB storage",
+            "Custom domains",
+            "Analytics",
+          ],
           buttonText: "Start Free Trial",
           buttonVariant: "default",
           popular: true,
@@ -201,7 +717,14 @@ export const blocks = [
           price: "Custom",
           period: "",
           description: "For large organizations",
-          features: ["Everything in Pro", "Dedicated support", "SLA guarantee", "SSO/SAML", "Custom integrations", "On-premise option"],
+          features: [
+            "Everything in Pro",
+            "Dedicated support",
+            "SLA guarantee",
+            "SSO/SAML",
+            "Custom integrations",
+            "On-premise option",
+          ],
           buttonText: "Contact Sales",
           buttonVariant: "outline",
           popular: false,
@@ -237,9 +760,30 @@ export const blocks = [
     defaultProps: {
       heading: "Loved by developers",
       testimonials: [
-        { quote: "This tool has completely transformed our workflow. We ship features 10x faster.", author: "Sarah Chen", role: "CTO", company: "TechCorp", avatar: "" },
-        { quote: "The best low-code platform I've ever used. Clean code output and great UX.", author: "Mike Johnson", role: "Lead Developer", company: "StartupXYZ", avatar: "" },
-        { quote: "Our designers and developers finally speak the same language.", author: "Emily Davis", role: "Design Lead", company: "DesignStudio", avatar: "" },
+        {
+          quote:
+            "This tool has completely transformed our workflow. We ship features 10x faster.",
+          author: "Sarah Chen",
+          role: "CTO",
+          company: "TechCorp",
+          avatar: "",
+        },
+        {
+          quote:
+            "The best low-code platform I've ever used. Clean code output and great UX.",
+          author: "Mike Johnson",
+          role: "Lead Developer",
+          company: "StartupXYZ",
+          avatar: "",
+        },
+        {
+          quote:
+            "Our designers and developers finally speak the same language.",
+          author: "Emily Davis",
+          role: "Design Lead",
+          company: "DesignStudio",
+          avatar: "",
+        },
       ],
     },
     editableProps: ["heading"],
@@ -251,7 +795,8 @@ export const blocks = [
     description: "Large featured testimonial",
     cli: "npx shadcn@latest add card avatar",
     defaultProps: {
-      quote: "I've tried every page builder out there. This is the only one that produces code I'd actually ship to production.",
+      quote:
+        "I've tried every page builder out there. This is the only one that produces code I'd actually ship to production.",
       author: "Alex Rivera",
       role: "Senior Engineer",
       company: "BigTech Inc",
@@ -275,7 +820,12 @@ export const blocks = [
       secondaryButton: "Talk to Sales",
       secondaryHref: "#",
     },
-    editableProps: ["heading", "description", "primaryButton", "secondaryButton"],
+    editableProps: [
+      "heading",
+      "description",
+      "primaryButton",
+      "secondaryButton",
+    ],
   },
   {
     id: "cta-newsletter",
@@ -315,12 +865,33 @@ export const blocks = [
     cli: "npx shadcn@latest add button input textarea label card",
     defaultProps: {
       heading: "Get in touch",
-      description: "We'd love to hear from you. Send us a message and we'll respond within 24 hours.",
+      description:
+        "We'd love to hear from you. Send us a message and we'll respond within 24 hours.",
       fields: [
-        { label: "Full Name", type: "text", placeholder: "John Doe", required: true },
-        { label: "Email", type: "email", placeholder: "john@example.com", required: true },
-        { label: "Subject", type: "text", placeholder: "How can we help?", required: false },
-        { label: "Message", type: "textarea", placeholder: "Your message...", required: true },
+        {
+          label: "Full Name",
+          type: "text",
+          placeholder: "John Doe",
+          required: true,
+        },
+        {
+          label: "Email",
+          type: "email",
+          placeholder: "john@example.com",
+          required: true,
+        },
+        {
+          label: "Subject",
+          type: "text",
+          placeholder: "How can we help?",
+          required: false,
+        },
+        {
+          label: "Message",
+          type: "textarea",
+          placeholder: "Your message...",
+          required: true,
+        },
       ],
       submitButton: "Send Message",
     },
@@ -355,8 +926,16 @@ export const blocks = [
       fields: [
         { label: "Full Name", type: "text", placeholder: "John Doe" },
         { label: "Email", type: "email", placeholder: "john@example.com" },
-        { label: "Password", type: "password", placeholder: "Create a password" },
-        { label: "Confirm Password", type: "password", placeholder: "Confirm your password" },
+        {
+          label: "Password",
+          type: "password",
+          placeholder: "Create a password",
+        },
+        {
+          label: "Confirm Password",
+          type: "password",
+          placeholder: "Confirm your password",
+        },
       ],
       submitButton: "Create Account",
       termsText: "I agree to the Terms of Service and Privacy Policy",
@@ -395,7 +974,10 @@ export const blocks = [
       menus: [
         { label: "Products", items: ["Product A", "Product B", "Product C"] },
         { label: "Solutions", items: ["Enterprise", "Startups", "Agencies"] },
-        { label: "Resources", items: ["Documentation", "API Reference", "Support"] },
+        {
+          label: "Resources",
+          items: ["Documentation", "API Reference", "Support"],
+        },
       ],
       ctaButton: "Sign Up",
     },
@@ -413,7 +995,10 @@ export const blocks = [
       logo: "Acme Inc",
       tagline: "Building the future of development.",
       columns: [
-        { title: "Product", links: ["Features", "Pricing", "Changelog", "Documentation"] },
+        {
+          title: "Product",
+          links: ["Features", "Pricing", "Changelog", "Documentation"],
+        },
         { title: "Company", links: ["About", "Blog", "Careers", "Press"] },
         { title: "Legal", links: ["Terms", "Privacy", "Cookies"] },
       ],
@@ -437,7 +1022,12 @@ export const blocks = [
       ],
       copyright: "© 2024 Brand. All rights reserved.",
     },
-    editableProps: ["logo", "newsletterHeading", "newsletterDescription", "copyright"],
+    editableProps: [
+      "logo",
+      "newsletterHeading",
+      "newsletterDescription",
+      "copyright",
+    ],
   },
 
   // ============ TEAM ============
@@ -451,10 +1041,30 @@ export const blocks = [
       heading: "Meet our team",
       description: "The people behind the product.",
       members: [
-        { name: "John Smith", role: "CEO & Founder", bio: "10+ years building products.", avatar: "" },
-        { name: "Sarah Johnson", role: "CTO", bio: "Former Google engineer.", avatar: "" },
-        { name: "Mike Chen", role: "Head of Design", bio: "Award-winning designer.", avatar: "" },
-        { name: "Emily Davis", role: "Head of Marketing", bio: "Growth expert.", avatar: "" },
+        {
+          name: "John Smith",
+          role: "CEO & Founder",
+          bio: "10+ years building products.",
+          avatar: "",
+        },
+        {
+          name: "Sarah Johnson",
+          role: "CTO",
+          bio: "Former Google engineer.",
+          avatar: "",
+        },
+        {
+          name: "Mike Chen",
+          role: "Head of Design",
+          bio: "Award-winning designer.",
+          avatar: "",
+        },
+        {
+          name: "Emily Davis",
+          role: "Head of Marketing",
+          bio: "Growth expert.",
+          avatar: "",
+        },
       ],
     },
     editableProps: ["heading", "description"],
@@ -526,9 +1136,27 @@ export const blocks = [
       heading: "Latest from our blog",
       description: "Insights, tutorials, and updates from our team.",
       posts: [
-        { title: "Getting Started with Our Platform", excerpt: "A complete guide to building your first page.", date: "Dec 15, 2024", tag: "Tutorial", image: "" },
-        { title: "Best Practices for Component Design", excerpt: "Learn how to create reusable, maintainable components.", date: "Dec 10, 2024", tag: "Design", image: "" },
-        { title: "Announcing v2.0", excerpt: "Major updates including new features and improvements.", date: "Dec 5, 2024", tag: "News", image: "" },
+        {
+          title: "Getting Started with Our Platform",
+          excerpt: "A complete guide to building your first page.",
+          date: "Dec 15, 2024",
+          tag: "Tutorial",
+          image: "",
+        },
+        {
+          title: "Best Practices for Component Design",
+          excerpt: "Learn how to create reusable, maintainable components.",
+          date: "Dec 10, 2024",
+          tag: "Design",
+          image: "",
+        },
+        {
+          title: "Announcing v2.0",
+          excerpt: "Major updates including new features and improvements.",
+          date: "Dec 5, 2024",
+          tag: "News",
+          image: "",
+        },
       ],
     },
     editableProps: ["heading", "description"],
@@ -545,11 +1173,31 @@ export const blocks = [
       heading: "Frequently Asked Questions",
       description: "Find answers to common questions about our platform.",
       items: [
-        { question: "How do I get started?", answer: "Simply sign up for a free account and follow our quick start guide. You'll be building pages in minutes." },
-        { question: "What payment methods do you accept?", answer: "We accept all major credit cards, PayPal, and bank transfers for enterprise customers." },
-        { question: "Can I cancel my subscription?", answer: "Yes, you can cancel your subscription at any time. Your access will continue until the end of your billing period." },
-        { question: "Do you offer refunds?", answer: "We offer a 14-day money-back guarantee. If you're not satisfied, contact support for a full refund." },
-        { question: "Is there a free trial?", answer: "Yes! Our Pro plan includes a 14-day free trial with no credit card required." },
+        {
+          question: "How do I get started?",
+          answer:
+            "Simply sign up for a free account and follow our quick start guide. You'll be building pages in minutes.",
+        },
+        {
+          question: "What payment methods do you accept?",
+          answer:
+            "We accept all major credit cards, PayPal, and bank transfers for enterprise customers.",
+        },
+        {
+          question: "Can I cancel my subscription?",
+          answer:
+            "Yes, you can cancel your subscription at any time. Your access will continue until the end of your billing period.",
+        },
+        {
+          question: "Do you offer refunds?",
+          answer:
+            "We offer a 14-day money-back guarantee. If you're not satisfied, contact support for a full refund.",
+        },
+        {
+          question: "Is there a free trial?",
+          answer:
+            "Yes! Our Pro plan includes a 14-day free trial with no credit card required.",
+        },
       ],
     },
     editableProps: ["heading", "description"],
@@ -577,8 +1225,24 @@ export const blocks = [
       spacing: "lg",
     },
     propSchema: {
-      style: { type: "select", label: "Style", options: [{ value: "line", label: "Line" }, { value: "dots", label: "Dots" }, { value: "gradient", label: "Gradient" }] },
-      spacing: { type: "select", label: "Spacing", options: [{ value: "sm", label: "Small" }, { value: "md", label: "Medium" }, { value: "lg", label: "Large" }] },
+      style: {
+        type: "select",
+        label: "Style",
+        options: [
+          { value: "line", label: "Line" },
+          { value: "dots", label: "Dots" },
+          { value: "gradient", label: "Gradient" },
+        ],
+      },
+      spacing: {
+        type: "select",
+        label: "Spacing",
+        options: [
+          { value: "sm", label: "Small" },
+          { value: "md", label: "Medium" },
+          { value: "lg", label: "Large" },
+        ],
+      },
     },
   },
 ];

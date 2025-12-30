@@ -23,10 +23,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select";
-import { InlineEditable, EditableHeading, EditableParagraph } from "./InlineEditable";
-import { EditableText, EditableButtonGroup, EditableList, AddContentButton } from "./EditableBlock";
+import {
+  InlineEditable,
+  EditableHeading,
+  EditableParagraph,
+} from "./InlineEditable";
+import {
+  EditableText,
+  EditableButtonGroup,
+  EditableList,
+  AddContentButton,
+} from "./EditableBlock";
+import {
+  ContainerBlock,
+  NestedElement,
+  ElementDropZone,
+  AddElementButton,
+} from "./NestedElements";
 import { useEditorStore } from "../../../stores/editorStore";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, GripVertical, Eye, EyeOff } from "lucide-react";
 import {
   Zap,
   Shield,
@@ -45,11 +60,540 @@ import {
 
 // Icon map for feature sections
 const iconMap = {
-  Zap, Shield, Code, Puzzle, Globe, Headphones, Check, Star, Users, Award, Mail, Phone, MapPin,
+  Zap,
+  Shield,
+  Code,
+  Puzzle,
+  Globe,
+  Headphones,
+  Check,
+  Star,
+  Users,
+  Award,
+  Mail,
+  Phone,
+  MapPin,
 };
 
 // Component registry with inline editing support
-const createComponentRegistry = (updateElement, isSelected) => ({
+const createComponentRegistry = (
+  updateElement,
+  isSelected,
+  addElement,
+  selectedIds
+) => ({
+  // ============ CONTAINER COMPONENTS (accept children) ============
+  "section-container": ({ element, props, style }) => {
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const [dragOverIndex, setDragOverIndex] = React.useState(null);
+
+    const childElements = element.children || [];
+    const isEmpty = childElements.length === 0;
+
+    // Layout classes
+    const layoutClasses = {
+      vertical: "flex flex-col",
+      horizontal: "flex flex-row flex-wrap",
+      "grid-2": "grid grid-cols-1 md:grid-cols-2",
+      "grid-3": "grid grid-cols-1 md:grid-cols-3",
+    };
+
+    const backgroundClasses = {
+      transparent: "",
+      muted: "bg-muted/30",
+      gradient: "bg-gradient-to-b from-background to-muted/30",
+      primary: "bg-primary/5",
+    };
+
+    const alignClasses = {
+      left: "items-start text-left",
+      center: "items-center text-center",
+      right: "items-end text-right",
+    };
+
+    const handleDrop = (e, index = null) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      setDragOverIndex(null);
+
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json"));
+        if (data && data.type) {
+          addElement(data, element.id, index ?? childElements.length);
+        }
+      } catch (err) {
+        console.error("Container drop error:", err);
+      }
+    };
+
+    const handleDragOver = (e, index = null) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(true);
+      setDragOverIndex(index);
+      e.dataTransfer.dropEffect = "copy";
+    };
+
+    const handleDragLeave = (e) => {
+      if (!e.currentTarget.contains(e.relatedTarget)) {
+        setIsDragOver(false);
+        setDragOverIndex(null);
+      }
+    };
+
+    return (
+      <section
+        className={`w-full px-6 py-${props.padding || 16} ${
+          backgroundClasses[props.background] || ""
+        } ${props.className || ""}`}
+        style={style}
+        onDrop={(e) => handleDrop(e)}
+        onDragOver={(e) => handleDragOver(e)}
+        onDragLeave={handleDragLeave}
+      >
+        <div className={`mx-auto max-w-${props.maxWidth || "6xl"}`}>
+          <div
+            className={`
+              ${layoutClasses[props.layout] || layoutClasses.vertical} 
+              ${alignClasses[props.align] || alignClasses.center}
+              gap-4
+              ${
+                isDragOver
+                  ? "ring-2 ring-dashed ring-primary bg-primary/5 rounded-lg min-h-[100px]"
+                  : ""
+              }
+              ${isEmpty ? "min-h-[120px]" : ""}
+            `}
+          >
+            {isEmpty ? (
+              <div
+                className={`
+                  flex-1 flex flex-col items-center justify-center py-12
+                  border-2 border-dashed rounded-lg transition-colors
+                  ${
+                    isDragOver
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-muted-foreground/30 text-muted-foreground/50"
+                  }
+                `}
+              >
+                <Plus className="h-8 w-8 mb-2 opacity-50" />
+                <p className="text-sm font-medium">Drag elements here</p>
+                <p className="text-xs mt-1">
+                  Button, Heading, Paragraph, Card, etc.
+                </p>
+              </div>
+            ) : (
+              childElements.map((child, index) => (
+                <React.Fragment key={child.id}>
+                  {/* Drop zone before element */}
+                  {isSelected && (
+                    <div
+                      className={`h-1 w-full rounded transition-all ${
+                        dragOverIndex === index
+                          ? "bg-primary h-2"
+                          : "hover:bg-primary/30"
+                      }`}
+                      onDrop={(e) => handleDrop(e, index)}
+                      onDragOver={(e) => handleDragOver(e, index)}
+                    />
+                  )}
+                  {/* Render child - this creates recursion */}
+                  <ComponentRenderer
+                    element={child}
+                    isSelected={selectedIds?.includes(child.id)}
+                  />
+                </React.Fragment>
+              ))
+            )}
+            {/* Drop zone after last element */}
+            {!isEmpty && isSelected && (
+              <div
+                className={`h-1 w-full rounded transition-all ${
+                  dragOverIndex === childElements.length
+                    ? "bg-primary h-2"
+                    : "hover:bg-primary/30"
+                }`}
+                onDrop={(e) => handleDrop(e, childElements.length)}
+                onDragOver={(e) => handleDragOver(e, childElements.length)}
+              />
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  },
+
+  "flex-row": ({ element, props, style }) => {
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const childElements = element.children || [];
+    const isEmpty = childElements.length === 0;
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json"));
+        if (data && data.type) {
+          addElement(data, element.id, childElements.length);
+        }
+      } catch (err) {
+        console.error("Flex row drop error:", err);
+      }
+    };
+
+    const handleDragOver = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(true);
+      e.dataTransfer.dropEffect = "copy";
+    };
+
+    return (
+      <div
+        className={`
+          flex flex-row gap-${props.gap || 4} 
+          items-${props.align || "center"} 
+          justify-${props.justify || "start"}
+          ${props.wrap ? "flex-wrap" : ""}
+          ${
+            isDragOver
+              ? "ring-2 ring-dashed ring-primary bg-primary/5 rounded p-2"
+              : ""
+          }
+          ${
+            isEmpty
+              ? "min-h-[60px] border-2 border-dashed border-muted-foreground/30 rounded-lg"
+              : ""
+          }
+          ${props.className || ""}
+        `}
+        style={style}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDragOver(false)}
+      >
+        {isEmpty ? (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground/50 text-sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Drop buttons, badges, icons...
+          </div>
+        ) : (
+          childElements.map((child) => (
+            <ComponentRenderer
+              key={child.id}
+              element={child}
+              isSelected={selectedIds?.includes(child.id)}
+            />
+          ))
+        )}
+      </div>
+    );
+  },
+
+  "flex-column": ({ element, props, style }) => {
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const childElements = element.children || [];
+    const isEmpty = childElements.length === 0;
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json"));
+        if (data && data.type) {
+          addElement(data, element.id, childElements.length);
+        }
+      } catch (err) {
+        console.error("Flex column drop error:", err);
+      }
+    };
+
+    const handleDragOver = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(true);
+      e.dataTransfer.dropEffect = "copy";
+    };
+
+    return (
+      <div
+        className={`
+          flex flex-col gap-${props.gap || 4} 
+          items-${props.align || "stretch"}
+          ${
+            isDragOver
+              ? "ring-2 ring-dashed ring-primary bg-primary/5 rounded p-2"
+              : ""
+          }
+          ${
+            isEmpty
+              ? "min-h-[80px] border-2 border-dashed border-muted-foreground/30 rounded-lg"
+              : ""
+          }
+          ${props.className || ""}
+        `}
+        style={style}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDragOver(false)}
+      >
+        {isEmpty ? (
+          <div className="flex-1 flex items-center justify-center text-muted-foreground/50 text-sm py-4">
+            <Plus className="h-4 w-4 mr-1" />
+            Drop headings, paragraphs, cards...
+          </div>
+        ) : (
+          childElements.map((child) => (
+            <ComponentRenderer
+              key={child.id}
+              element={child}
+              isSelected={selectedIds?.includes(child.id)}
+            />
+          ))
+        )}
+      </div>
+    );
+  },
+
+  "card-root": ({ element, props, style }) => {
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const childElements = element.children || [];
+    const isEmpty = childElements.length === 0;
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json"));
+        if (data && data.type) {
+          addElement(data, element.id, childElements.length);
+        }
+      } catch (err) {
+        console.error("Card drop error:", err);
+      }
+    };
+
+    const handleDragOver = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(true);
+      e.dataTransfer.dropEffect = "copy";
+    };
+
+    return (
+      <Card
+        className={`${props.width || "w-[350px]"} ${
+          isDragOver ? "ring-2 ring-primary ring-dashed bg-primary/5" : ""
+        } ${props.className || ""}`}
+        style={style}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={() => setIsDragOver(false)}
+      >
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center text-muted-foreground/50 text-sm py-8 border-2 border-dashed border-muted-foreground/20 rounded m-2">
+            <Plus className="h-4 w-4 mb-1" />
+            <span className="text-xs">Drag Header/Content/Footer</span>
+          </div>
+        ) : (
+          childElements.map((child) => (
+            <ComponentRenderer
+              key={child.id}
+              element={child}
+              isSelected={selectedIds?.includes(child.id)}
+            />
+          ))
+        )}
+      </Card>
+    );
+  },
+
+  "card-header": ({ element, props, style }) => {
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const childElements = element.children || [];
+    const isEmpty = childElements.length === 0;
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json"));
+        if (data && data.type) {
+          addElement(data, element.id, childElements.length);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    return (
+      <CardHeader
+        className={`${isDragOver ? "bg-primary/10 dashed-border" : ""} ${
+          props.className || ""
+        }`}
+        style={style}
+        onDrop={handleDrop}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+      >
+        {isEmpty ? (
+          <div className="text-xs text-muted-foreground/50 text-center border border-dashed rounded py-2">
+            Header (Drag Title/Desc)
+          </div>
+        ) : (
+          childElements.map((child) => (
+            <ComponentRenderer
+              key={child.id}
+              element={child}
+              isSelected={selectedIds?.includes(child.id)}
+            />
+          ))
+        )}
+      </CardHeader>
+    );
+  },
+
+  "card-content": ({ element, props, style }) => {
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const childElements = element.children || [];
+    const isEmpty = childElements.length === 0;
+
+    // Layout class
+    const layoutClass =
+      props.layout === "grid" ? "grid gap-4" : "flex flex-col space-y-2";
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json"));
+        if (data && data.type) {
+          addElement(data, element.id, childElements.length);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    return (
+      <CardContent
+        className={`${layoutClass} ${isDragOver ? "bg-primary/5" : ""} ${
+          props.className || ""
+        }`}
+        style={style}
+        onDrop={handleDrop}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+      >
+        {isEmpty ? (
+          <div className="text-xs text-muted-foreground/50 text-center border border-dashed rounded py-4">
+            Content Area
+          </div>
+        ) : (
+          childElements.map((child) => (
+            <ComponentRenderer
+              key={child.id}
+              element={child}
+              isSelected={selectedIds?.includes(child.id)}
+            />
+          ))
+        )}
+      </CardContent>
+    );
+  },
+
+  "card-footer": ({ element, props, style }) => {
+    const [isDragOver, setIsDragOver] = React.useState(false);
+    const childElements = element.children || [];
+    const isEmpty = childElements.length === 0;
+
+    const justifyClass = props.justify
+      ? `justify-${props.justify}`
+      : "justify-between";
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOver(false);
+      try {
+        const data = JSON.parse(e.dataTransfer.getData("application/json"));
+        if (data && data.type) {
+          addElement(data, element.id, childElements.length);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    return (
+      <CardFooter
+        className={`flex ${justifyClass} ${isDragOver ? "bg-primary/5" : ""} ${
+          props.className || ""
+        }`}
+        style={style}
+        onDrop={handleDrop}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setIsDragOver(true);
+        }}
+        onDragLeave={() => setIsDragOver(false)}
+      >
+        {isEmpty ? (
+          <div className="w-full text-xs text-muted-foreground/50 text-center border border-dashed rounded py-2">
+            Footer (Drag Buttons)
+          </div>
+        ) : (
+          childElements.map((child) => (
+            <ComponentRenderer
+              key={child.id}
+              element={child}
+              isSelected={selectedIds?.includes(child.id)}
+            />
+          ))
+        )}
+      </CardFooter>
+    );
+  },
+
+  "card-title": ({ element, props, style }) => (
+    <CardTitle className={props.className || ""} style={style}>
+      {isSelected ? (
+        <EditableText
+          value={props.text || "Title"}
+          onChange={(v) => updateElement(element.id, { props: { text: v } })}
+        />
+      ) : (
+        props.text
+      )}
+    </CardTitle>
+  ),
+
+  "card-description": ({ element, props, style }) => (
+    <CardDescription className={props.className || ""} style={style}>
+      {isSelected ? (
+        <EditableText
+          value={props.text || "Description"}
+          onChange={(v) => updateElement(element.id, { props: { text: v } })}
+        />
+      ) : (
+        props.text
+      )}
+    </CardDescription>
+  ),
+
   // ============ BASIC COMPONENTS ============
   button: ({ element, props, style }) => (
     <Button
@@ -61,7 +605,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
       {isSelected ? (
         <InlineEditable
           value={props.children || "Button"}
-          onChange={(v) => updateElement(element.id, { props: { children: v } })}
+          onChange={(v) =>
+            updateElement(element.id, { props: { children: v } })
+          }
           className="inline"
         />
       ) : (
@@ -92,11 +638,17 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   badge: ({ element, props, style }) => (
-    <Badge variant={props.variant || "default"} className={props.className} style={style}>
+    <Badge
+      variant={props.variant || "default"}
+      className={props.className}
+      style={style}
+    >
       {isSelected ? (
         <InlineEditable
           value={props.children || "Badge"}
-          onChange={(v) => updateElement(element.id, { props: { children: v } })}
+          onChange={(v) =>
+            updateElement(element.id, { props: { children: v } })
+          }
           className="inline"
         />
       ) : (
@@ -106,18 +658,31 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   separator: ({ props, style }) => (
-    <Separator orientation={props.orientation || "horizontal"} className={props.className} style={style} />
+    <Separator
+      orientation={props.orientation || "horizontal"}
+      className={props.className}
+      style={style}
+    />
   ),
 
   switch: ({ element, props, style }) => (
-    <div className={`flex items-center gap-2 ${props.className || ""}`} style={style}>
-      <Switch id={element.id} defaultChecked={props.checked} disabled={props.disabled} />
+    <div
+      className={`flex items-center gap-2 ${props.className || ""}`}
+      style={style}
+    >
+      <Switch
+        id={element.id}
+        defaultChecked={props.checked}
+        disabled={props.disabled}
+      />
       {props.label && (
         <Label htmlFor={element.id}>
           {isSelected ? (
             <InlineEditable
               value={props.label}
-              onChange={(v) => updateElement(element.id, { props: { label: v } })}
+              onChange={(v) =>
+                updateElement(element.id, { props: { label: v } })
+              }
             />
           ) : (
             props.label
@@ -128,7 +693,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   checkbox: ({ element, props, style }) => (
-    <div className={`flex items-center gap-2 ${props.className || ""}`} style={style}>
+    <div
+      className={`flex items-center gap-2 ${props.className || ""}`}
+      style={style}
+    >
       <input
         type="checkbox"
         id={element.id}
@@ -152,7 +720,11 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   skeleton: ({ props, style }) => (
     <Skeleton
       className={props.className}
-      style={{ width: props.width || "100%", height: props.height || 20, ...style }}
+      style={{
+        width: props.width || "100%",
+        height: props.height || 20,
+        ...style,
+      }}
     />
   ),
 
@@ -206,7 +778,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
             {isSelected ? (
               <InlineEditable
                 value={props.title || "Card Title"}
-                onChange={(v) => updateElement(element.id, { props: { title: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { title: v } })
+                }
               />
             ) : (
               props.title
@@ -217,7 +791,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
               {isSelected ? (
                 <InlineEditable
                   value={props.description || ""}
-                  onChange={(v) => updateElement(element.id, { props: { description: v } })}
+                  onChange={(v) =>
+                    updateElement(element.id, { props: { description: v } })
+                  }
                   placeholder="Add description..."
                 />
               ) : (
@@ -232,7 +808,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
           {isSelected && props.content ? (
             <InlineEditable
               value={props.content}
-              onChange={(v) => updateElement(element.id, { props: { content: v } })}
+              onChange={(v) =>
+                updateElement(element.id, { props: { content: v } })
+              }
               multiline
             />
           ) : (
@@ -267,7 +845,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   avatar: ({ props, style }) => (
     <div
-      className={`relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted items-center justify-center ${props.className || ""}`}
+      className={`relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full bg-muted items-center justify-center ${
+        props.className || ""
+      }`}
       style={style}
     >
       {props.src ? (
@@ -302,7 +882,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
     const Tag = `h${level}`;
     return (
-      <Tag className={`${styles[level]} ${props.className || ""}`} style={style}>
+      <Tag
+        className={`${styles[level]} ${props.className || ""}`}
+        style={style}
+      >
         {props.text || "Heading"}
       </Tag>
     );
@@ -343,6 +926,14 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ HERO BLOCKS ============
   "hero-centered": ({ element, props, style }) => {
+    // Visibility flags with defaults
+    const showHeading = props.showHeading !== false;
+    const showSubheading = props.showSubheading !== false;
+    const showDescription = props.showDescription !== false;
+    const showButtons =
+      props.showPrimaryButton !== false || props.showSecondaryButton !== false;
+    const showGradient = props.showGradient !== false;
+
     // Convert legacy props to buttons array if needed
     const getButtonsArray = () => {
       if (props.buttons && Array.isArray(props.buttons)) {
@@ -350,7 +941,7 @@ const createComponentRegistry = (updateElement, isSelected) => ({
       }
       // Convert legacy primaryButton/secondaryButton to array
       const buttons = [];
-      if (props.primaryButton) {
+      if (props.primaryButton && props.showPrimaryButton !== false) {
         buttons.push({
           id: "primary",
           label: props.primaryButton,
@@ -358,7 +949,7 @@ const createComponentRegistry = (updateElement, isSelected) => ({
           variant: "default",
         });
       }
-      if (props.secondaryButton) {
+      if (props.secondaryButton && props.showSecondaryButton !== false) {
         buttons.push({
           id: "secondary",
           label: props.secondaryButton,
@@ -366,7 +957,7 @@ const createComponentRegistry = (updateElement, isSelected) => ({
           variant: "outline",
         });
       }
-      if (buttons.length === 0) {
+      if (buttons.length === 0 && showButtons) {
         buttons.push({
           id: "btn-1",
           label: "Get Started Free",
@@ -379,19 +970,50 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
     const buttons = getButtonsArray();
 
+    // Get text alignment class
+    const alignClass =
+      props.textAlign === "left"
+        ? "text-left"
+        : props.textAlign === "right"
+        ? "text-right"
+        : "text-center";
+    const justifyClass =
+      props.textAlign === "left"
+        ? "justify-start"
+        : props.textAlign === "right"
+        ? "justify-end"
+        : "justify-center";
+
+    // Get heading size class
+    const headingSizes = {
+      "3xl": "text-3xl sm:text-4xl",
+      "4xl": "text-4xl sm:text-5xl",
+      "5xl": "text-4xl sm:text-6xl",
+      "6xl": "text-5xl sm:text-7xl",
+    };
+    const headingSizeClass =
+      headingSizes[props.headingSize] || headingSizes["5xl"];
+
+    // Get padding class
+    const paddingY = props.paddingY ? `py-${props.paddingY}` : "py-24";
+
     return (
       <section
-        className={`w-full px-6 py-24 ${props.showGradient ? "bg-gradient-to-b from-background to-muted/30" : ""} ${props.className || ""}`}
+        className={`w-full px-6 ${paddingY} ${
+          showGradient ? "bg-gradient-to-b from-background to-muted/30" : ""
+        } ${props.className || ""}`}
         style={style}
       >
-        <div className="mx-auto max-w-4xl text-center">
-          {/* Subheading */}
-          {(props.subheading || isSelected) && (
+        <div className={`mx-auto max-w-4xl ${alignClass}`}>
+          {/* Subheading - respects visibility toggle */}
+          {showSubheading && (props.subheading || isSelected) && (
             <p className="text-sm font-semibold text-primary mb-4">
               {isSelected ? (
                 <EditableText
                   value={props.subheading || ""}
-                  onChange={(v) => updateElement(element.id, { props: { subheading: v } })}
+                  onChange={(v) =>
+                    updateElement(element.id, { props: { subheading: v } })
+                  }
                   placeholder="Add subheading..."
                 />
               ) : (
@@ -400,55 +1022,91 @@ const createComponentRegistry = (updateElement, isSelected) => ({
             </p>
           )}
 
-          {/* Main Heading */}
-          <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
-            {isSelected ? (
-              <EditableText
-                value={props.heading || "Hero Heading"}
-                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
-                placeholder="Enter heading..."
-              />
-            ) : (
-              props.heading || "Hero Heading"
-            )}
-          </h1>
+          {/* Main Heading - respects visibility toggle */}
+          {showHeading && (
+            <h1 className={`${headingSizeClass} font-bold tracking-tight`}>
+              {isSelected ? (
+                <EditableText
+                  value={props.heading || "Hero Heading"}
+                  onChange={(v) =>
+                    updateElement(element.id, { props: { heading: v } })
+                  }
+                  placeholder="Enter heading..."
+                />
+              ) : (
+                props.heading || "Hero Heading"
+              )}
+            </h1>
+          )}
 
-          {/* Description */}
-          <p className="mt-6 text-lg text-muted-foreground max-w-2xl mx-auto">
-            {isSelected ? (
-              <EditableText
-                value={props.description || ""}
-                onChange={(v) => updateElement(element.id, { props: { description: v } })}
-                placeholder="Add description..."
-                multiline
-              />
-            ) : (
-              props.description || "Hero description goes here."
-            )}
-          </p>
+          {/* Description - respects visibility toggle */}
+          {showDescription && (
+            <p
+              className={`mt-6 text-lg text-muted-foreground ${
+                alignClass === "text-center" ? "max-w-2xl mx-auto" : "max-w-2xl"
+              }`}
+            >
+              {isSelected ? (
+                <EditableText
+                  value={props.description || ""}
+                  onChange={(v) =>
+                    updateElement(element.id, { props: { description: v } })
+                  }
+                  placeholder="Add description..."
+                  multiline
+                />
+              ) : (
+                props.description || "Hero description goes here."
+              )}
+            </p>
+          )}
 
-          {/* Buttons - dynamically add/remove */}
-          <div className="mt-10">
-            <EditableButtonGroup
-              buttons={buttons}
-              onChange={(newButtons) => updateElement(element.id, { props: { buttons: newButtons } })}
-              isSelected={isSelected}
-              align="center"
-            />
-          </div>
+          {/* Buttons - dynamically add/remove, respects visibility */}
+          {showButtons && (
+            <div
+              className={`mt-10 flex items-center ${justifyClass} gap-4 flex-wrap`}
+            >
+              <EditableButtonGroup
+                buttons={buttons}
+                onChange={(newButtons) =>
+                  updateElement(element.id, { props: { buttons: newButtons } })
+                }
+                isSelected={isSelected}
+                align={props.textAlign || "center"}
+              />
+            </div>
+          )}
+
+          {/* Empty state hint when editing */}
+          {isSelected &&
+            !showHeading &&
+            !showSubheading &&
+            !showDescription &&
+            !showButtons && (
+              <div className="py-8 text-center text-muted-foreground border-2 border-dashed rounded-lg">
+                <p className="text-sm">
+                  All elements are hidden. Enable them in the right panel.
+                </p>
+              </div>
+            )}
         </div>
       </section>
     );
   },
 
   hero: ({ element, props, style }) => (
-    <section className={`w-full px-6 py-24 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-24 ${props.className || ""}`}
+      style={style}
+    >
       <div className={`mx-auto max-w-4xl text-${props.align || "center"}`}>
         <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
           {isSelected ? (
             <InlineEditable
               value={props.heading || "Hero Heading"}
-              onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+              onChange={(v) =>
+                updateElement(element.id, { props: { heading: v } })
+              }
             />
           ) : (
             props.heading || "Hero Heading"
@@ -458,14 +1116,20 @@ const createComponentRegistry = (updateElement, isSelected) => ({
           {isSelected ? (
             <InlineEditable
               value={props.description || ""}
-              onChange={(v) => updateElement(element.id, { props: { description: v } })}
+              onChange={(v) =>
+                updateElement(element.id, { props: { description: v } })
+              }
               multiline
             />
           ) : (
             props.description || "Hero description goes here."
           )}
         </p>
-        <div className={`mt-10 flex items-center justify-${props.align || "center"} gap-4`}>
+        <div
+          className={`mt-10 flex items-center justify-${
+            props.align || "center"
+          } gap-4`}
+        >
           <Button asChild>
             <a href={props.primaryHref || "#"}>
               {props.primaryLabel || "Get Started"}
@@ -481,57 +1145,223 @@ const createComponentRegistry = (updateElement, isSelected) => ({
     </section>
   ),
 
-  // ============ FEATURES ============
-  "features-grid": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
-      <div className="mx-auto max-w-6xl">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-semibold tracking-tight">
+  "hero-split": ({ element, props, style }) => {
+    // Visibility flags with defaults
+    const showHeading = props.showHeading !== false;
+    const showDescription = props.showDescription !== false;
+    const showPrimaryButton = props.showPrimaryButton !== false;
+    const showSecondaryButton = props.showSecondaryButton !== false;
+    const showImage = props.showImage !== false;
+    const imagePosition = props.imagePosition || "right";
+
+    // Get padding class
+    const paddingY = props.paddingY ? `py-${props.paddingY}` : "py-24";
+
+    const contentSection = (
+      <div className="flex-1 flex flex-col justify-center">
+        {/* Heading */}
+        {showHeading && (
+          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
             {isSelected ? (
-              <InlineEditable
-                value={props.heading || "Features"}
-                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+              <EditableText
+                value={props.heading || "Hero Heading"}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { heading: v } })
+                }
+                placeholder="Enter heading..."
               />
             ) : (
-              props.heading || "Features"
+              props.heading || "Hero Heading"
             )}
-          </h2>
-          <p className="mt-2 text-muted-foreground max-w-2xl mx-auto">
+          </h1>
+        )}
+
+        {/* Description */}
+        {showDescription && (
+          <p className="mt-4 text-lg text-muted-foreground max-w-xl">
             {isSelected ? (
-              <InlineEditable
+              <EditableText
                 value={props.description || ""}
-                onChange={(v) => updateElement(element.id, { props: { description: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { description: v } })
+                }
+                placeholder="Add description..."
+                multiline
               />
             ) : (
-              props.description
+              props.description || "Description goes here."
             )}
           </p>
-        </div>
-        <div className={`grid gap-6 md:grid-cols-${props.columns || 3}`}>
-          {(props.features || []).map((feature, idx) => {
-            const Icon = iconMap[feature.icon] || Zap;
-            return (
-              <Card key={idx} className="text-center p-6">
-                <div className="mx-auto w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                  <Icon className="h-6 w-6 text-primary" />
-                </div>
-                <CardTitle className="text-lg mb-2">{feature.title}</CardTitle>
-                <CardDescription>{feature.description}</CardDescription>
-              </Card>
-            );
-          })}
+        )}
+
+        {/* Buttons */}
+        {(showPrimaryButton || showSecondaryButton) && (
+          <div className="mt-8 flex items-center gap-4 flex-wrap">
+            {showPrimaryButton && (
+              <Button size="lg">
+                {isSelected ? (
+                  <EditableText
+                    value={props.primaryButton || "Get Started"}
+                    onChange={(v) =>
+                      updateElement(element.id, { props: { primaryButton: v } })
+                    }
+                    placeholder="Button text..."
+                  />
+                ) : (
+                  props.primaryButton || "Get Started"
+                )}
+              </Button>
+            )}
+            {showSecondaryButton && (
+              <Button variant="outline" size="lg">
+                {isSelected ? (
+                  <EditableText
+                    value={props.secondaryButton || "Learn More"}
+                    onChange={(v) =>
+                      updateElement(element.id, {
+                        props: { secondaryButton: v },
+                      })
+                    }
+                    placeholder="Button text..."
+                  />
+                ) : (
+                  props.secondaryButton || "Learn More"
+                )}
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+    );
+
+    const imageSection = showImage && (
+      <div className="flex-1 flex items-center justify-center">
+        <div className="w-full aspect-video bg-muted/50 rounded-lg flex items-center justify-center border-2 border-dashed border-muted-foreground/30">
+          <div className="text-center text-muted-foreground">
+            <svg
+              className="w-12 h-12 mx-auto mb-2 opacity-50"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <p className="text-sm">Image placeholder</p>
+          </div>
         </div>
       </div>
-    </section>
-  ),
+    );
+
+    return (
+      <section
+        className={`w-full px-6 ${paddingY} ${props.className || ""}`}
+        style={style}
+      >
+        <div className="mx-auto max-w-6xl">
+          <div className="flex flex-col lg:flex-row gap-12 items-center">
+            {imagePosition === "left" ? (
+              <>
+                {imageSection}
+                {contentSection}
+              </>
+            ) : (
+              <>
+                {contentSection}
+                {imageSection}
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  },
+
+  // ============ FEATURES ============
+  "features-grid": ({ element, props, style }) => {
+    // Visibility flags with defaults
+    const showHeading = props.showHeading !== false;
+    const showDescription = props.showDescription !== false;
+    const showIcons = props.showIcons !== false;
+
+    return (
+      <section
+        className={`w-full px-6 py-16 ${props.className || ""}`}
+        style={style}
+      >
+        <div className="mx-auto max-w-6xl">
+          {/* Header section - respects visibility */}
+          {(showHeading || showDescription) && (
+            <div className="text-center mb-12">
+              {showHeading && (
+                <h2 className="text-3xl font-semibold tracking-tight">
+                  {isSelected ? (
+                    <InlineEditable
+                      value={props.heading || "Features"}
+                      onChange={(v) =>
+                        updateElement(element.id, { props: { heading: v } })
+                      }
+                    />
+                  ) : (
+                    props.heading || "Features"
+                  )}
+                </h2>
+              )}
+              {showDescription && (
+                <p className="mt-2 text-muted-foreground max-w-2xl mx-auto">
+                  {isSelected ? (
+                    <InlineEditable
+                      value={props.description || ""}
+                      onChange={(v) =>
+                        updateElement(element.id, { props: { description: v } })
+                      }
+                    />
+                  ) : (
+                    props.description
+                  )}
+                </p>
+              )}
+            </div>
+          )}
+          <div className={`grid gap-6 md:grid-cols-${props.columns || 3}`}>
+            {(props.features || []).map((feature, idx) => {
+              const Icon = iconMap[feature.icon] || Zap;
+              return (
+                <Card key={idx} className="text-center p-6">
+                  {showIcons && (
+                    <div className="mx-auto w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                      <Icon className="h-6 w-6 text-primary" />
+                    </div>
+                  )}
+                  <CardTitle className="text-lg mb-2">
+                    {feature.title}
+                  </CardTitle>
+                  <CardDescription>{feature.description}</CardDescription>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    );
+  },
 
   features: ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-6xl">
         <h2 className="text-3xl font-semibold tracking-tight">
           {props.heading || "Features"}
         </h2>
-        <p className="mt-2 text-muted-foreground max-w-2xl">{props.description}</p>
+        <p className="mt-2 text-muted-foreground max-w-2xl">
+          {props.description}
+        </p>
         <div className={`mt-8 grid gap-4 md:grid-cols-${props.columns || 3}`}>
           {(props.features || []).map((feature, idx) => (
             <Card key={idx}>
@@ -548,14 +1378,19 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ PRICING ============
   "pricing-simple": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-6xl">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-semibold">
             {isSelected ? (
               <InlineEditable
                 value={props.heading || "Pricing"}
-                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { heading: v } })
+                }
               />
             ) : (
               props.heading || "Pricing"
@@ -565,7 +1400,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
             {isSelected ? (
               <InlineEditable
                 value={props.description || ""}
-                onChange={(v) => updateElement(element.id, { props: { description: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { description: v } })
+                }
               />
             ) : (
               props.description
@@ -574,7 +1411,12 @@ const createComponentRegistry = (updateElement, isSelected) => ({
         </div>
         <div className="grid gap-6 md:grid-cols-3">
           {(props.plans || []).map((plan, idx) => (
-            <Card key={idx} className={`relative ${plan.popular ? "border-primary shadow-lg" : ""}`}>
+            <Card
+              key={idx}
+              className={`relative ${
+                plan.popular ? "border-primary shadow-lg" : ""
+              }`}
+            >
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <Badge>Most Popular</Badge>
@@ -586,7 +1428,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
                   <span className="text-4xl font-bold">{plan.price}</span>
                   <span className="text-muted-foreground">{plan.period}</span>
                 </div>
-                <CardDescription className="mt-2">{plan.description}</CardDescription>
+                <CardDescription className="mt-2">
+                  {plan.description}
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <ul className="space-y-3">
@@ -599,7 +1443,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button className="w-full" variant={plan.buttonVariant || "default"}>
+                <Button
+                  className="w-full"
+                  variant={plan.buttonVariant || "default"}
+                >
                   {plan.buttonText || "Get Started"}
                 </Button>
               </CardFooter>
@@ -611,7 +1458,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   pricing: ({ props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-6xl">
         <h2 className="text-3xl font-semibold">{props.heading || "Pricing"}</h2>
         <p className="mt-2 text-muted-foreground">{props.description}</p>
@@ -622,7 +1472,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
                 <CardTitle>{plan.name}</CardTitle>
                 <div className="text-3xl font-bold">
                   {plan.price}
-                  <span className="text-sm text-muted-foreground">{plan.period}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {plan.period}
+                  </span>
                 </div>
               </CardHeader>
               <CardContent>
@@ -633,7 +1485,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button className="w-full" variant={plan.featured ? "default" : "outline"}>
+                <Button
+                  className="w-full"
+                  variant={plan.featured ? "default" : "outline"}
+                >
                   {plan.ctaLabel || "Select"}
                 </Button>
               </CardFooter>
@@ -646,13 +1501,18 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ TESTIMONIALS ============
   "testimonials-grid": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-6xl">
         <h2 className="text-3xl font-semibold text-center mb-12">
           {isSelected ? (
             <InlineEditable
               value={props.heading || "Testimonials"}
-              onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+              onChange={(v) =>
+                updateElement(element.id, { props: { heading: v } })
+              }
             />
           ) : (
             props.heading || "Testimonials"
@@ -664,7 +1524,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
               <CardContent className="pt-6">
                 <div className="flex items-center gap-1 mb-4">
                   {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-primary text-primary" />
+                    <Star
+                      key={i}
+                      className="h-4 w-4 fill-primary text-primary"
+                    />
                   ))}
                 </div>
                 <blockquote className="text-sm mb-4">"{t.quote}"</blockquote>
@@ -690,14 +1553,19 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   "testimonial-single": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <Card className="mx-auto max-w-3xl">
         <CardContent className="p-8 text-center">
           <blockquote className="text-2xl font-medium leading-relaxed mb-6">
             {isSelected ? (
               <InlineEditable
                 value={props.quote || ""}
-                onChange={(v) => updateElement(element.id, { props: { quote: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { quote: v } })
+                }
                 multiline
               />
             ) : (
@@ -706,14 +1574,18 @@ const createComponentRegistry = (updateElement, isSelected) => ({
           </blockquote>
           <div className="flex items-center justify-center gap-3">
             <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
-              <span className="text-lg font-medium">{props.author?.charAt(0) || "?"}</span>
+              <span className="text-lg font-medium">
+                {props.author?.charAt(0) || "?"}
+              </span>
             </div>
             <div className="text-left">
               <div className="font-medium">
                 {isSelected ? (
                   <InlineEditable
                     value={props.author || "Author"}
-                    onChange={(v) => updateElement(element.id, { props: { author: v } })}
+                    onChange={(v) =>
+                      updateElement(element.id, { props: { author: v } })
+                    }
                   />
                 ) : (
                   props.author
@@ -730,7 +1602,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   testimonial: ({ element, props, style }) => (
-    <Card className={`mx-auto max-w-2xl ${props.className || ""}`} style={style}>
+    <Card
+      className={`mx-auto max-w-2xl ${props.className || ""}`}
+      style={style}
+    >
       <CardContent className="pt-6">
         <blockquote className="text-xl font-medium">
           "{props.quote || "Great product!"}"
@@ -744,14 +1619,19 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ CTA ============
   "cta-simple": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <Card className="mx-auto max-w-4xl">
         <CardContent className="p-8 text-center">
           <h2 className="text-2xl font-semibold mb-2">
             {isSelected ? (
               <InlineEditable
                 value={props.heading || "Ready to get started?"}
-                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { heading: v } })
+                }
               />
             ) : (
               props.heading || "Ready to get started?"
@@ -761,7 +1641,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
             {isSelected ? (
               <InlineEditable
                 value={props.description || ""}
-                onChange={(v) => updateElement(element.id, { props: { description: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { description: v } })
+                }
               />
             ) : (
               props.description
@@ -769,7 +1651,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Button asChild>
-              <a href={props.primaryHref || "#"}>{props.primaryButton || "Get Started"}</a>
+              <a href={props.primaryHref || "#"}>
+                {props.primaryButton || "Get Started"}
+              </a>
             </Button>
             {props.secondaryButton && (
               <Button variant="outline" asChild>
@@ -783,15 +1667,22 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   cta: ({ props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <Card className="mx-auto max-w-4xl">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">{props.heading || "Call to Action"}</CardTitle>
+          <CardTitle className="text-2xl">
+            {props.heading || "Call to Action"}
+          </CardTitle>
           <CardDescription>{props.description}</CardDescription>
         </CardHeader>
         <CardFooter className="justify-center gap-3">
           <Button asChild>
-            <a href={props.primaryHref || "#"}>{props.primaryLabel || "Primary"}</a>
+            <a href={props.primaryHref || "#"}>
+              {props.primaryLabel || "Primary"}
+            </a>
           </Button>
           {props.secondaryLabel && (
             <Button variant="outline" asChild>
@@ -805,14 +1696,19 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ FORMS ============
   "form-contact": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <Card className="mx-auto max-w-lg">
         <CardHeader>
           <CardTitle>
             {isSelected ? (
               <InlineEditable
                 value={props.heading || "Contact Us"}
-                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { heading: v } })
+                }
               />
             ) : (
               props.heading || "Contact Us"
@@ -822,7 +1718,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
             {isSelected ? (
               <InlineEditable
                 value={props.description || ""}
-                onChange={(v) => updateElement(element.id, { props: { description: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { description: v } })
+                }
               />
             ) : (
               props.description
@@ -861,7 +1759,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
         {(props.fields || []).map((field, idx) => (
           <div key={idx} className="space-y-2">
             <Label>{field.label || "Field"}</Label>
-            <Input type={field.type || "text"} placeholder={field.placeholder} />
+            <Input
+              type={field.type || "text"}
+              placeholder={field.placeholder}
+            />
           </div>
         ))}
       </CardContent>
@@ -873,14 +1774,19 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ STATS ============
   "stats-simple": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-6xl">
         {props.heading && (
           <h2 className="text-3xl font-semibold text-center mb-12">
             {isSelected ? (
               <InlineEditable
                 value={props.heading}
-                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { heading: v } })
+                }
               />
             ) : (
               props.heading
@@ -890,8 +1796,12 @@ const createComponentRegistry = (updateElement, isSelected) => ({
         <div className="grid gap-6 md:grid-cols-4">
           {(props.stats || []).map((stat, idx) => (
             <div key={idx} className="text-center">
-              <div className="text-4xl font-bold text-primary">{stat.value}</div>
-              <div className="text-sm text-muted-foreground mt-1">{stat.label}</div>
+              <div className="text-4xl font-bold text-primary">
+                {stat.value}
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                {stat.label}
+              </div>
             </div>
           ))}
         </div>
@@ -900,7 +1810,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   stats: ({ props, style }) => (
-    <div className={`grid gap-4 md:grid-cols-3 ${props.className || ""}`} style={style}>
+    <div
+      className={`grid gap-4 md:grid-cols-3 ${props.className || ""}`}
+      style={style}
+    >
       {(props.stats || []).map((stat, idx) => (
         <Card key={idx}>
           <CardHeader>
@@ -914,14 +1827,19 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ FAQ ============
   "faq-accordion": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-3xl">
         <div className="text-center mb-12">
           <h2 className="text-3xl font-semibold">
             {isSelected ? (
               <InlineEditable
                 value={props.heading || "FAQ"}
-                onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+                onChange={(v) =>
+                  updateElement(element.id, { props: { heading: v } })
+                }
               />
             ) : (
               props.heading || "FAQ"
@@ -946,7 +1864,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
   ),
 
   faq: ({ props, style }) => (
-    <section className={`w-full px-6 py-16 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-16 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-4xl">
         <h2 className="text-3xl font-semibold">{props.heading || "FAQ"}</h2>
         <div className="mt-8 space-y-4">
@@ -964,13 +1885,18 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 
   // ============ LOGO CLOUD ============
   "logo-cloud": ({ element, props, style }) => (
-    <section className={`w-full px-6 py-12 ${props.className || ""}`} style={style}>
+    <section
+      className={`w-full px-6 py-12 ${props.className || ""}`}
+      style={style}
+    >
       <div className="mx-auto max-w-6xl">
         <p className="text-center text-sm text-muted-foreground mb-8">
           {isSelected ? (
             <InlineEditable
               value={props.heading || "Trusted by industry leaders"}
-              onChange={(v) => updateElement(element.id, { props: { heading: v } })}
+              onChange={(v) =>
+                updateElement(element.id, { props: { heading: v } })
+              }
             />
           ) : (
             props.heading || "Trusted by industry leaders"
@@ -978,7 +1904,10 @@ const createComponentRegistry = (updateElement, isSelected) => ({
         </p>
         <div className="flex flex-wrap items-center justify-center gap-8">
           {(props.logos || []).map((logo, idx) => (
-            <div key={idx} className="text-2xl font-bold text-muted-foreground/50">
+            <div
+              key={idx}
+              className="text-2xl font-bold text-muted-foreground/50"
+            >
               {logo}
             </div>
           ))}
@@ -1011,7 +1940,9 @@ const createComponentRegistry = (updateElement, isSelected) => ({
         {isSelected ? (
           <InlineEditable
             value={props.description || ""}
-            onChange={(v) => updateElement(element.id, { props: { description: v } })}
+            onChange={(v) =>
+              updateElement(element.id, { props: { description: v } })
+            }
           />
         ) : (
           props.description
@@ -1053,7 +1984,8 @@ const createComponentRegistry = (updateElement, isSelected) => ({
 const FallbackComponent = ({ element }) => (
   <div className="p-4 border border-dashed border-muted-foreground/30 rounded-md bg-muted/20">
     <div className="text-sm text-muted-foreground">
-      Unknown component: <code className="bg-muted px-1 rounded">{element.type}</code>
+      Unknown component:{" "}
+      <code className="bg-muted px-1 rounded">{element.type}</code>
     </div>
   </div>
 );
@@ -1061,9 +1993,16 @@ const FallbackComponent = ({ element }) => (
 export function ComponentRenderer({ element, isSelected = false }) {
   const { type, props = {}, style = {}, children = [] } = element;
   const updateElement = useEditorStore((s) => s.updateElement);
+  const addElement = useEditorStore((s) => s.addElement);
+  const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
 
-  // Create registry with current update function and selection state
-  const componentRegistry = createComponentRegistry(updateElement, isSelected);
+  // Create registry with current update function, selection state, and add function
+  const componentRegistry = createComponentRegistry(
+    updateElement,
+    isSelected,
+    addElement,
+    selectedIds
+  );
 
   // Normalize type: handle hyphenated names
   let normalizedType = type?.toLowerCase() || "";
@@ -1094,7 +2033,11 @@ export function ComponentRenderer({ element, isSelected = false }) {
   const renderedChildren =
     children.length > 0
       ? children.map((child) => (
-          <ComponentRenderer key={child.id} element={child} isSelected={false} />
+          <ComponentRenderer
+            key={child.id}
+            element={child}
+            isSelected={selectedIds.includes(child.id)}
+          />
         ))
       : null;
 
