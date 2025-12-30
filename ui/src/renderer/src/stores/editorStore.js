@@ -288,6 +288,17 @@ export const useEditorStore = create(
         }));
       },
 
+      setClipboard: (elements) => {
+        set((state) => ({
+          canvas: {
+            ...state.canvas,
+            clipboard: Array.isArray(elements)
+              ? elements.map(deepCloneWithNewIds)
+              : null,
+          },
+        }));
+      },
+
       pasteFromClipboard: () => {
         if (get().ui.previewMode) return;
         const { clipboard } = get().canvas;

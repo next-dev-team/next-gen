@@ -16,6 +16,8 @@ import {
   MousePointer2,
 } from "lucide-react";
 import { Button } from "../ui/button";
+import { Switch } from "../ui/switch";
+import { Label } from "../ui/label";
 import { Separator } from "../ui/separator";
 import { useEditorStore } from "../../stores/editorStore";
 import { DesignPanel } from "./panels/DesignPanel";
@@ -64,12 +66,17 @@ export function DesignEditor() {
 
   const zoomPercent = `${Math.round(zoom * 100)}%`;
 
-  const canvasMaxWidth =
-    devicePreview === "mobile"
-      ? 390
-      : devicePreview === "tablet"
-      ? 768
-      : "100%";
+  const canvasMaxWidth = (() => {
+    switch (devicePreview) {
+      case "mobile":
+        return 390;
+      case "tablet":
+        return 768;
+      case "desktop":
+      default:
+        return "100%";
+    }
+  })();
 
   return (
     <div className="h-full w-full flex flex-col bg-background overflow-hidden">
@@ -205,16 +212,24 @@ export function DesignEditor() {
 
         {/* Right: Export & sidebar toggle */}
         <div className="flex items-center gap-1">
-          <Button
-            variant={previewMode ? "secondary" : "ghost"}
-            size="sm"
-            className="gap-1.5"
-            onClick={togglePreviewMode}
-            title="Preview (Read-only)"
-          >
-            <Eye className="h-4 w-4" />
-            Preview
-          </Button>
+          <div className="flex items-center gap-2 px-2 mr-1">
+            <Label
+              htmlFor="preview-mode"
+              className="text-xs font-medium text-muted-foreground cursor-pointer flex items-center gap-1.5"
+            >
+              {previewMode ? (
+                <Eye className="h-4 w-4 text-primary" />
+              ) : (
+                <MousePointer2 className="h-4 w-4" />
+              )}
+              {previewMode ? "Preview" : "Editor"}
+            </Label>
+            <Switch
+              id="preview-mode"
+              checked={previewMode}
+              onCheckedChange={togglePreviewMode}
+            />
+          </div>
 
           <Button
             variant="ghost"
@@ -272,38 +287,53 @@ export function DesignEditor() {
 
         {/* Center - Canvas */}
         <div className="flex-1 relative overflow-hidden bg-[#0a0a0a]">
-          {canvasMode === "layout" ? (
-            /* Layout Mode - Original Canvas */
-            <div className="absolute inset-0 overflow-auto p-8">
-              <div
-                className="mx-auto bg-background rounded-lg border shadow-2xl min-h-full"
-                style={{
-                  maxWidth: canvasMaxWidth,
-                  transform: `scale(${zoom})`,
-                  transformOrigin: "top center",
-                }}
-              >
-                <Canvas />
-              </div>
-            </div>
-          ) : (
-            /* Freeform Mode - Figma-like Canvas */
-            <div
-              className="absolute inset-0"
-              style={{
-                transform: `scale(${zoom})`,
-                transformOrigin: "top left",
-              }}
-            >
-              <FreeformCanvas />
-            </div>
-          )}
+          {(() => {
+            switch (canvasMode) {
+              case "layout":
+                return (
+                  /* Layout Mode - Original Canvas */
+                  <div className="absolute inset-0 overflow-auto p-8">
+                    <div
+                      className="mx-auto bg-background rounded-lg border shadow-2xl min-h-full"
+                      style={{
+                        maxWidth: canvasMaxWidth,
+                        transform: `scale(${zoom})`,
+                        transformOrigin: "top center",
+                      }}
+                    >
+                      <Canvas />
+                    </div>
+                  </div>
+                );
+              case "freeform":
+                return (
+                  /* Freeform Mode - Figma-like Canvas */
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      transform: `scale(${zoom})`,
+                      transformOrigin: "top left",
+                    }}
+                  >
+                    <FreeformCanvas />
+                  </div>
+                );
+              default:
+                return null;
+            }
+          })()}
 
           {/* Mode indicator overlay */}
           <div className="absolute bottom-4 right-4 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded border">
-            {canvasMode === "freeform"
-              ? "Freeform: Click Add Element • Right-click to add • Drag to move"
-              : "Layout: Drag blocks from sidebar • Ctrl+Scroll to zoom"}
+            {(() => {
+              switch (canvasMode) {
+                case "freeform":
+                  return "Freeform: Click Add Element • Right-click to add • Drag to move";
+                case "layout":
+                default:
+                  return "Layout: Drag blocks from sidebar • Ctrl+Scroll to zoom";
+              }
+            })()}
           </div>
         </div>
 
