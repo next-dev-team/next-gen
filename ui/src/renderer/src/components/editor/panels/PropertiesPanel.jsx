@@ -9,6 +9,10 @@ import {
   ChevronRight,
   Trash2,
   Clipboard,
+  Move,
+  Palette,
+  Settings2,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "../../ui/button";
 import { Input } from "../../ui/input";
@@ -18,6 +22,7 @@ import { Separator } from "../../ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../../ui/tabs";
 import { Switch } from "../../ui/switch";
 import { Badge } from "../../ui/badge";
+import { Slider } from "../../ui/slider";
 import {
   Select,
   SelectContent,
@@ -25,10 +30,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../../ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../../ui/collapsible";
 import { useEditorStore } from "../../../stores/editorStore";
-import { generateElementCode, copyToClipboard } from "../../../utils/codeGenerator";
+import {
+  generateElementCode,
+  copyToClipboard,
+} from "../../../utils/codeGenerator";
 import { getComponentById as getShadcnComponent } from "../../../data/shadcnComponents";
 import { getBlockById } from "../../../data/blocks";
+import { TransformPanel } from "./TransformPanel";
+import { InspectorPanel } from "./InspectorPanel";
 
 // Property editor components
 function TextProperty({ label, value, onChange, placeholder }) {
@@ -106,6 +121,59 @@ function BooleanProperty({ label, value, onChange }) {
   );
 }
 
+function ColorProperty({ label, value, onChange }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs">{label}</Label>
+      <div className="flex gap-2">
+        <div className="relative">
+          <input
+            type="color"
+            value={value || "#000000"}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-8 w-10 rounded-md border cursor-pointer"
+          />
+        </div>
+        <Input
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="#000000"
+          className="h-8 text-sm font-mono flex-1"
+        />
+      </div>
+    </div>
+  );
+}
+
+function SliderProperty({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  unit = "",
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <Label className="text-xs">{label}</Label>
+        <span className="text-xs text-muted-foreground font-mono">
+          {value ?? min}
+          {unit}
+        </span>
+      </div>
+      <Slider
+        value={[value ?? min]}
+        onValueChange={([v]) => onChange(v)}
+        min={min}
+        max={max}
+        step={step}
+      />
+    </div>
+  );
+}
+
 function ArrayProperty({ label, value, onChange }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -122,30 +190,27 @@ function ArrayProperty({ label, value, onChange }) {
   };
 
   return (
-    <div className="space-y-1.5">
-      <button
-        className="flex items-center gap-1 w-full text-left"
-        onClick={() => setIsOpen(!isOpen)}
-      >
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger className="flex items-center gap-1 w-full text-left hover:text-primary transition-colors">
         {isOpen ? (
           <ChevronDown className="h-3 w-3" />
         ) : (
           <ChevronRight className="h-3 w-3" />
         )}
-        <Label className="text-xs cursor-pointer">{label}</Label>
-        <Badge variant="secondary" className="text-[10px] ml-auto">
+        <Label className="text-xs cursor-pointer flex-1">{label}</Label>
+        <Badge variant="secondary" className="text-[10px]">
           {Array.isArray(value) ? value.length : 0} items
         </Badge>
-      </button>
-      {isOpen && (
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-2">
         <textarea
           value={JSON.stringify(value || [], null, 2)}
           onChange={(e) => handleTextChange(e.target.value)}
           rows={6}
           className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-xs font-mono ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
         />
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -197,6 +262,26 @@ function PropertyEditor({ propKey, schema, value, onChange }) {
           onChange={onChange}
         />
       );
+    case "color":
+      return (
+        <ColorProperty
+          label={schema.label || propKey}
+          value={value}
+          onChange={onChange}
+        />
+      );
+    case "slider":
+      return (
+        <SliderProperty
+          label={schema.label || propKey}
+          value={value}
+          onChange={onChange}
+          min={schema.min}
+          max={schema.max}
+          step={schema.step}
+          unit={schema.unit}
+        />
+      );
     default:
       return (
         <TextProperty
@@ -209,9 +294,98 @@ function PropertyEditor({ propKey, schema, value, onChange }) {
   }
 }
 
+// Style section with common CSS properties
+function StyleSection({ element, updateElement }) {
+  const style = element.style || {};
+
+  const handleStyleChange = (key, value) => {
+    updateElement(element.id, { style: { [key]: value } });
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Layout */}
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger className="flex items-center justify-between w-full text-xs font-medium hover:text-primary transition-colors">
+          <span>Layout</span>
+          <ChevronDown className="h-3 w-3" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-2 space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <TextProperty
+              label="Width"
+              value={style.width}
+              onChange={(v) => handleStyleChange("width", v)}
+              placeholder="auto"
+            />
+            <TextProperty
+              label="Height"
+              value={style.height}
+              onChange={(v) => handleStyleChange("height", v)}
+              placeholder="auto"
+            />
+          </div>
+          <TextProperty
+            label="Padding"
+            value={style.padding}
+            onChange={(v) => handleStyleChange("padding", v)}
+            placeholder="0"
+          />
+          <TextProperty
+            label="Margin"
+            value={style.margin}
+            onChange={(v) => handleStyleChange("margin", v)}
+            placeholder="0"
+          />
+        </CollapsibleContent>
+      </Collapsible>
+
+      <Separator />
+
+      {/* Appearance */}
+      <Collapsible defaultOpen>
+        <CollapsibleTrigger className="flex items-center justify-between w-full text-xs font-medium hover:text-primary transition-colors">
+          <span>Appearance</span>
+          <ChevronDown className="h-3 w-3" />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="mt-2 space-y-3">
+          <ColorProperty
+            label="Background"
+            value={style.background}
+            onChange={(v) => handleStyleChange("background", v)}
+          />
+          <TextProperty
+            label="Border Radius"
+            value={style.borderRadius}
+            onChange={(v) => handleStyleChange("borderRadius", v)}
+            placeholder="0"
+          />
+          <SliderProperty
+            label="Opacity"
+            value={(style.opacity ?? 1) * 100}
+            onChange={(v) => handleStyleChange("opacity", v / 100)}
+            min={0}
+            max={100}
+            step={1}
+            unit="%"
+          />
+        </CollapsibleContent>
+      </Collapsible>
+
+      <Separator />
+
+      {/* CSS Class */}
+      <TextProperty
+        label="CSS Class"
+        value={element.props?.className}
+        onChange={(v) => updateElement(element.id, { props: { className: v } })}
+        placeholder="e.g. mt-4 p-2"
+      />
+    </div>
+  );
+}
+
 export function PropertiesPanel() {
-  const [copied, setCopied] = useState(false);
-  const [cliCopied, setCliCopied] = useState(false);
   const [activeTab, setActiveTab] = useState("design");
 
   // Store state
@@ -240,39 +414,10 @@ export function PropertiesPanel() {
   // Get property schema
   const propSchema = componentDef?.propSchema || {};
 
-  // Generate code for selected element
-  const elementCode = useMemo(() => {
-    if (!selectedElement) return "";
-    return generateElementCode(selectedElement);
-  }, [selectedElement]);
-
-  // Get CLI command
-  const cliCommand = componentDef?.cli || "";
-
   // Handle property change
   const handlePropChange = (key, value) => {
     if (!selectedElement) return;
     updateElement(selectedElement.id, { props: { [key]: value } });
-  };
-
-  // Copy code
-  const handleCopyCode = async () => {
-    const success = await copyToClipboard(elementCode);
-    if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  // Copy CLI
-  const handleCopyCli = async () => {
-    if (cliCommand) {
-      const success = await copyToClipboard(cliCommand);
-      if (success) {
-        setCliCopied(true);
-        setTimeout(() => setCliCopied(false), 2000);
-      }
-    }
   };
 
   // No selection
@@ -288,7 +433,8 @@ export function PropertiesPanel() {
             Select an element to edit
           </p>
           <p className="text-xs text-muted-foreground/70 text-center">
-            Click on an element in the canvas, or drag a component from the left panel
+            Click on an element in the canvas, or drag a component from the left
+            panel
           </p>
         </div>
       </div>
@@ -331,10 +477,17 @@ export function PropertiesPanel() {
       {/* Header */}
       <div className="p-3 border-b shrink-0">
         <div className="flex items-center justify-between mb-2">
-          <h3 className="font-semibold text-sm">{displayName}</h3>
-          <code className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-mono">
-            {selectedElement.id.slice(0, 8)}
-          </code>
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
+              <Sparkles className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">{displayName}</h3>
+              <code className="text-[10px] text-muted-foreground font-mono">
+                {selectedElement.id.slice(0, 8)}
+              </code>
+            </div>
+          </div>
         </div>
 
         {/* Quick actions */}
@@ -359,43 +512,54 @@ export function PropertiesPanel() {
         </div>
 
         {/* CLI command */}
-        {cliCommand && (
+        {componentDef?.cli && (
           <div className="mt-2">
             <Button
               variant="secondary"
               size="sm"
               className="w-full h-7 text-xs gap-1 font-mono justify-start"
-              onClick={handleCopyCli}
+              onClick={async () => {
+                await copyToClipboard(componentDef.cli);
+              }}
             >
               <Terminal className="h-3 w-3 shrink-0" />
-              <span className="truncate flex-1 text-left opacity-70">{cliCommand}</span>
-              {cliCopied ? (
-                <Check className="h-3 w-3 text-green-500 shrink-0" />
-              ) : (
-                <Clipboard className="h-3 w-3 shrink-0" />
-              )}
+              <span className="truncate flex-1 text-left opacity-70">
+                {componentDef.cli}
+              </span>
+              <Clipboard className="h-3 w-3 shrink-0" />
             </Button>
           </div>
         )}
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col flex-1 min-h-0">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex flex-col flex-1 min-h-0"
+      >
         <div className="px-3 py-2 border-b shrink-0">
-          <TabsList className="w-full">
-            <TabsTrigger value="design" className="flex-1 text-xs">
-              Design
+          <TabsList className="w-full grid grid-cols-4">
+            <TabsTrigger value="design" className="text-xs gap-1 px-2">
+              <Settings2 className="h-3 w-3" />
+              Props
             </TabsTrigger>
-            <TabsTrigger value="style" className="flex-1 text-xs">
+            <TabsTrigger value="style" className="text-xs gap-1 px-2">
+              <Palette className="h-3 w-3" />
               Style
             </TabsTrigger>
-            <TabsTrigger value="code" className="flex-1 text-xs">
+            <TabsTrigger value="transform" className="text-xs gap-1 px-2">
+              <Move className="h-3 w-3" />
+              Transform
+            </TabsTrigger>
+            <TabsTrigger value="inspect" className="text-xs gap-1 px-2">
+              <Code className="h-3 w-3" />
               Code
             </TabsTrigger>
           </TabsList>
         </div>
 
-        {/* Design Tab */}
+        {/* Design/Props Tab */}
         <TabsContent value="design" className="flex-1 m-0 p-0 min-h-0">
           <ScrollArea className="h-full">
             <div className="p-3 space-y-4">
@@ -408,53 +572,53 @@ export function PropertiesPanel() {
               )}
 
               {/* Dynamic properties from schema */}
-              {Object.keys(propSchema).length > 0 ? (
-                Object.entries(propSchema).map(([key, schema]) => (
-                  <PropertyEditor
-                    key={key}
-                    propKey={key}
-                    schema={schema}
-                    value={selectedElement.props?.[key]}
-                    onChange={(v) => handlePropChange(key, v)}
-                  />
-                ))
-              ) : (
-                // Fallback: show all current props as text fields
-                Object.keys(selectedElement.props || {}).length > 0 && (
-                  <>
-                    {Object.entries(selectedElement.props).map(([key, value]) => {
-                      if (typeof value === "object") {
-                        return (
-                          <ArrayProperty
-                            key={key}
-                            label={key}
-                            value={value}
-                            onChange={(v) => handlePropChange(key, v)}
-                          />
-                        );
-                      }
-                      if (typeof value === "boolean") {
-                        return (
-                          <BooleanProperty
-                            key={key}
-                            label={key}
-                            value={value}
-                            onChange={(v) => handlePropChange(key, v)}
-                          />
-                        );
-                      }
-                      return (
-                        <TextProperty
-                          key={key}
-                          label={key}
-                          value={String(value || "")}
-                          onChange={(v) => handlePropChange(key, v)}
-                        />
-                      );
-                    })}
-                  </>
-                )
-              )}
+              {Object.keys(propSchema).length > 0
+                ? Object.entries(propSchema).map(([key, schema]) => (
+                    <PropertyEditor
+                      key={key}
+                      propKey={key}
+                      schema={schema}
+                      value={selectedElement.props?.[key]}
+                      onChange={(v) => handlePropChange(key, v)}
+                    />
+                  ))
+                : // Fallback: show all current props as text fields
+                  Object.keys(selectedElement.props || {}).length > 0 && (
+                    <>
+                      {Object.entries(selectedElement.props).map(
+                        ([key, value]) => {
+                          if (typeof value === "object") {
+                            return (
+                              <ArrayProperty
+                                key={key}
+                                label={key}
+                                value={value}
+                                onChange={(v) => handlePropChange(key, v)}
+                              />
+                            );
+                          }
+                          if (typeof value === "boolean") {
+                            return (
+                              <BooleanProperty
+                                key={key}
+                                label={key}
+                                value={value}
+                                onChange={(v) => handlePropChange(key, v)}
+                              />
+                            );
+                          }
+                          return (
+                            <TextProperty
+                              key={key}
+                              label={key}
+                              value={String(value || "")}
+                              onChange={(v) => handlePropChange(key, v)}
+                            />
+                          );
+                        }
+                      )}
+                    </>
+                  )}
 
               {Object.keys(propSchema).length === 0 &&
                 Object.keys(selectedElement.props || {}).length === 0 && (
@@ -469,106 +633,31 @@ export function PropertiesPanel() {
         {/* Style Tab */}
         <TabsContent value="style" className="flex-1 m-0 p-0 min-h-0">
           <ScrollArea className="h-full">
-            <div className="p-3 space-y-4">
-              <TextProperty
-                label="CSS Class"
-                value={selectedElement.props?.className}
-                onChange={(v) => handlePropChange("className", v)}
-                placeholder="e.g. mt-4 p-2 bg-muted"
-              />
-
-              <Separator />
-
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase">
-                Inline Styles
-              </h4>
-
-              <TextProperty
-                label="Width"
-                value={selectedElement.style?.width}
-                onChange={(v) =>
-                  updateElement(selectedElement.id, { style: { width: v } })
-                }
-                placeholder="e.g. 100%, 300px, auto"
-              />
-
-              <TextProperty
-                label="Height"
-                value={selectedElement.style?.height}
-                onChange={(v) =>
-                  updateElement(selectedElement.id, { style: { height: v } })
-                }
-                placeholder="e.g. auto, 200px"
-              />
-
-              <TextProperty
-                label="Padding"
-                value={selectedElement.style?.padding}
-                onChange={(v) =>
-                  updateElement(selectedElement.id, { style: { padding: v } })
-                }
-                placeholder="e.g. 16px, 1rem"
-              />
-
-              <TextProperty
-                label="Margin"
-                value={selectedElement.style?.margin}
-                onChange={(v) =>
-                  updateElement(selectedElement.id, { style: { margin: v } })
-                }
-                placeholder="e.g. 0 auto, 16px 0"
-              />
-
-              <TextProperty
-                label="Background"
-                value={selectedElement.style?.background}
-                onChange={(v) =>
-                  updateElement(selectedElement.id, { style: { background: v } })
-                }
-                placeholder="e.g. #fff, rgba(0,0,0,0.1)"
-              />
-
-              <TextProperty
-                label="Border Radius"
-                value={selectedElement.style?.borderRadius}
-                onChange={(v) =>
-                  updateElement(selectedElement.id, { style: { borderRadius: v } })
-                }
-                placeholder="e.g. 8px, 50%"
+            <div className="p-3">
+              <StyleSection
+                element={selectedElement}
+                updateElement={updateElement}
               />
             </div>
           </ScrollArea>
         </TabsContent>
 
-        {/* Code Tab */}
-        <TabsContent value="code" className="flex-1 m-0 p-0 min-h-0">
-          <div className="flex flex-col h-full">
-            <div className="p-3 border-b shrink-0">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="w-full gap-2"
-                onClick={handleCopyCode}
-              >
-                {copied ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-green-500" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-3.5 w-3.5" />
-                    Copy Code
-                  </>
-                )}
-              </Button>
+        {/* Transform Tab */}
+        <TabsContent value="transform" className="flex-1 m-0 p-0 min-h-0">
+          <ScrollArea className="h-full">
+            <div className="p-3">
+              <TransformPanel />
             </div>
-            <ScrollArea className="flex-1">
-              <pre className="p-3 text-[11px] font-mono leading-relaxed text-muted-foreground whitespace-pre-wrap">
-                {elementCode || "// No code to display"}
-              </pre>
-            </ScrollArea>
-          </div>
+          </ScrollArea>
+        </TabsContent>
+
+        {/* Inspect/Code Tab */}
+        <TabsContent value="inspect" className="flex-1 m-0 p-0 min-h-0">
+          <ScrollArea className="h-full">
+            <div className="p-3">
+              <InspectorPanel />
+            </div>
+          </ScrollArea>
         </TabsContent>
       </Tabs>
     </div>

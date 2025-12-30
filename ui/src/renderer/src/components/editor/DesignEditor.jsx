@@ -21,7 +21,7 @@ import { DesignPanel } from "./panels/DesignPanel";
 import { PropertiesPanel } from "./panels/PropertiesPanel";
 import { Canvas } from "./canvas/Canvas";
 import { FreeformCanvas } from "./canvas/FreeformCanvas";
-import { CodeExportDialog } from "./export/CodeExportDialog";
+import { EnhancedCodeExportDialog as CodeExportDialog } from "./export/CodeExportDialog";
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts";
 import { KeyboardShortcutsDialog } from "./dialogs/KeyboardShortcutsDialog";
 
@@ -134,7 +134,13 @@ export function DesignEditor() {
         {/* Center: Zoom & Device controls */}
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-1 rounded-md border bg-background p-1">
-            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={zoomOut} title="Zoom out (Ctrl+-)">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={zoomOut}
+              title="Zoom out (Ctrl+-)"
+            >
               <ZoomOut className="h-3.5 w-3.5" />
             </Button>
             <Button
@@ -146,7 +152,13 @@ export function DesignEditor() {
             >
               {zoomPercent}
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 px-2" onClick={zoomIn} title="Zoom in (Ctrl++)">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2"
+              onClick={zoomIn}
+              title="Zoom in (Ctrl++)"
+            >
               <ZoomIn className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -262,7 +274,7 @@ export function DesignEditor() {
             </div>
           ) : (
             /* Freeform Mode - Figma-like Canvas */
-            <div 
+            <div
               className="absolute inset-0"
               style={{
                 transform: `scale(${zoom})`,
@@ -272,14 +284,12 @@ export function DesignEditor() {
               <FreeformCanvas />
             </div>
           )}
-          
+
           {/* Mode indicator overlay */}
           <div className="absolute bottom-4 right-4 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded border">
-            {canvasMode === "freeform" ? (
-              "Freeform: Click Add Element • Right-click to add • Drag to move"
-            ) : (
-              "Layout: Drag blocks from sidebar • Ctrl+Scroll to zoom"
-            )}
+            {canvasMode === "freeform"
+              ? "Freeform: Click Add Element • Right-click to add • Drag to move"
+              : "Layout: Drag blocks from sidebar • Ctrl+Scroll to zoom"}
           </div>
         </div>
 
@@ -295,7 +305,10 @@ export function DesignEditor() {
       </div>
 
       {/* Code Export Dialog */}
-      <CodeExportDialog open={codeDialogOpen} onOpenChange={setCodeDialogOpen} />
+      <CodeExportDialog
+        open={codeDialogOpen}
+        onOpenChange={setCodeDialogOpen}
+      />
     </div>
   );
 }
