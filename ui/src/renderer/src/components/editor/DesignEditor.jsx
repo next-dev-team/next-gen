@@ -11,6 +11,7 @@ import {
   Undo2,
   Redo2,
   Trash2,
+  Eye,
   LayoutGrid,
   MousePointer2,
 } from "lucide-react";
@@ -36,6 +37,7 @@ export function DesignEditor() {
   const devicePreview = useEditorStore((s) => s.ui.devicePreview);
   const leftSidebarWidth = useEditorStore((s) => s.ui.leftSidebarWidth);
   const rightSidebarWidth = useEditorStore((s) => s.ui.rightSidebarWidth);
+  const previewMode = useEditorStore((s) => s.ui.previewMode);
 
   // Actions
   const toggleLeftSidebar = useEditorStore((s) => s.toggleLeftSidebar);
@@ -48,6 +50,7 @@ export function DesignEditor() {
   const redo = useEditorStore((s) => s.redo);
   const deleteElements = useEditorStore((s) => s.deleteElements);
   const clearCanvas = useEditorStore((s) => s.clearCanvas);
+  const togglePreviewMode = useEditorStore((s) => s.togglePreviewMode);
   const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
   const history = useEditorStore((s) => s.canvas.history);
 
@@ -89,7 +92,7 @@ export function DesignEditor() {
             variant="ghost"
             size="sm"
             onClick={undo}
-            disabled={!canUndo}
+            disabled={previewMode || !canUndo}
             title="Undo (Ctrl+Z)"
           >
             <Undo2 className="h-4 w-4" />
@@ -98,7 +101,7 @@ export function DesignEditor() {
             variant="ghost"
             size="sm"
             onClick={redo}
-            disabled={!canRedo}
+            disabled={previewMode || !canRedo}
             title="Redo (Ctrl+Shift+Z)"
           >
             <Redo2 className="h-4 w-4" />
@@ -203,6 +206,17 @@ export function DesignEditor() {
         {/* Right: Export & sidebar toggle */}
         <div className="flex items-center gap-1">
           <Button
+            variant={previewMode ? "secondary" : "ghost"}
+            size="sm"
+            className="gap-1.5"
+            onClick={togglePreviewMode}
+            title="Preview (Read-only)"
+          >
+            <Eye className="h-4 w-4" />
+            Preview
+          </Button>
+
+          <Button
             variant="ghost"
             size="sm"
             onClick={() => {
@@ -210,7 +224,7 @@ export function DesignEditor() {
                 deleteElements(selectedIds);
               }
             }}
-            disabled={selectedIds.length === 0}
+            disabled={previewMode || selectedIds.length === 0}
             title="Delete selected (Del)"
           >
             <Trash2 className="h-4 w-4" />

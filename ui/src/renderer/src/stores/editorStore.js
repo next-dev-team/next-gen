@@ -24,6 +24,7 @@ const initialUIState = {
   zoom: 1,
   panX: 0,
   panY: 0,
+  previewMode: false,
   leftSidebarOpen: true,
   rightSidebarOpen: true,
   leftSidebarWidth: 280,
@@ -45,6 +46,7 @@ export const useEditorStore = create(
 
       // Add element to canvas
       addElement: (element, parentId = null, index = null) => {
+        if (get().ui.previewMode) return null;
         const id = createId();
         const newElement = {
           id,
@@ -103,6 +105,7 @@ export const useEditorStore = create(
 
       // Update element props
       updateElement: (id, updates) => {
+        if (get().ui.previewMode) return;
         set((state) => {
           const updateInTree = (els) =>
             els.map((el) => {
@@ -141,6 +144,7 @@ export const useEditorStore = create(
 
       // Delete element(s)
       deleteElements: (ids) => {
+        if (get().ui.previewMode) return;
         set((state) => {
           const removeFromTree = (els) =>
             els
@@ -160,6 +164,7 @@ export const useEditorStore = create(
 
       // Move element
       moveElement: (id, newParentId, newIndex) => {
+        if (get().ui.previewMode) return;
         set((state) => {
           let movedElement = null;
 
@@ -211,6 +216,7 @@ export const useEditorStore = create(
 
       // Duplicate element(s)
       duplicateElements: (ids) => {
+        if (get().ui.previewMode) return;
         set((state) => {
           const duplicateInTree = (els) => {
             const result = [];
@@ -237,12 +243,14 @@ export const useEditorStore = create(
 
       // Selection
       setSelection: (ids) => {
+        if (get().ui.previewMode) return;
         set((state) => ({
           canvas: { ...state.canvas, selectedIds: ids },
         }));
       },
 
       addToSelection: (id) => {
+        if (get().ui.previewMode) return;
         set((state) => ({
           canvas: {
             ...state.canvas,
@@ -260,6 +268,7 @@ export const useEditorStore = create(
       },
 
       setHovered: (id) => {
+        if (get().ui.previewMode) return;
         set((state) => ({
           canvas: { ...state.canvas, hoveredId: id },
         }));
@@ -280,6 +289,7 @@ export const useEditorStore = create(
       },
 
       pasteFromClipboard: () => {
+        if (get().ui.previewMode) return;
         const { clipboard } = get().canvas;
         if (!clipboard || clipboard.length === 0) return;
 
@@ -298,6 +308,7 @@ export const useEditorStore = create(
 
       // History (Undo/Redo)
       undo: () => {
+        if (get().ui.previewMode) return;
         set((state) => {
           const { past, future } = state.canvas.history;
           if (past.length === 0) return state;
@@ -326,6 +337,7 @@ export const useEditorStore = create(
       },
 
       redo: () => {
+        if (get().ui.previewMode) return;
         set((state) => {
           const { past, future } = state.canvas.history;
           if (future.length === 0) return state;
@@ -354,6 +366,7 @@ export const useEditorStore = create(
       },
 
       clearCanvas: () => {
+        if (get().ui.previewMode) return;
         set((state) => ({
           canvas: {
             ...state.canvas,
@@ -412,6 +425,21 @@ export const useEditorStore = create(
         set((state) => ({ ui: { ...state.ui, devicePreview: device } }));
       },
 
+      setPreviewMode: (enabled) => {
+        set((state) => ({
+          ui: { ...state.ui, previewMode: !!enabled },
+          canvas: { ...state.canvas, selectedIds: [], hoveredId: null },
+        }));
+      },
+
+      togglePreviewMode: () => {
+        const enabled = !get().ui.previewMode;
+        set((state) => ({
+          ui: { ...state.ui, previewMode: enabled },
+          canvas: { ...state.canvas, selectedIds: [], hoveredId: null },
+        }));
+      },
+
       // ============ HELPERS ============
 
       getSelectedElements: () => {
@@ -446,7 +474,7 @@ export const useEditorStore = create(
         canvas: {
           elements: state.canvas.elements,
         },
-        ui: state.ui,
+        ui: (({ previewMode, ...ui }) => ui)(state.ui),
       }),
       // Deep merge to preserve non-persisted state like history, selectedIds, etc.
       merge: (persistedState, currentState) => ({

@@ -6,6 +6,7 @@ import { ContextMenu } from "./ContextMenu";
 export function CanvasElement({ element, isSelected, isHovered }) {
   const [contextMenu, setContextMenu] = useState(null);
 
+  const previewMode = useEditorStore((s) => s.ui.previewMode);
   const setSelection = useEditorStore((s) => s.setSelection);
   const addToSelection = useEditorStore((s) => s.addToSelection);
   const setHovered = useEditorStore((s) => s.setHovered);
@@ -48,6 +49,7 @@ export function CanvasElement({ element, isSelected, isHovered }) {
 
   // Build outline classes
   const outlineClasses = useMemo(() => {
+    if (previewMode) return "";
     if (isSelected) {
       return "ring-2 ring-primary ring-offset-2 ring-offset-background";
     }
@@ -55,7 +57,7 @@ export function CanvasElement({ element, isSelected, isHovered }) {
       return "ring-1 ring-primary/50 ring-offset-1 ring-offset-background";
     }
     return "";
-  }, [isSelected, isHovered]);
+  }, [isSelected, isHovered, previewMode]);
 
   // Calculate element type label
   const typeLabel = element.type
@@ -67,10 +69,10 @@ export function CanvasElement({ element, isSelected, isHovered }) {
     <>
       <div
         className={`relative transition-all rounded-sm ${outlineClasses}`}
-        onClick={handleClick}
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        onContextMenu={handleContextMenu}
+        onClick={previewMode ? undefined : handleClick}
+        onMouseEnter={previewMode ? undefined : handleMouseEnter}
+        onMouseLeave={previewMode ? undefined : handleMouseLeave}
+        onContextMenu={previewMode ? undefined : handleContextMenu}
         data-element-id={element.id}
         data-element-type={element.type}
       >
@@ -96,10 +98,10 @@ export function CanvasElement({ element, isSelected, isHovered }) {
         )}
 
         {/* Rendered component - pass isSelected for inline editing */}
-        <ComponentRenderer element={element} isSelected={isSelected} />
+        <ComponentRenderer element={element} isSelected={!previewMode && isSelected} />
 
         {/* Resize handles (for selected elements) */}
-        {isSelected && (
+        {!previewMode && isSelected && (
           <>
             {/* Corner handles */}
             <div className="absolute top-0 left-0 w-2 h-2 bg-primary rounded-full -translate-x-1/2 -translate-y-1/2 cursor-nw-resize z-20 shadow" />
@@ -116,7 +118,7 @@ export function CanvasElement({ element, isSelected, isHovered }) {
         )}
 
         {/* Click indicator - shows "Double-click to edit" on selected elements */}
-        {isSelected && (
+        {!previewMode && isSelected && (
           <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 z-20">
             <div className="bg-muted text-muted-foreground text-[10px] px-2 py-0.5 rounded whitespace-nowrap shadow-sm">
               Double-click to edit • Right-click for menu
@@ -126,7 +128,7 @@ export function CanvasElement({ element, isSelected, isHovered }) {
       </div>
 
       {/* Context Menu */}
-      {contextMenu && (
+      {!previewMode && contextMenu && (
         <ContextMenu
           element={element}
           position={contextMenu}

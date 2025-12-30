@@ -242,6 +242,7 @@ export function DraggableElement({
   onDragEnd,
   snapEnabled = true,
   gridEnabled = false,
+  readOnly = false,
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
@@ -275,6 +276,7 @@ export function DraggableElement({
   // Handle mouse down on element (start drag)
   const handleMouseDown = useCallback(
     (e) => {
+      if (readOnly) return;
       if (
         e.target.closest(".resize-handle") ||
         e.target.closest("input") ||
@@ -298,12 +300,13 @@ export function DraggableElement({
         onDragStart?.();
       }
     },
-    [isSelected, onSelect, x, y, onDragStart]
+    [isSelected, onSelect, x, y, onDragStart, readOnly]
   );
 
   // Handle resize start
   const handleResizeStart = useCallback(
     (e, handle) => {
+      if (readOnly) return;
       e.stopPropagation();
       e.preventDefault();
       setIsResizing(true);
@@ -316,7 +319,7 @@ export function DraggableElement({
         height: elementRef.current?.offsetHeight || 100,
       });
     },
-    [x, y]
+    [x, y, readOnly]
   );
 
   // Handle mouse move
@@ -412,7 +415,9 @@ export function DraggableElement({
         ${isHovered && !isSelected ? "ring-1 ring-primary/50" : ""}
         ${!isSelected && !isHovered ? "z-10" : ""}
         ${
-          isDragging
+          readOnly
+            ? "cursor-default"
+            : isDragging
             ? "cursor-grabbing opacity-80"
             : isSelected
             ? "cursor-grab"
@@ -430,8 +435,8 @@ export function DraggableElement({
         opacity,
         transformOrigin: "center center",
       }}
-      onMouseDown={handleMouseDown}
-      onDoubleClick={handleDoubleClick}
+      onMouseDown={readOnly ? undefined : handleMouseDown}
+      onDoubleClick={readOnly ? undefined : handleDoubleClick}
       data-element-id={element.id}
     >
       {children}
@@ -911,6 +916,7 @@ export function FreeformCanvas({ className = "" }) {
   const elements = useEditorStore((s) => s.canvas.elements);
   const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
   const hoveredId = useEditorStore((s) => s.canvas.hoveredId);
+  const previewMode = useEditorStore((s) => s.ui.previewMode);
 
   // Store actions
   const addElement = useEditorStore((s) => s.addElement);
@@ -940,6 +946,7 @@ export function FreeformCanvas({ className = "" }) {
 
   // Handle canvas click (deselect)
   const handleCanvasClick = (e) => {
+    if (previewMode) return;
     if (
       e.target === canvasRef.current ||
       e.target.classList.contains("canvas-background")
@@ -950,6 +957,7 @@ export function FreeformCanvas({ className = "" }) {
 
   // Handle canvas mouse down (start selection box)
   const handleCanvasMouseDown = (e) => {
+    if (previewMode) return;
     if (
       e.target === canvasRef.current ||
       e.target.classList.contains("canvas-background")
@@ -966,7 +974,7 @@ export function FreeformCanvas({ className = "" }) {
 
   // Handle canvas mouse move (update selection box)
   useEffect(() => {
-    if (!isSelecting) return;
+    if (!isSelecting || previewMode) return;
 
     const handleMouseMove = (e) => {
       const rect = canvasRef.current?.getBoundingClientRect();
@@ -1015,10 +1023,11 @@ export function FreeformCanvas({ className = "" }) {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isSelecting, selectionBox, elements, setSelection]);
+  }, [isSelecting, selectionBox, elements, setSelection, previewMode]);
 
   // Handle canvas context menu
   const handleContextMenu = (e) => {
+    if (previewMode) return;
     e.preventDefault();
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
@@ -1035,6 +1044,7 @@ export function FreeformCanvas({ className = "" }) {
 
   // Handle drag over
   const handleDragOver = useCallback((e) => {
+    if (previewMode) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     setIsDragOver(true);
@@ -1046,20 +1056,22 @@ export function FreeformCanvas({ className = "" }) {
         y: e.clientY - rect.top,
       });
     }
-  }, []);
+  }, [previewMode]);
 
   // Handle drag leave
   const handleDragLeave = useCallback((e) => {
+    if (previewMode) return;
     // Only set to false if we're actually leaving the canvas
     if (!canvasRef.current?.contains(e.relatedTarget)) {
       setIsDragOver(false);
       setDropPosition(null);
     }
-  }, []);
+  }, [previewMode]);
 
   // Handle drop from sidebar
   const handleDrop = useCallback(
     (e) => {
+      if (previewMode) return;
       e.preventDefault();
       setIsDragOver(false);
       setDropPosition(null);
@@ -1097,7 +1109,7 @@ export function FreeformCanvas({ className = "" }) {
         console.error("Drop error:", err);
       }
     },
-    [addElement, gridEnabled]
+    [addElement, gridEnabled, previewMode]
   );
 
   // Add element at position (for context menu and toolbar)
@@ -1106,6 +1118,7 @@ export function FreeformCanvas({ className = "" }) {
     defaultProps = {},
     position = { x: 100, y: 100 }
   ) => {
+    if (previewMode) return;
     let x = position.canvasX || position.x || 100;
     let y = position.canvasY || position.y || 100;
 
@@ -1129,6 +1142,7 @@ export function FreeformCanvas({ className = "" }) {
 
   // Handle element selection
   const handleElementSelect = (elementId, e) => {
+    if (previewMode) return;
     if (e.shiftKey || e.ctrlKey || e.metaKey) {
       addToSelection(elementId);
     } else {
@@ -1138,6 +1152,7 @@ export function FreeformCanvas({ className = "" }) {
 
   // Handle position change
   const handlePositionChange = (elementId, position) => {
+    if (previewMode) return;
     updateElement(elementId, {
       style: {
         x: position.x,
@@ -1148,6 +1163,7 @@ export function FreeformCanvas({ className = "" }) {
 
   // Handle size change
   const handleSizeChange = (elementId, size) => {
+    if (previewMode) return;
     updateElement(elementId, {
       style: {
         width: size.width,
@@ -1177,15 +1193,15 @@ export function FreeformCanvas({ className = "" }) {
     <div
       ref={canvasRef}
       className={`relative w-full h-full min-h-[800px] bg-[#0a0a0a] ${className} ${
-        isDragOver ? "ring-2 ring-primary ring-inset" : ""
+        !previewMode && isDragOver ? "ring-2 ring-primary ring-inset" : ""
       }`}
       style={canvasStyle}
-      onClick={handleCanvasClick}
-      onMouseDown={handleCanvasMouseDown}
-      onContextMenu={handleContextMenu}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
+      onClick={previewMode ? undefined : handleCanvasClick}
+      onMouseDown={previewMode ? undefined : handleCanvasMouseDown}
+      onContextMenu={previewMode ? undefined : handleContextMenu}
+      onDragOver={previewMode ? undefined : handleDragOver}
+      onDragLeave={previewMode ? undefined : handleDragLeave}
+      onDrop={previewMode ? undefined : handleDrop}
     >
       {/* Canvas background */}
       <div className="canvas-background absolute inset-0 pointer-events-none" />
@@ -1214,51 +1230,58 @@ export function FreeformCanvas({ className = "" }) {
       )}
 
       {/* Floating toolbar */}
-      <FloatingToolbar
-        onAddElement={handleAddElement}
-        position={{ x: 20, y: 20 }}
-      />
+      {!previewMode && (
+        <FloatingToolbar
+          onAddElement={handleAddElement}
+          position={{ x: 20, y: 20 }}
+        />
+      )}
 
       {/* Canvas toolbar */}
-      <CanvasToolbar
-        gridEnabled={gridEnabled}
-        snapEnabled={snapEnabled}
-        onGridToggle={() => setGridEnabled(!gridEnabled)}
-        onSnapToggle={() => setSnapEnabled(!snapEnabled)}
-      />
+      {!previewMode && (
+        <CanvasToolbar
+          gridEnabled={gridEnabled}
+          snapEnabled={snapEnabled}
+          onGridToggle={() => setGridEnabled(!gridEnabled)}
+          onSnapToggle={() => setSnapEnabled(!snapEnabled)}
+        />
+      )}
 
       {/* Elements */}
       {elements.map((element) => (
         <DraggableElement
           key={element.id}
           element={element}
-          isSelected={selectedIds.includes(element.id)}
-          isHovered={hoveredId === element.id}
-          onSelect={(e) => handleElementSelect(element.id, e)}
-          onPositionChange={(pos) => handlePositionChange(element.id, pos)}
-          onSizeChange={(size) => handleSizeChange(element.id, size)}
+          isSelected={!previewMode && selectedIds.includes(element.id)}
+          isHovered={!previewMode && hoveredId === element.id}
+          onSelect={previewMode ? undefined : (e) => handleElementSelect(element.id, e)}
+          onPositionChange={previewMode ? undefined : (pos) => handlePositionChange(element.id, pos)}
+          onSizeChange={previewMode ? undefined : (size) => handleSizeChange(element.id, size)}
           snapEnabled={snapEnabled}
           gridEnabled={gridEnabled}
+          readOnly={previewMode}
         >
           <div
             className="bg-background border rounded-md shadow-sm overflow-hidden"
-            onMouseEnter={() => setHovered(element.id)}
-            onMouseLeave={() => setHovered(null)}
+            onMouseEnter={previewMode ? undefined : () => setHovered(element.id)}
+            onMouseLeave={previewMode ? undefined : () => setHovered(null)}
           >
             <ComponentRenderer
               element={element}
-              isSelected={selectedIds.includes(element.id)}
+              isSelected={!previewMode && selectedIds.includes(element.id)}
             />
           </div>
         </DraggableElement>
       ))}
 
       {/* Context menu */}
-      <CanvasContextMenu
-        position={contextMenu}
-        onAddElement={handleAddElement}
-        onClose={() => setContextMenu(null)}
-      />
+      {!previewMode && (
+        <CanvasContextMenu
+          position={contextMenu}
+          onAddElement={handleAddElement}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
 
       {/* Help text */}
       {elements.length === 0 && !isDragOver && (

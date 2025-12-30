@@ -26,7 +26,10 @@ export function ElementDropZone({
   label = "Drop here",
   acceptTypes = ["component", "block"],
 }) {
+  const previewMode = useEditorStore((s) => s.ui.previewMode);
   const addElement = useEditorStore((s) => s.addElement);
+
+  if (previewMode) return null;
 
   const handleDrop = (e) => {
     e.preventDefault();
@@ -87,6 +90,7 @@ export function NestedElement({
   const [isHovered, setIsHovered] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  const previewMode = useEditorStore((s) => s.ui.previewMode);
   const setSelection = useEditorStore((s) => s.setSelection);
   const updateElement = useEditorStore((s) => s.updateElement);
   const deleteElements = useEditorStore((s) => s.deleteElements);
@@ -100,11 +104,13 @@ export function NestedElement({
   }, [element.type]);
 
   const handleClick = (e) => {
+    if (previewMode) return;
     e.stopPropagation();
     setSelection([element.id]);
   };
 
   const handleDelete = (e) => {
+    if (previewMode) return;
     e.stopPropagation();
     deleteElements([element.id]);
   };
@@ -118,6 +124,7 @@ export function NestedElement({
 
   // Handle drop INTO this element
   const handleDrop = (e) => {
+    if (previewMode) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
@@ -135,6 +142,7 @@ export function NestedElement({
   };
 
   const handleDragOver = (e) => {
+    if (previewMode) return;
     e.preventDefault();
     e.stopPropagation();
     if (canAcceptChildren) {
@@ -144,6 +152,7 @@ export function NestedElement({
   };
 
   const handleDragLeave = () => {
+    if (previewMode) return;
     setIsDragOver(false);
   };
 
@@ -166,12 +175,12 @@ export function NestedElement({
         ${isDragOver ? "ring-2 ring-primary ring-dashed bg-primary/5" : ""}
         ${isParentSelected ? "cursor-pointer" : ""}
       `}
-      onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      onClick={previewMode ? undefined : handleClick}
+      onMouseEnter={previewMode ? undefined : () => setIsHovered(true)}
+      onMouseLeave={previewMode ? undefined : () => setIsHovered(false)}
+      onDrop={previewMode ? undefined : handleDrop}
+      onDragOver={previewMode ? undefined : handleDragOver}
+      onDragLeave={previewMode ? undefined : handleDragLeave}
       style={{ marginLeft: depth * 8 }}
     >
       {/* Element label badge */}
@@ -247,11 +256,13 @@ export function ContainerBlock({
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
+  const previewMode = useEditorStore((s) => s.ui.previewMode);
   const addElement = useEditorStore((s) => s.addElement);
   const setSelection = useEditorStore((s) => s.setSelection);
   const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
 
   const handleDrop = (e, index = null) => {
+    if (previewMode) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(false);
@@ -269,6 +280,7 @@ export function ContainerBlock({
   };
 
   const handleDragOver = (e, index = null) => {
+    if (previewMode) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragOver(true);
@@ -277,6 +289,7 @@ export function ContainerBlock({
   };
 
   const handleDragLeave = (e) => {
+    if (previewMode) return;
     // Only set to false if leaving the container entirely
     if (!e.currentTarget.contains(e.relatedTarget)) {
       setIsDragOver(false);
@@ -299,12 +312,12 @@ export function ContainerBlock({
     <div
       className={`
         relative min-h-[60px] rounded-lg transition-all
-        ${isDragOver ? "bg-primary/5 ring-2 ring-primary ring-dashed" : ""}
-        ${isSelected ? "ring-2 ring-primary" : ""}
+        ${!previewMode && isDragOver ? "bg-primary/5 ring-2 ring-primary ring-dashed" : ""}
+        ${!previewMode && isSelected ? "ring-2 ring-primary" : ""}
       `}
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
+      onDrop={previewMode ? undefined : handleDrop}
+      onDragOver={previewMode ? undefined : handleDragOver}
+      onDragLeave={previewMode ? undefined : handleDragLeave}
     >
       {/* Container content */}
       <div className={layoutClass}>
@@ -324,7 +337,7 @@ export function ContainerBlock({
             <div className="text-center py-4">
               <Plus className="h-6 w-6 mx-auto mb-2 opacity-50" />
               <p className="text-sm">{emptyMessage}</p>
-              {isSelected && (
+              {!previewMode && isSelected && (
                 <p className="text-xs mt-1">
                   Drag components from the left panel
                 </p>
@@ -335,12 +348,14 @@ export function ContainerBlock({
           // Render children with drop zones between them
           <>
             {/* Drop zone before first child */}
-            <ElementDropZone
-              parentId={element.id}
-              index={0}
-              isActive={dragOverIndex === 0}
-              orientation={layout === "horizontal" ? "vertical" : "horizontal"}
-            />
+            {!previewMode && (
+              <ElementDropZone
+                parentId={element.id}
+                index={0}
+                isActive={dragOverIndex === 0}
+                orientation={layout === "horizontal" ? "vertical" : "horizontal"}
+              />
+            )}
 
             {childElements.map((child, index) => (
               <React.Fragment key={child.id}>
@@ -349,19 +364,21 @@ export function ContainerBlock({
                   element={child}
                   parentId={element.id}
                   index={index}
-                  isSelected={selectedIds.includes(child.id)}
-                  isParentSelected={isSelected}
+                  isSelected={!previewMode && selectedIds.includes(child.id)}
+                  isParentSelected={!previewMode && isSelected}
                 />
 
                 {/* Drop zone after each child */}
-                <ElementDropZone
-                  parentId={element.id}
-                  index={index + 1}
-                  isActive={dragOverIndex === index + 1}
-                  orientation={
-                    layout === "horizontal" ? "vertical" : "horizontal"
-                  }
-                />
+                {!previewMode && (
+                  <ElementDropZone
+                    parentId={element.id}
+                    index={index + 1}
+                    isActive={dragOverIndex === index + 1}
+                    orientation={
+                      layout === "horizontal" ? "vertical" : "horizontal"
+                    }
+                  />
+                )}
               </React.Fragment>
             ))}
           </>
@@ -369,7 +386,7 @@ export function ContainerBlock({
       </div>
 
       {/* Selection hint for container */}
-      {isSelected && isEmpty && (
+      {!previewMode && isSelected && isEmpty && (
         <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground bg-muted px-2 py-0.5 rounded whitespace-nowrap">
           Drop Button, Text, or any component
         </div>

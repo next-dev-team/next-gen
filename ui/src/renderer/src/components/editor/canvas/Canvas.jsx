@@ -11,15 +11,16 @@ export function Canvas() {
   const elements = useEditorStore((s) => s.canvas.elements);
   const selectedIds = useEditorStore((s) => s.canvas.selectedIds);
   const hoveredId = useEditorStore((s) => s.canvas.hoveredId);
+  const previewMode = useEditorStore((s) => s.ui.previewMode);
 
   // Actions
   const addElement = useEditorStore((s) => s.addElement);
   const clearSelection = useEditorStore((s) => s.clearSelection);
-  const setHovered = useEditorStore((s) => s.setHovered);
 
   // Handle drop from design panel
   const handleDrop = useCallback(
     (e, index = null) => {
+      if (previewMode) return;
       e.preventDefault();
       setDragOverIndex(null);
 
@@ -32,21 +33,24 @@ export function Canvas() {
         console.error("Drop error:", err);
       }
     },
-    [addElement]
+    [addElement, previewMode]
   );
 
   const handleDragOver = useCallback((e, index = null) => {
+    if (previewMode) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "copy";
     setDragOverIndex(index);
-  }, []);
+  }, [previewMode]);
 
   const handleDragLeave = useCallback(() => {
+    if (previewMode) return;
     setDragOverIndex(null);
-  }, []);
+  }, [previewMode]);
 
   // Click on empty canvas to deselect
   const handleCanvasClick = (e) => {
+    if (previewMode) return;
     if (e.target === containerRef.current || e.target.classList.contains("canvas-empty")) {
       clearSelection();
     }
@@ -58,10 +62,10 @@ export function Canvas() {
     <div
       ref={containerRef}
       className="min-h-[600px] relative"
-      onClick={handleCanvasClick}
-      onDrop={(e) => handleDrop(e, elements.length)}
-      onDragOver={(e) => handleDragOver(e, elements.length)}
-      onDragLeave={handleDragLeave}
+      onClick={previewMode ? undefined : handleCanvasClick}
+      onDrop={previewMode ? undefined : (e) => handleDrop(e, elements.length)}
+      onDragOver={previewMode ? undefined : (e) => handleDragOver(e, elements.length)}
+      onDragLeave={previewMode ? undefined : handleDragLeave}
     >
       {isEmpty ? (
         <div
@@ -85,31 +89,35 @@ export function Canvas() {
           {elements.map((element, index) => (
             <React.Fragment key={element.id}>
               {/* Drop zone before element */}
-              <DropZone
-                index={index}
-                isActive={dragOverIndex === index}
-                onDrop={(e) => handleDrop(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDragLeave={handleDragLeave}
-              />
+              {!previewMode && (
+                <DropZone
+                  index={index}
+                  isActive={dragOverIndex === index}
+                  onDrop={(e) => handleDrop(e, index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDragLeave={handleDragLeave}
+                />
+              )}
 
               {/* Element */}
               <CanvasElement
                 element={element}
-                isSelected={selectedIds.includes(element.id)}
-                isHovered={hoveredId === element.id}
+                isSelected={!previewMode && selectedIds.includes(element.id)}
+                isHovered={!previewMode && hoveredId === element.id}
               />
             </React.Fragment>
           ))}
 
           {/* Drop zone after last element */}
-          <DropZone
-            index={elements.length}
-            isActive={dragOverIndex === elements.length}
-            onDrop={(e) => handleDrop(e, elements.length)}
-            onDragOver={(e) => handleDragOver(e, elements.length)}
-            onDragLeave={handleDragLeave}
-          />
+          {!previewMode && (
+            <DropZone
+              index={elements.length}
+              isActive={dragOverIndex === elements.length}
+              onDrop={(e) => handleDrop(e, elements.length)}
+              onDragOver={(e) => handleDragOver(e, elements.length)}
+              onDragLeave={handleDragLeave}
+            />
+          )}
         </div>
       )}
     </div>
