@@ -513,7 +513,7 @@ export default function ScrumBoardView() {
 
   if (loading || !state) {
     return (
-      <div className="rounded-xl border bg-card p-6">
+      <div className="rounded-xl border bg-card p-6 h-full min-h-0">
         <div className="h-6 w-36 bg-muted rounded mb-3" />
         <div className="h-4 w-64 bg-muted rounded" />
       </div>
@@ -521,7 +521,7 @@ export default function ScrumBoardView() {
   }
 
   return (
-    <div className="rounded-xl border bg-card p-6 min-h-[520px] flex flex-col gap-4">
+    <div className="rounded-xl border bg-card p-6 h-full min-h-0 flex flex-col gap-4">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <div className="flex items-center gap-2">
           <LayoutGrid className="h-5 w-5 text-muted-foreground" />
@@ -670,8 +670,8 @@ export default function ScrumBoardView() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-x-auto">
-        <div className="min-w-max flex gap-4 items-start pb-2">
+      <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
+        <div className="min-w-max flex gap-4 items-stretch pb-2 h-full">
           {activeBoard?.lists?.map((list) => (
             <ListColumn
               key={list.id}
@@ -747,7 +747,7 @@ const ListColumn = ({
 
   return (
     <div
-      className="w-[320px] rounded-xl border bg-background flex flex-col max-h-[70vh]"
+      className="w-[320px] rounded-xl border bg-background flex flex-col h-full min-h-0"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDropToEnd}
     >
