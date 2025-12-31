@@ -657,10 +657,19 @@ export default function ScrumBoardView() {
                     placeholder="Enter board name..."
                     value={newBoardName}
                     onChange={(e) => setNewBoardName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (
+                        e.key === "Enter" &&
+                        newBoardName.trim() &&
+                        !isDuplicateName
+                      ) {
+                        createBoard();
+                      }
+                    }}
                     autoFocus
                     className={cn(
                       isDuplicateName &&
-                        "border-destructive focus-visible:ring-destructive"
+                        "border-destructive focus-visible:ring-destructive bg-destructive/5"
                     )}
                   />
                   {isDuplicateName && (

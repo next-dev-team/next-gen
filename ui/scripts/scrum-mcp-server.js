@@ -142,11 +142,21 @@ const main = async () => {
       outputSchema: { state: z.any(), boardId: z.string() },
     },
     async ({ name }) => {
+      const boardName = String(name || "").trim();
+      if (!boardName) throw new Error("name is required");
+
       const state = getState();
+      const isDuplicate = state.boards.some(
+        (b) => b.name.toLowerCase() === boardName.toLowerCase()
+      );
+      if (isDuplicate) {
+        throw new Error(`A board with name "${boardName}" already exists`);
+      }
+
       const boardId = createId();
       const board = {
         id: boardId,
-        name: String(name || "").trim() || "Untitled",
+        name: boardName,
         createdAt: nowIso(),
         updatedAt: nowIso(),
         lists: [
