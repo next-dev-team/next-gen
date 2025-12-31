@@ -55,15 +55,16 @@ test.describe("Generator UI", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
+    await expect(window.locator(".ant-segmented")).toBeVisible();
     await window
-      .getByRole("radio", { name: "table Scrum Board" })
-      .nth(1)
+      .locator(".ant-segmented")
+      .getByText("Scrum Board", { exact: true })
       .click();
     await expect(
-      window.getByRole("heading", { name: "Scrum Board" })
-    ).toBeVisible();
+      window.getByRole("heading", { name: "Kanban Board" })
+    ).toBeVisible({ timeout: 15000 });
     await expect(window.getByRole("button", { name: "New Board" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Add list" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Add Column" })).toBeVisible();
   });
 
   test("should handle start on boot setting", async () => {
@@ -86,7 +87,7 @@ test.describe("Generator UI", () => {
     await window.reload();
 
     await window.evaluate(() => {
-      localStorage.removeItem("puck-store");
+      localStorage.removeItem("editor-store");
     });
     await window.reload();
 
@@ -100,57 +101,39 @@ test.describe("Generator UI", () => {
     ).toBeVisible();
 
     await expect(
-      window.getByRole("tab", { name: /Page Builder/i })
+      window.getByPlaceholder("Search blocks & components...")
     ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: /Page Builder/i }).click();
-
-    await window.getByRole("button", { name: "Templates" }).click();
-    const templatesDialog = window.getByRole("dialog");
-    await expect(
-      templatesDialog.getByRole("heading", { name: "Templates" })
-    ).toBeVisible();
-    await templatesDialog
-      .getByRole("button", { name: "Close" })
-      .first()
-      .click();
-
-    await expect(
-      window.locator('button.bg-secondary:has-text("Undo")')
-    ).toBeVisible();
-    await expect(
-      window.locator('button.bg-secondary:has-text("Redo")')
-    ).toBeVisible();
-
-    await window.getByRole("tab", { name: "Blocks" }).click();
-    await window.getByPlaceholder("Block name").fill("My Card");
-    await window.getByRole("button", { name: "Add Block" }).click();
-
-    await expect
-      .poll(async () => {
-        const raw = await window.evaluate(() =>
-          localStorage.getItem("puck-store")
-        );
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        const content = parsed?.state?.puckData?.content || [];
-        return content.map((item) => item?.type).filter(Boolean);
-      })
-      .toContain("My-Card");
 
     await window.getByRole("tab", { name: "Components" }).click();
-    await window.getByRole("button", { name: "Button" }).first().click();
-    await window.getByRole("button", { name: "Add to Builder" }).click();
+    await window
+      .getByPlaceholder("Search blocks & components...")
+      .fill("Button");
+
+    const draggableButton = window
+      .locator("[draggable]")
+      .filter({ hasText: "Button" })
+      .first();
+    await expect(draggableButton).toBeVisible({ timeout: 15000 });
+
+    let dropTarget = window.locator(".canvas-empty");
+    if (!(await dropTarget.isVisible())) {
+      dropTarget = window.locator('[class*="min-h-[600px]"]').first();
+    }
+    await expect(dropTarget).toBeVisible({ timeout: 15000 });
+    await draggableButton.dragTo(dropTarget);
 
     await expect
       .poll(async () => {
         const raw = await window.evaluate(() =>
-          localStorage.getItem("puck-store")
+          localStorage.getItem("editor-store")
         );
-        if (!raw) return [];
+        if (!raw) return 0;
         const parsed = JSON.parse(raw);
-        const content = parsed?.state?.puckData?.content || [];
-        return content.map((item) => item?.type).filter(Boolean);
+        return parsed?.state?.canvas?.elements?.length || 0;
       })
-      .toContain("Library__button");
+      .toBeGreaterThan(0);
+
+    await expect(window.getByTitle("Undo (Ctrl+Z)")).toBeVisible();
+    await expect(window.getByTitle("Redo (Ctrl+Shift+Z)")).toBeVisible();
   });
 });

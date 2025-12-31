@@ -1373,7 +1373,7 @@ const AgentAssistDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[720px] h-[560px] flex flex-col bg-background/95 backdrop-blur-lg">
+      <DialogContent className="sm:max-w-[720px] h-[560px] min-h-0 flex flex-col bg-background/95 backdrop-blur-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -1395,8 +1395,9 @@ const AgentAssistDialog = ({
             <TabsTrigger value="actions">Actions</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="setup" className="flex-1 min-h-0 py-4">
-            <div className="grid gap-4">
+          <TabsContent value="setup" className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
+              <div className="grid gap-4 py-4">
               <div className="rounded-xl border border-border/50 bg-secondary/10 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -1513,11 +1514,13 @@ const AgentAssistDialog = ({
                   </ScrollArea>
                 </div>
               </div>
-            </div>
+              </div>
+            </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="agent" className="flex-1 min-h-0 py-4">
-            <div className="grid gap-4">
+          <TabsContent value="agent" className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
+              <div className="grid gap-4 py-4">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="rounded-xl border border-border/50 bg-background/40 p-4">
                   <div className="text-sm font-medium mb-2">Team context</div>
@@ -1684,11 +1687,13 @@ const AgentAssistDialog = ({
                   </div>
                 )}
               </div>
-            </div>
+              </div>
+            </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="actions" className="flex-1 min-h-0 py-4">
-            <div className="grid gap-4">
+          <TabsContent value="actions" className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
+              <div className="grid gap-4 py-4">
               <div className="grid sm:grid-cols-3 gap-3">
                 <div className="rounded-xl border border-border/50 bg-background/40 p-4">
                   <div className="text-xs text-muted-foreground">Board</div>
@@ -1774,7 +1779,8 @@ const AgentAssistDialog = ({
                   updates in the board
                 </div>
               </div>
-            </div>
+              </div>
+            </ScrollArea>
           </TabsContent>
         </Tabs>
 
