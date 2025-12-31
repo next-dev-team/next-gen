@@ -399,6 +399,40 @@ export const useKanbanStore = create((set, get) => ({
     set({ state: newState, activeBoardId: newActiveBoardId });
   },
 
+  deleteList: async (boardId, listId) => {
+    const { apiCall, connected, state } = get();
+
+    if (connected) {
+      try {
+        await apiCall("/list/delete", { boardId, listId });
+        return true;
+      } catch (err) {
+        set({ error: err.message });
+        return false;
+      }
+    }
+
+    if (!state?.boards?.length) return false;
+
+    const board = state.boards.find((b) => b.id === boardId);
+    if (!board) return false;
+
+    const nextBoard = {
+      ...board,
+      lists: board.lists.filter((l) => l.id !== listId),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const newState = {
+      ...state,
+      boards: state.boards.map((b) => (b.id === boardId ? nextBoard : b)),
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(newState));
+    set({ state: newState });
+    return true;
+  },
+
   // Card operations
   addCard: async (boardId, listId, cardData) => {
     const { apiCall, connected } = get();

@@ -1226,6 +1226,7 @@ export default function ScrumBoardView() {
     setActiveBoard,
     createBoard,
     deleteBoard,
+    deleteList: deleteListApi,
     addCard,
     updateCard,
     deleteCard,
@@ -1248,6 +1249,29 @@ export default function ScrumBoardView() {
   const [createBoardOpen, setCreateBoardOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
+
+  const [confirmState, setConfirmState] = React.useState({
+    open: false,
+    title: "",
+    description: "",
+    confirmText: "Delete",
+  });
+  const [confirmBusy, setConfirmBusy] = React.useState(false);
+  const confirmActionRef = React.useRef(null);
+
+  const openConfirm = React.useCallback(
+    ({ title, description, confirmText, onConfirm }) => {
+      confirmActionRef.current = onConfirm;
+      setConfirmBusy(false);
+      setConfirmState({
+        open: true,
+        title,
+        description,
+        confirmText: confirmText || "Delete",
+      });
+    },
+    []
+  );
 
   // Initialize connection
   React.useEffect(() => {
@@ -1312,11 +1336,20 @@ export default function ScrumBoardView() {
 
   const handleDeleteCard = async () => {
     const { listId, card } = cardDialogContext;
-    if (card?.id) {
-      await deleteCard(activeBoardId, listId, card.id);
-    }
-    setCardDialogOpen(false);
-    setCardDialogContext(null);
+    if (!card?.id) return;
+
+    openConfirm({
+      title: "Delete story?",
+      description: "This action cannot be undone.",
+      confirmText: "Delete",
+      onConfirm: async () => {
+        const ok = await deleteCard(activeBoardId, listId, card.id);
+        if (ok) {
+          setCardDialogOpen(false);
+          setCardDialogContext(null);
+        }
+      },
+    });
   };
 
   // List operations
@@ -1330,7 +1363,19 @@ export default function ScrumBoardView() {
   };
 
   const deleteList = async (listId) => {
-    console.log("Delete list:", listId);
+    const board = getActiveBoard();
+    const list = board?.lists?.find((l) => l.id === listId);
+
+    openConfirm({
+      title: "Delete list?",
+      description: list?.cards?.length
+        ? `This will delete the list and ${list.cards.length} stories inside it.`
+        : "This action cannot be undone.",
+      confirmText: "Delete",
+      onConfirm: async () => {
+        await deleteListApi(activeBoardId, listId);
+      },
+    });
   };
 
   // Drag and drop
@@ -1472,7 +1517,16 @@ export default function ScrumBoardView() {
             <Button
               variant="destructive"
               size="sm"
-              onClick={() => deleteBoard(activeBoard.id)}
+              onClick={() => {
+                openConfirm({
+                  title: "Delete board?",
+                  description: "This action cannot be undone.",
+                  confirmText: "Delete",
+                  onConfirm: async () => {
+                    await deleteBoard(activeBoard.id);
+                  },
+                });
+              }}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -1538,6 +1592,54 @@ export default function ScrumBoardView() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      <Dialog
+        open={confirmState.open}
+        onOpenChange={(open) => {
+          if (confirmBusy) return;
+          setConfirmState((s) => ({ ...s, open }));
+        }}
+      >
+        <DialogContent className="sm:max-w-[420px] bg-background/95 backdrop-blur-lg">
+          <DialogHeader>
+            <DialogTitle>{confirmState.title}</DialogTitle>
+            {confirmState.description ? (
+              <DialogDescription>{confirmState.description}</DialogDescription>
+            ) : null}
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={confirmBusy}
+              onClick={() => setConfirmState((s) => ({ ...s, open: false }))}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={confirmBusy}
+              onClick={async () => {
+                if (!confirmActionRef.current) {
+                  setConfirmState((s) => ({ ...s, open: false }));
+                  return;
+                }
+
+                setConfirmBusy(true);
+                try {
+                  await confirmActionRef.current();
+                  setConfirmState((s) => ({ ...s, open: false }));
+                } finally {
+                  setConfirmBusy(false);
+                }
+              }}
+            >
+              {confirmBusy ? "Deleting..." : confirmState.confirmText}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
