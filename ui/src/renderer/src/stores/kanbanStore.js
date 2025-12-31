@@ -433,6 +433,47 @@ export const useKanbanStore = create((set, get) => ({
     return true;
   },
 
+  renameList: async (boardId, listId, name) => {
+    const { apiCall, connected, state } = get();
+    const nextName = String(name || "").trim();
+    if (!nextName) return false;
+
+    if (connected) {
+      try {
+        await apiCall("/list/rename", { boardId, listId, name: nextName });
+        return true;
+      } catch (err) {
+        set({ error: err.message });
+        return false;
+      }
+    }
+
+    if (!state?.boards?.length) return false;
+    const board = state.boards.find((b) => b.id === boardId);
+    if (!board) return false;
+    const list = board.lists.find((l) => l.id === listId);
+    if (!list) return false;
+
+    const nextBoard = {
+      ...board,
+      lists: board.lists.map((l) =>
+        l.id === listId
+          ? { ...l, name: nextName, updatedAt: new Date().toISOString() }
+          : l
+      ),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const newState = {
+      ...state,
+      boards: state.boards.map((b) => (b.id === boardId ? nextBoard : b)),
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(newState));
+    set({ state: newState });
+    return true;
+  },
+
   addList: async (boardId, name, options = {}) => {
     const { apiCall, connected, state } = get();
     const listName = String(name || "").trim();
@@ -750,6 +791,32 @@ export const useKanbanStore = create((set, get) => ({
         : 0;
 
     return stats;
+  },
+
+  syncNow: async () => {
+    try {
+      const response = await fetch(`${API_BASE}/state`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sync failed (${response.status})`);
+      }
+
+      const nextState = await response.json();
+      set({
+        state: nextState,
+        activeBoardId:
+          nextState?.activeBoardId || nextState?.boards?.[0]?.id || null,
+        loading: false,
+        error: null,
+      });
+      return nextState;
+    } catch (err) {
+      set({ error: err?.message || "Failed to sync" });
+      return null;
+    }
   },
 
   // Server Management

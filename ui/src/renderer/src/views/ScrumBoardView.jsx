@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   Book,
+  Copy,
   Plus,
   Trash2,
   Pencil,
@@ -127,6 +128,59 @@ const PRIORITY_CONFIG = {
   medium: { color: "bg-blue-500", textColor: "text-blue-500", icon: "◐" },
   high: { color: "bg-amber-500", textColor: "text-amber-500", icon: "◑" },
   critical: { color: "bg-red-500", textColor: "text-red-500", icon: "●" },
+};
+
+const BMAD_AGENT_SETUP_STORAGE_KEY = "bmad-scrum-agent-setup-v1";
+
+const BMAD_AGENT_OPTIONS = [
+  {
+    id: "scrum-manager",
+    label: "🤖 Scrum Manager",
+    description: "Full-featured sprint management and story lifecycle",
+  },
+  {
+    id: "scrum-quick",
+    label: "⚡ Quick Runner",
+    description: "Fast operations: triage, move stories, quick updates",
+  },
+  {
+    id: "scrum-analytics",
+    label: "📊 Analytics Agent",
+    description: "Metrics, burndown, velocity, and reporting",
+  },
+  {
+    id: "scrum-team",
+    label: "👥 Team Coordinator",
+    description: "Collaboration, ceremonies, assignments, blockers",
+  },
+];
+
+const BMAD_IDE_OPTIONS = [
+  { id: "claude-code", label: "Claude Code" },
+  { id: "cursor", label: "Cursor" },
+  { id: "windsurf", label: "Windsurf" },
+  { id: "vscode", label: "VS Code" },
+];
+
+const safeJsonParse = (raw) => {
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
+const normalizeMcpPath = (p) => String(p || "").replace(/\\/g, "/");
+
+const recommendAgent = ({ teamSize, sprintLength, autoSync }) => {
+  const size = Number(teamSize);
+  const sprint = Number(sprintLength);
+  const sync = Boolean(autoSync);
+
+  if (Number.isFinite(size) && size >= 8) return "scrum-team";
+  if (Number.isFinite(sprint) && sprint >= 21) return "scrum-manager";
+  if (!sync) return "scrum-quick";
+  return "scrum-manager";
 };
 
 // ============ Card Editor Dialog ============
@@ -1201,6 +1255,546 @@ const SettingsDialog = ({ open, onOpenChange }) => {
   );
 };
 
+const AgentAssistDialog = ({
+  open,
+  onOpenChange,
+  setup,
+  onChangeSetup,
+  activeBoard,
+  stats,
+  onCreateStory,
+  onOpenStory,
+  onStartStory,
+}) => {
+  const { connected, serverRunning, toggleServer, checkServerStatus, syncNow } =
+    useKanbanStore();
+
+  const [activeTab, setActiveTab] = React.useState("setup");
+  const [showComparison, setShowComparison] = React.useState(false);
+  const [copiedKey, setCopiedKey] = React.useState(null);
+  const copiedTimerRef = React.useRef(null);
+
+  const recommendedAgent = React.useMemo(() => {
+    return recommendAgent({
+      teamSize: setup.teamSize,
+      sprintLength: setup.sprintLength,
+      autoSync: setup.autoSync,
+    });
+  }, [setup.teamSize, setup.sprintLength, setup.autoSync]);
+
+  const selectedAgent = setup.agent || recommendedAgent;
+
+  const scriptPath = React.useMemo(() => {
+    const root = String(setup.projectRoot || "").trim();
+    if (!root) return "";
+    return normalizeMcpPath(`${root}/scripts/scrum-mcp-server.js`);
+  }, [setup.projectRoot]);
+
+  const mcpConfigSnippet = React.useMemo(() => {
+    const args = scriptPath
+      ? [scriptPath]
+      : ["<project-root>/scripts/scrum-mcp-server.js"];
+    return JSON.stringify(
+      {
+        "scrum-kanban": {
+          command: "node",
+          args,
+          env: { SCRUM_MCP_PORT: "3847" },
+        },
+      },
+      null,
+      2
+    );
+  }, [scriptPath]);
+
+  const slashCommandSnippet = React.useMemo(() => {
+    const byAgent = {
+      "scrum-manager": "/bmad-scrum-manager",
+      "scrum-quick": "/bmad-scrum-quick",
+      "scrum-analytics": "/bmad-scrum-analytics",
+      "scrum-team": "/bmad-scrum-team",
+    };
+    return byAgent[selectedAgent] || "/bmad-scrum-manager";
+  }, [selectedAgent]);
+
+  const copyText = React.useCallback(async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(String(text || ""));
+      setCopiedKey(key);
+      if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = window.setTimeout(
+        () => setCopiedKey(null),
+        1200
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    checkServerStatus();
+    return () => {
+      if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
+    };
+  }, [open, checkServerStatus]);
+
+  const handleToggleIde = (ide) => {
+    const next = new Set(Array.isArray(setup.ides) ? setup.ides : []);
+    if (next.has(ide)) next.delete(ide);
+    else next.add(ide);
+    onChangeSetup({ ...setup, ides: Array.from(next) });
+  };
+
+  const boardId = activeBoard?.id || null;
+  const ready = React.useMemo(() => {
+    if (!activeBoard) return null;
+    const list = activeBoard.lists.find((l) => l.statusId === "ready-for-dev");
+    if (!list) return null;
+    const card = list.cards?.[0] || null;
+    return card ? { listId: list.id, card } : null;
+  }, [activeBoard]);
+
+  const inProgressListId = React.useMemo(() => {
+    if (!activeBoard) return null;
+    return (
+      activeBoard.lists.find((l) => l.statusId === "in-progress")?.id || null
+    );
+  }, [activeBoard]);
+
+  const setupAgentList = React.useMemo(() => {
+    return BMAD_AGENT_OPTIONS.map((a) => ({
+      ...a,
+      isRecommended: a.id === recommendedAgent,
+      isSelected: a.id === selectedAgent,
+    }));
+  }, [recommendedAgent, selectedAgent]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[720px] h-[560px] flex flex-col bg-background/95 backdrop-blur-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary" />
+            BMAD Agent Assist
+          </DialogTitle>
+          <DialogDescription>
+            Guided setup inspired by ENHANCE_SCRUM.md, without terminal steps
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="flex-1 flex flex-col min-h-0"
+        >
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="setup">Setup</TabsTrigger>
+            <TabsTrigger value="agent">Agent</TabsTrigger>
+            <TabsTrigger value="actions">Actions</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="setup" className="flex-1 min-h-0 py-4">
+            <div className="grid gap-4">
+              <div className="rounded-xl border border-border/50 bg-secondary/10 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={cn(
+                        "w-2.5 h-2.5 rounded-full",
+                        connected
+                          ? "bg-green-500 animate-pulse"
+                          : serverRunning
+                          ? "bg-amber-500"
+                          : "bg-destructive"
+                      )}
+                    />
+                    <div className="text-sm font-medium">
+                      {connected
+                        ? "Connected (Live)"
+                        : serverRunning
+                        ? "Server running, reconnect needed"
+                        : "Server stopped"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => syncNow()}
+                      className="gap-2"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Sync
+                    </Button>
+                    <Button
+                      variant={serverRunning ? "destructive" : "default"}
+                      size="sm"
+                      onClick={toggleServer}
+                      className="gap-2"
+                    >
+                      {serverRunning ? (
+                        <>
+                          <WifiOff className="h-4 w-4" />
+                          Stop
+                        </>
+                      ) : (
+                        <>
+                          <Wifi className="h-4 w-4" />
+                          Start
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-sm font-medium mb-2">
+                    Select your IDE
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {BMAD_IDE_OPTIONS.map((ide) => {
+                      const isActive = Array.isArray(setup.ides)
+                        ? setup.ides.includes(ide.id)
+                        : false;
+                      return (
+                        <Button
+                          key={ide.id}
+                          type="button"
+                          variant={isActive ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleToggleIde(ide.id)}
+                        >
+                          {ide.label}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-sm font-medium mb-2">Project root</div>
+                  <Input
+                    value={setup.projectRoot}
+                    onChange={(e) =>
+                      onChangeSetup({ ...setup, projectRoot: e.target.value })
+                    }
+                    placeholder="c:/path/to/next-gen/ui"
+                    className="bg-background/50"
+                  />
+                  <div className="text-[11px] text-muted-foreground mt-2">
+                    Used to generate your MCP config snippet
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="text-sm font-medium">MCP Server config</div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => copyText("mcp-config", mcpConfigSnippet)}
+                  >
+                    <Copy className="h-4 w-4" />
+                    {copiedKey === "mcp-config" ? "Copied" : "Copy"}
+                  </Button>
+                </div>
+                <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                  <ScrollArea className="h-[160px]">
+                    <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                      {mcpConfigSnippet}
+                    </pre>
+                  </ScrollArea>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="agent" className="flex-1 min-h-0 py-4">
+            <div className="grid gap-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-sm font-medium mb-2">Team context</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Team size</Label>
+                      <Input
+                        inputMode="numeric"
+                        value={setup.teamSize}
+                        onChange={(e) =>
+                          onChangeSetup({ ...setup, teamSize: e.target.value })
+                        }
+                        className="bg-background/50"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Sprint length (days)</Label>
+                      <Select
+                        value={String(setup.sprintLength || "14")}
+                        onValueChange={(v) =>
+                          onChangeSetup({ ...setup, sprintLength: v })
+                        }
+                      >
+                        <SelectTrigger className="bg-background/50">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="7">7</SelectItem>
+                          <SelectItem value="14">14</SelectItem>
+                          <SelectItem value="21">21</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mt-4">
+                    <Label className="flex flex-col gap-1">
+                      <span className="text-sm">Auto-sync</span>
+                      <span className="font-normal text-xs text-muted-foreground">
+                        Pull state every 30s (optional)
+                      </span>
+                    </Label>
+                    <Switch
+                      checked={Boolean(setup.autoSync)}
+                      onCheckedChange={(v) =>
+                        onChangeSetup({ ...setup, autoSync: v })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-sm font-medium mb-2">Recommendation</div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-primary/15 text-primary">
+                      Recommended
+                    </Badge>
+                    <div className="text-sm">{recommendedAgent}</div>
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-2">
+                    You can override this based on your workflow
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                <div className="text-sm font-medium mb-3">
+                  Select your agent
+                </div>
+                <div className="grid gap-2">
+                  {setupAgentList.map((agent) => (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      className={cn(
+                        "p-3 rounded-xl border text-left transition-all",
+                        "hover:bg-accent/50",
+                        agent.isSelected
+                          ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                          : "border-border/50 bg-background/30"
+                      )}
+                      onClick={() =>
+                        onChangeSetup({ ...setup, agent: agent.id })
+                      }
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="font-medium flex items-center gap-2">
+                            <span>{agent.label}</span>
+                            {agent.isRecommended && (
+                              <Badge className="bg-primary/15 text-primary">
+                                ✨
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {agent.description}
+                          </div>
+                        </div>
+                        {agent.isSelected && (
+                          <CheckCircle2 className="h-5 w-5 text-primary" />
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 mt-4">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowComparison((s) => !s)}
+                  >
+                    <Search className="h-4 w-4" />
+                    See comparison
+                  </Button>
+                  <div className="flex-1" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => copyText("slash", slashCommandSnippet)}
+                  >
+                    <Copy className="h-4 w-4" />
+                    {copiedKey === "slash" ? "Copied" : "Copy command"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      onChangeSetup({ ...setup, agent: selectedAgent });
+                      setActiveTab("actions");
+                    }}
+                  >
+                    <ArrowRight className="h-4 w-4" />
+                    Continue
+                  </Button>
+                </div>
+
+                {showComparison && (
+                  <div className="mt-4 rounded-xl border border-border/50 bg-secondary/10 p-4">
+                    <div className="text-sm font-medium mb-2">Comparison</div>
+                    <div className="grid gap-2">
+                      {BMAD_AGENT_OPTIONS.map((a) => (
+                        <div
+                          key={a.id}
+                          className="rounded-lg border border-border/50 bg-background/40 p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="text-sm font-medium">{a.label}</div>
+                            <Badge variant="secondary" className="text-[10px]">
+                              {a.id}
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {a.description}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="actions" className="flex-1 min-h-0 py-4">
+            <div className="grid gap-4">
+              <div className="grid sm:grid-cols-3 gap-3">
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-xs text-muted-foreground">Board</div>
+                  <div className="text-sm font-medium truncate">
+                    {activeBoard?.name || "No board selected"}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-xs text-muted-foreground">Stories</div>
+                  <div className="text-sm font-medium">{stats?.total || 0}</div>
+                </div>
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-xs text-muted-foreground">Agent</div>
+                  <div className="text-sm font-medium">{selectedAgent}</div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                <div className="text-sm font-medium mb-3">Quick actions</div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    disabled={!boardId}
+                    onClick={() => onCreateStory()}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create story
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    disabled={!boardId || !ready}
+                    onClick={() => onOpenStory(ready.listId, ready.card)}
+                  >
+                    <Book className="h-4 w-4" />
+                    Open next ready
+                  </Button>
+                  <Button
+                    type="button"
+                    className="gap-2"
+                    disabled={!boardId || !ready || !inProgressListId}
+                    onClick={() => onStartStory(ready, inProgressListId)}
+                  >
+                    <PlayCircle className="h-4 w-4" />
+                    Start next story
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => syncNow()}
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Sync MCP
+                  </Button>
+                </div>
+                {!ready && boardId && (
+                  <div className="text-xs text-muted-foreground mt-3">
+                    No stories in Ready for Dev
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="text-sm font-medium">Test agent</div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => syncNow()}
+                  >
+                    <Zap className="h-4 w-4" />
+                    Run
+                  </Button>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Verifies MCP connectivity by syncing state and reflecting
+                  updates in the board
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button
+            onClick={() => {
+              onOpenChange(false);
+            }}
+          >
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 // ============ Offline State ============
 const OfflineState = ({ onReconnect, onOpenSettings, serverRunning }) => (
   <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 h-full flex flex-col items-center justify-center gap-6 text-center">
@@ -1245,6 +1839,7 @@ export default function ScrumBoardView() {
     deleteBoard,
     deleteList: deleteListApi,
     addList: addListApi,
+    renameList: renameListApi,
     addCard,
     updateCard,
     deleteCard,
@@ -1256,6 +1851,7 @@ export default function ScrumBoardView() {
     getActiveBoard,
     getEpics,
     getStats,
+    syncNow,
     // Settings
     checkServerStatus,
     serverRunning,
@@ -1266,7 +1862,43 @@ export default function ScrumBoardView() {
   const [cardDialogContext, setCardDialogContext] = React.useState(null);
   const [createBoardOpen, setCreateBoardOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
+  const [agentAssistOpen, setAgentAssistOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
+
+  const [agentSetup, setAgentSetup] = React.useState(() => {
+    const defaults = {
+      ides: ["cursor"],
+      projectRoot: "",
+      teamSize: "5",
+      sprintLength: "14",
+      autoSync: false,
+      agent: "",
+    };
+
+    const raw = safeJsonParse(
+      localStorage.getItem(BMAD_AGENT_SETUP_STORAGE_KEY) || ""
+    );
+    if (!raw || typeof raw !== "object") return defaults;
+
+    return {
+      ...defaults,
+      ...raw,
+      ides: Array.isArray(raw.ides) ? raw.ides : defaults.ides,
+    };
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem(
+      BMAD_AGENT_SETUP_STORAGE_KEY,
+      JSON.stringify(agentSetup)
+    );
+  }, [agentSetup]);
+
+  React.useEffect(() => {
+    if (!agentSetup.autoSync || !connected) return;
+    const interval = window.setInterval(() => syncNow(), 30000);
+    return () => window.clearInterval(interval);
+  }, [agentSetup.autoSync, connected, syncNow]);
 
   const [confirmState, setConfirmState] = React.useState({
     open: false,
@@ -1377,7 +2009,8 @@ export default function ScrumBoardView() {
   };
 
   const renameList = async (listId, name) => {
-    console.log("Rename list:", listId, name);
+    if (!activeBoardId) return false;
+    return renameListApi(activeBoardId, listId, name);
   };
 
   const deleteList = async (listId) => {
@@ -1395,6 +2028,34 @@ export default function ScrumBoardView() {
       },
     });
   };
+
+  const openAgentCreateStory = React.useCallback(() => {
+    if (!activeBoardId) return;
+    const board = getActiveBoard();
+    const backlogListId =
+      board?.lists?.find((l) => l.statusId === "backlog")?.id ||
+      board?.lists?.[0]?.id ||
+      null;
+    if (!backlogListId) return;
+    openNewCard(backlogListId);
+  }, [activeBoardId, getActiveBoard, openNewCard]);
+
+  const openAgentStory = React.useCallback((listId, card) => {
+    if (!activeBoardId || !listId || !card) return;
+    openEditCard(listId, card);
+  }, [activeBoardId, openEditCard]);
+
+  const startAgentStory = React.useCallback(
+    async (readyInfo, inProgressListId) => {
+      if (!activeBoardId) return;
+      const fromListId = readyInfo?.listId;
+      const cardId = readyInfo?.card?.id;
+      if (!fromListId || !cardId || !inProgressListId) return;
+      await moveCard(activeBoardId, cardId, fromListId, inProgressListId, 0);
+      openEditCard(inProgressListId, readyInfo.card);
+    },
+    [activeBoardId, moveCard, openEditCard]
+  );
 
   // Drag and drop
   const safeParse = (value) => {
@@ -1531,6 +2192,16 @@ export default function ScrumBoardView() {
             New Board
           </Button>
 
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setAgentAssistOpen(true)}
+          >
+            <Sparkles className="h-4 w-4" />
+            Agent Assist
+          </Button>
+
           {activeBoard && (
             <Button
               variant="destructive"
@@ -1610,6 +2281,18 @@ export default function ScrumBoardView() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      <AgentAssistDialog
+        open={agentAssistOpen}
+        onOpenChange={setAgentAssistOpen}
+        setup={agentSetup}
+        onChangeSetup={setAgentSetup}
+        activeBoard={activeBoard}
+        stats={stats}
+        onCreateStory={openAgentCreateStory}
+        onOpenStory={openAgentStory}
+        onStartStory={startAgentStory}
+      />
 
       <Dialog
         open={confirmState.open}
