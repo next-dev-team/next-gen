@@ -747,7 +747,7 @@ const ListColumn = ({
 
   return (
     <div
-      className="w-[320px] rounded-xl border bg-background"
+      className="w-[320px] rounded-xl border bg-background flex flex-col max-h-[70vh]"
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDropToEnd}
     >
@@ -831,7 +831,7 @@ const ListColumn = ({
         </Button>
       </div>
 
-      <div className="p-3 flex flex-col gap-2">
+      <div className="p-3 flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto overscroll-contain">
         {list.cards.map((card, index) => (
           <React.Fragment key={card.id}>
             <DropZone
