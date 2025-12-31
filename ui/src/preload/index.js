@@ -70,6 +70,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ======= BMAD METHOD =======
   runBmadCli: (options) => ipcRenderer.invoke("bmad-cli-run", options),
   stopBmadCli: () => ipcRenderer.invoke("bmad-cli-stop"),
+  sendBmadCliInput: (payload) => ipcRenderer.invoke("bmad-cli-input", payload),
   getBmadLogs: () => ipcRenderer.invoke("get-bmad-logs"),
   onBmadLog: (callback) => {
     const handler = (event, log) => callback(log);
@@ -78,6 +79,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   writeProjectFile: (payload) => ipcRenderer.invoke("write-project-file", payload),
+  readProjectFile: (payload) => ipcRenderer.invoke("read-project-file", payload),
 
   // External links
   openExternal: (url) => {

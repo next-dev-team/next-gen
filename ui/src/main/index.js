@@ -34,6 +34,14 @@ const MAX_LOG_BUFFER = 1000;
 
 const bmadLogBuffer = [];
 let bmadChildProcess = null;
+let bmadPtyProcess = null;
+
+let nodePty = null;
+try {
+  nodePty = require("node-pty");
+} catch {
+  nodePty = null;
+}
 
 function sendBmadLog(type, message) {
   const logEntry = { type, message, timestamp: new Date().toISOString() };
@@ -325,7 +333,7 @@ ipcMain.handle("check-path-exists", async (event, checkPath) => {
 
 ipcMain.handle(
   "write-project-file",
-  async (event, { projectRoot, relativePath, content, overwrite = true }) => {
+  async (event, { projectRoot, relativePath, content, overwrite } = {}) => {
     const fs = require("fs");
     const root = String(projectRoot || "").trim();
     const rel = String(relativePath || "").trim();
@@ -365,19 +373,71 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
+  "read-project-file",
+  async (event, { projectRoot, relativePath, maxBytes } = {}) => {
+    const fs = require("fs");
+    const resolvedRoot = String(projectRoot || "").trim();
+    const rel = String(relativePath || "").trim();
+    if (!resolvedRoot || !path.isAbsolute(resolvedRoot)) {
+      throw new Error("projectRoot must be an absolute path");
+    }
+    if (!rel) {
+      throw new Error("relativePath is required");
+    }
+
+    const target = path.resolve(resolvedRoot, rel);
+    const rootPrefix = resolvedRoot.endsWith(path.sep)
+      ? resolvedRoot
+      : resolvedRoot + path.sep;
+    if (!target.startsWith(rootPrefix)) {
+      throw new Error("Refusing to read outside projectRoot");
+    }
+
+    const limit =
+      typeof maxBytes === "number" && Number.isFinite(maxBytes) && maxBytes > 0
+        ? Math.floor(maxBytes)
+        : 250_000;
+
+    const stat = await fs.promises.stat(target);
+    if (stat.size > limit) {
+      throw new Error(`File too large to preview (${stat.size} bytes)`);
+    }
+
+    const content = await fs.promises.readFile(target, "utf8");
+    return { success: true, path: target, content };
+  }
+);
+
+ipcMain.handle(
   "bmad-cli-run",
   async (
     event,
-    { cwd, mode, action, moduleCodes, verbose, extraArgs } = {}
+    {
+      cwd,
+      mode,
+      action,
+      moduleCodes,
+      verbose,
+      extraArgs,
+      interactive,
+      autoAcceptDefaults: autoAcceptDefaultsOption,
+    } = {}
   ) => {
     const fs = require("fs");
     const workingDir = String(cwd || "").trim();
     if (!workingDir || !path.isAbsolute(workingDir)) {
+      sendBmadLog("error", "cwd must be an absolute path");
       throw new Error("cwd must be an absolute path");
     }
-    await fs.promises.access(workingDir);
+    try {
+      await fs.promises.access(workingDir);
+    } catch {
+      sendBmadLog("error", `cwd not accessible: ${workingDir}`);
+      throw new Error(`cwd not accessible: ${workingDir}`);
+    }
 
-    if (bmadChildProcess) {
+    if (bmadChildProcess || bmadPtyProcess) {
+      sendBmadLog("warning", "BMAD command already running");
       throw new Error("BMAD command already running");
     }
 
@@ -400,71 +460,337 @@ ipcMain.handle(
       args.push(...extra);
     } else {
       command = process.platform === "win32" ? "npx.cmd" : "npx";
-      args = ["bmad-method@alpha", selectedAction];
+      args = ["-y", "bmad-method@alpha", selectedAction];
       if (isVerbose) args.push("-v");
       args.push(...extra);
     }
 
-    return new Promise((resolve, reject) => {
-      sendBmadLog("info", `▶ ${command} ${args.join(" ")}`);
+    const runOnceSpawn = (runCommand, runArgs, { autoAcceptDefaults } = {}) =>
+      new Promise((resolve) => {
+        sendBmadLog("info", `▶ ${runCommand} ${runArgs.join(" ")}`);
 
-      const child = spawn(command, args, {
-        cwd: workingDir,
-        shell: true,
-        env: { ...process.env, FORCE_COLOR: "1" },
-      });
-      bmadChildProcess = child;
+        const child = spawn(runCommand, runArgs, {
+          cwd: workingDir,
+          shell: true,
+          env: { ...process.env, FORCE_COLOR: "1" },
+        });
+        bmadChildProcess = child;
 
-      let stdout = "";
-      let stderr = "";
+        let autoInputInterval = null;
+        let autoInputTimeout = null;
 
-      child.stdout.on("data", (data) => {
-        const text = data.toString();
-        stdout += text;
-        const lines = text.split("\n").filter((line) => line.trim());
-        lines.forEach((line) => {
-          sendBmadLog("info", line);
+        if (autoAcceptDefaults && child?.stdin?.writable) {
+          autoInputInterval = setInterval(() => {
+            try {
+              child.stdin.write("\n");
+            } catch {}
+          }, 900);
+
+          autoInputTimeout = setTimeout(() => {
+            try {
+              if (autoInputInterval) clearInterval(autoInputInterval);
+            } catch {}
+          }, 45_000);
+        }
+
+        let stdout = "";
+        let stderr = "";
+
+        child.stdout.on("data", (data) => {
+          const text = data.toString();
+          stdout += text;
+          const lines = text.split("\n").filter((line) => line.trim());
+          lines.forEach((line) => {
+            sendBmadLog("info", line);
+          });
+        });
+
+        child.stderr.on("data", (data) => {
+          const text = data.toString();
+          stderr += text;
+          const lines = text.split("\n").filter((line) => line.trim());
+          lines.forEach((line) => {
+            const type =
+              line.includes("WARN") || line.includes("warning")
+                ? "warning"
+                : "error";
+            sendBmadLog(type, line);
+          });
+        });
+
+        child.on("error", (error) => {
+          bmadChildProcess = null;
+          try {
+            if (autoInputInterval) clearInterval(autoInputInterval);
+            if (autoInputTimeout) clearTimeout(autoInputTimeout);
+          } catch {}
+          sendBmadLog("error", `Process error: ${error.message}`);
+          resolve({
+            success: false,
+            code: -1,
+            stdout,
+            stderr: stderr || error.message,
+            error,
+          });
+        });
+
+        child.on("close", (code) => {
+          bmadChildProcess = null;
+          try {
+            if (autoInputInterval) clearInterval(autoInputInterval);
+            if (autoInputTimeout) clearTimeout(autoInputTimeout);
+          } catch {}
+          resolve({
+            success: code === 0,
+            code,
+            stdout,
+            stderr,
+          });
         });
       });
 
-      child.stderr.on("data", (data) => {
-        const text = data.toString();
-        stderr += text;
-        const lines = text.split("\n").filter((line) => line.trim());
-        lines.forEach((line) => {
-          const type =
-            line.includes("WARN") || line.includes("warning")
-              ? "warning"
-              : "error";
-          sendBmadLog(type, line);
-        });
-      });
+    const runOncePty = (runCommand, runArgs, { autoAcceptDefaults } = {}) =>
+      new Promise((resolve) => {
+        sendBmadLog("info", `▶ ${runCommand} ${runArgs.join(" ")}`);
 
-      child.on("error", (error) => {
-        bmadChildProcess = null;
-        sendBmadLog("error", `Process error: ${error.message}`);
-        reject(error);
-      });
-
-      child.on("close", (code) => {
-        bmadChildProcess = null;
-        if (code === 0) {
-          sendBmadLog("success", "✅ BMAD command completed");
-          resolve({ success: true, code, stdout, stderr });
-        } else {
-          sendBmadLog("error", `❌ BMAD command failed (exit ${code})`);
-          const err = new Error(
-            `BMAD command failed with exit code ${code}` +
-              (stderr ? `\n${stderr}` : "")
+        let ptyProcess;
+        try {
+          ptyProcess = nodePty.spawn(runCommand, runArgs, {
+            name: "xterm-color",
+            cols: 120,
+            rows: 30,
+            cwd: workingDir,
+            env: { ...process.env, FORCE_COLOR: "1" },
+          });
+        } catch (error) {
+          sendBmadLog(
+            "error",
+            `Process error: ${error?.message || String(error)}`
           );
-          reject(err);
+          resolve({
+            success: false,
+            code: -1,
+            stdout: "",
+            stderr: error?.message || String(error),
+            error,
+          });
+          return;
+        }
+
+        bmadPtyProcess = ptyProcess;
+
+        let autoInputInterval = null;
+        let autoInputTimeout = null;
+
+        if (autoAcceptDefaults && typeof ptyProcess?.write === "function") {
+          autoInputInterval = setInterval(() => {
+            try {
+              ptyProcess.write("\r");
+            } catch {}
+          }, 900);
+
+          autoInputTimeout = setTimeout(() => {
+            try {
+              if (autoInputInterval) clearInterval(autoInputInterval);
+            } catch {}
+          }, 45_000);
+        }
+
+        let output = "";
+        let carry = "";
+        let carryTimer = null;
+
+        const flushCarry = () => {
+          if (!carry) return;
+          const cleaned = carry.replace(/\r/g, "");
+          if (cleaned.trim()) sendBmadLog("info", cleaned);
+          carry = "";
+        };
+
+        const scheduleCarryFlush = () => {
+          if (carryTimer) clearTimeout(carryTimer);
+          carryTimer = setTimeout(() => {
+            carryTimer = null;
+            flushCarry();
+          }, 350);
+        };
+
+        const handleData = (data) => {
+          const text = String(data || "");
+          if (!text) return;
+          output += text;
+
+          const parts = (carry + text).split(/\r\n|\n|\r/);
+          carry = parts.pop() || "";
+
+          for (const part of parts) {
+            const cleaned = String(part || "").replace(/\r/g, "");
+            if (cleaned.trim()) sendBmadLog("info", cleaned);
+          }
+
+          if (carry) scheduleCarryFlush();
+        };
+
+        if (typeof ptyProcess.onData === "function") {
+          ptyProcess.onData(handleData);
+        } else if (typeof ptyProcess.on === "function") {
+          ptyProcess.on("data", handleData);
+        }
+
+        const handleExit = (payload) => {
+          bmadPtyProcess = null;
+          try {
+            if (carryTimer) clearTimeout(carryTimer);
+            if (autoInputInterval) clearInterval(autoInputInterval);
+            if (autoInputTimeout) clearTimeout(autoInputTimeout);
+          } catch {}
+          try {
+            flushCarry();
+          } catch {}
+
+          const code =
+            typeof payload?.exitCode === "number"
+              ? payload.exitCode
+              : typeof payload === "number"
+              ? payload
+              : -1;
+
+          resolve({
+            success: code === 0,
+            code,
+            stdout: output,
+            stderr: "",
+          });
+        };
+
+        if (typeof ptyProcess.onExit === "function") {
+          ptyProcess.onExit(handleExit);
+        } else if (typeof ptyProcess.on === "function") {
+          ptyProcess.on("exit", handleExit);
         }
       });
-    });
+
+    const ensureBmadProjectFolders = async () => {
+      const expectedDirs = ["_bmad", "_config", "_bmad-output"];
+      const created = [];
+      for (const dirName of expectedDirs) {
+        const abs = path.join(workingDir, dirName);
+        try {
+          await fs.promises.access(abs);
+        } catch {
+          try {
+            await fs.promises.mkdir(abs, { recursive: true });
+            created.push(dirName);
+          } catch {}
+        }
+      }
+      return created;
+    };
+
+    const finalizeInstallIfNeeded = async (result) => {
+      if (!result?.success) return result;
+      if (selectedAction !== "install") return result;
+
+      const created = await ensureBmadProjectFolders();
+      if (created.includes("_bmad")) {
+        sendBmadLog(
+          "warning",
+          "BMAD installer completed but _bmad folder was missing. Created it to unblock project setup."
+        );
+      }
+      if (created.length > 0 && !created.includes("_bmad")) {
+        sendBmadLog(
+          "info",
+          `Created missing folders: ${created.map((d) => d).join(", ")}`
+        );
+      }
+      if (created.length === 0) {
+        sendBmadLog("success", "Found BMAD project folders: _bmad, _config");
+      }
+      return result;
+    };
+
+    const looksLikeMissingBmadBinary = (result, attemptedCommand) => {
+      if (!attemptedCommand) return false;
+      const attempted = String(attemptedCommand);
+      const isBmad = attempted === "bmad" || attempted === "bmad.cmd";
+      if (!isBmad) return false;
+
+      const stderrText = String(result?.stderr || "");
+      const stdoutText = String(result?.stdout || "");
+      return (
+        result?.code === 127 ||
+        stderrText.includes("command not found") ||
+        stderrText.includes("not recognized") ||
+        stdoutText.includes("command not found") ||
+        stdoutText.includes("not recognized")
+      );
+    };
+
+    const wantsInteractive =
+      Boolean(interactive) || selectedAction === "install";
+    const canUsePty = Boolean(nodePty && typeof nodePty.spawn === "function");
+    const runOnce = wantsInteractive && canUsePty ? runOncePty : runOnceSpawn;
+
+    const autoAcceptDefaults =
+      typeof autoAcceptDefaultsOption === "boolean"
+        ? autoAcceptDefaultsOption
+        : !wantsInteractive && selectedAction === "install";
+
+    const first = await runOnce(command, args, { autoAcceptDefaults });
+    if (
+      !first.success &&
+      selectedMode === "bmad" &&
+      looksLikeMissingBmadBinary(first, command)
+    ) {
+      sendBmadLog(
+        "warning",
+        "bmad CLI not found in PATH. Falling back to npx bmad-method@alpha."
+      );
+      const fallbackCommand = process.platform === "win32" ? "npx.cmd" : "npx";
+      const fallbackArgs = ["-y", "bmad-method@alpha", selectedAction];
+      if (isVerbose) fallbackArgs.push("-v");
+      fallbackArgs.push(...extra);
+      const second = await runOnce(fallbackCommand, fallbackArgs, {
+        autoAcceptDefaults,
+      });
+      if (second.success) {
+        await finalizeInstallIfNeeded(second);
+        sendBmadLog("success", "✅ BMAD command completed");
+        return second;
+      }
+      sendBmadLog("error", `❌ BMAD command failed (exit ${second.code})`);
+      throw new Error(
+        `BMAD command failed with exit code ${second.code}` +
+          (second.stderr ? `\n${second.stderr}` : "")
+      );
+    }
+
+    if (first.success) {
+      await finalizeInstallIfNeeded(first);
+      sendBmadLog("success", "✅ BMAD command completed");
+      return first;
+    }
+
+    sendBmadLog("error", `❌ BMAD command failed (exit ${first.code})`);
+    throw new Error(
+      `BMAD command failed with exit code ${first.code}` +
+        (first.stderr ? `\n${first.stderr}` : "")
+    );
   }
 );
 
 ipcMain.handle("bmad-cli-stop", async () => {
+  if (bmadPtyProcess) {
+    try {
+      if (typeof bmadPtyProcess.kill === "function") {
+        bmadPtyProcess.kill();
+      }
+    } catch {}
+    bmadPtyProcess = null;
+    sendBmadLog("warning", "Stopped BMAD command");
+    return true;
+  }
   if (bmadChildProcess) {
     try {
       bmadChildProcess.kill();
@@ -473,6 +799,39 @@ ipcMain.handle("bmad-cli-stop", async () => {
     sendBmadLog("warning", "Stopped BMAD command");
     return true;
   }
+  return false;
+});
+
+ipcMain.handle("bmad-cli-input", async (event, payload) => {
+  const input =
+    payload && typeof payload === "object" ? payload.input : String(payload);
+  const appendNewline =
+    payload && typeof payload === "object"
+      ? payload.appendNewline !== false
+      : true;
+
+  if (bmadPtyProcess && typeof bmadPtyProcess.write === "function") {
+    try {
+      bmadPtyProcess.write(
+        `${String(input || "")}${appendNewline ? "\r" : ""}`
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (bmadChildProcess?.stdin?.writable) {
+    try {
+      bmadChildProcess.stdin.write(
+        `${String(input || "")}${appendNewline ? "\n" : ""}`
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   return false;
 });
 

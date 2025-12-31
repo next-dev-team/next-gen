@@ -1281,8 +1281,31 @@ const AgentAssistDialog = ({
 
   const [bmadLogs, setBmadLogs] = React.useState([]);
   const [bmadBusy, setBmadBusy] = React.useState(false);
+  const [bmadInput, setBmadInput] = React.useState("");
   const [prdBusy, setPrdBusy] = React.useState(false);
   const [prdResult, setPrdResult] = React.useState(null);
+  const [workflowName, setWorkflowName] = React.useState("status");
+  const [includeWorkflowData, setIncludeWorkflowData] = React.useState(true);
+  const [workflowsTab, setWorkflowsTab] = React.useState("wizard");
+  const [wizardPhase, setWizardPhase] = React.useState("phase-1");
+  const [wizardWorkflow, setWizardWorkflow] =
+    React.useState("brainstorm-project");
+  const [wizardResearchType, setWizardResearchType] = React.useState("market");
+  const [wizardResearchInputs, setWizardResearchInputs] = React.useState([
+    "",
+    "",
+    "",
+  ]);
+  const [wizardProductBriefInput, setWizardProductBriefInput] =
+    React.useState("");
+  const [wizardContextPath, setWizardContextPath] = React.useState("");
+  const [workflowPreviewBusy, setWorkflowPreviewBusy] = React.useState(false);
+  const [workflowPreviewError, setWorkflowPreviewError] = React.useState(null);
+  const [workflowPreviewContent, setWorkflowPreviewContent] =
+    React.useState(null);
+  const [workflowRunBusy, setWorkflowRunBusy] = React.useState(false);
+  const [workflowRunLogs, setWorkflowRunLogs] = React.useState([]);
+  const workflowRunActiveRef = React.useRef(false);
 
   const recommendedAgent = React.useMemo(() => {
     return recommendAgent({
@@ -1381,7 +1404,248 @@ const AgentAssistDialog = ({
     await window.electronAPI.stopBmadCli();
   }, []);
 
+  const sendBmadInput = React.useCallback(async () => {
+    const next = String(bmadInput || "");
+    if (!next.trim()) return;
+    if (!window.electronAPI?.sendBmadCliInput) return;
+    await window.electronAPI.sendBmadCliInput({
+      input: next,
+      appendNewline: true,
+    });
+    setBmadInput("");
+  }, [bmadInput]);
+
   const prdPath = String(setup.prdPath || "_bmad-output/prd.md").trim();
+
+  const workflowDataPath = React.useMemo(() => {
+    const root = String(projectRoot || "").replace(/[\\/]+$/, "");
+    const rel = String(prdPath || "").replace(/^[\\/]+/, "");
+    if (!root) return rel;
+    if (!rel) return root;
+    return `${root}/${rel}`;
+  }, [projectRoot, prdPath]);
+
+  const workflowCommand = React.useMemo(() => {
+    const name = String(workflowName || "status").trim() || "status";
+    const withData = includeWorkflowData && Boolean(workflowDataPath);
+    return withData
+      ? `workflow ${name} --data ${workflowDataPath}`
+      : `workflow ${name}`;
+  }, [includeWorkflowData, workflowDataPath, workflowName]);
+
+  const workflowExamples = React.useMemo(() => {
+    const dataPath = workflowDataPath || "/path/to/context.md";
+    return [
+      {
+        key: "workflow-example-status",
+        label: "workflow status",
+        command: "workflow status",
+      },
+      {
+        key: "workflow-example-prd",
+        label: "workflow prd",
+        command: "workflow prd",
+      },
+      {
+        key: "workflow-example-brainstorming",
+        label: "workflow brainstorming",
+        command: "workflow brainstorming",
+      },
+      {
+        key: "workflow-example-brainstorming-data",
+        label: "workflow brainstorming --data",
+        command: `workflow brainstorming --data ${dataPath}`,
+      },
+    ];
+  }, [workflowDataPath]);
+
+  const wizardWorkflowOptions = React.useMemo(() => {
+    if (wizardPhase === "phase-2") {
+      return [{ value: "prd", label: "prd" }];
+    }
+    if (wizardPhase === "phase-3") {
+      return [
+        { value: "solution-architecture", label: "solution-architecture" },
+        { value: "tech-spec", label: "tech-spec" },
+        { value: "create-story", label: "create-story" },
+        { value: "dev-story", label: "dev-story" },
+      ];
+    }
+    return [
+      { value: "brainstorm-project", label: "brainstorm-project" },
+      { value: "research", label: "research" },
+      { value: "product-brief", label: "product-brief" },
+      { value: "brainstorming", label: "brainstorming" },
+    ];
+  }, [wizardPhase]);
+
+  const resolvedWizardWorkflow = React.useMemo(() => {
+    const allowed = new Set(wizardWorkflowOptions.map((o) => o.value));
+    if (allowed.has(wizardWorkflow)) return wizardWorkflow;
+    const fallback = wizardWorkflowOptions[0]?.value || "brainstorm-project";
+    return fallback;
+  }, [wizardWorkflow, wizardWorkflowOptions]);
+
+  React.useEffect(() => {
+    const allowed = new Set(wizardWorkflowOptions.map((o) => o.value));
+    if (allowed.has(wizardWorkflow)) return;
+    const fallback = wizardWorkflowOptions[0]?.value || "brainstorm-project";
+    setWizardWorkflow(fallback);
+  }, [wizardWorkflow, wizardWorkflowOptions]);
+
+  React.useEffect(() => {
+    if (wizardContextPath) return;
+    if (prdPath) setWizardContextPath(prdPath);
+  }, [prdPath, wizardContextPath]);
+
+  const wizardContextAbsPath = React.useMemo(() => {
+    const root = String(projectRoot || "").replace(/[\\/]+$/, "");
+    const raw = String(wizardContextPath || "").trim();
+    if (!raw) return "";
+    if (/^(?:[a-zA-Z]:\\|\/)/.test(raw)) return raw;
+    const rel = raw.replace(/^[\\/]+/, "");
+    if (!root) return rel;
+    return `${root}/${rel}`;
+  }, [projectRoot, wizardContextPath]);
+
+  const wizardCliArgs = React.useMemo(() => {
+    const wf = String(resolvedWizardWorkflow || "").trim();
+    if (!wf) return [];
+
+    if (wf === "research") {
+      const args = ["research"];
+      if (wizardResearchType) args.push("--type", String(wizardResearchType));
+      const inputs = (wizardResearchInputs || [])
+        .map((v) => String(v || "").trim())
+        .filter(Boolean);
+      for (const input of inputs) args.push("--input", input);
+      return args;
+    }
+
+    if (wf === "product-brief") {
+      const args = ["product-brief"];
+      const input = String(wizardProductBriefInput || "").trim();
+      if (input) args.push("--input", input);
+      return args;
+    }
+
+    if (wf === "brainstorming") {
+      const args = ["brainstorming"];
+      if (wizardContextAbsPath) args.push("--data", wizardContextAbsPath);
+      return args;
+    }
+
+    return [wf];
+  }, [
+    resolvedWizardWorkflow,
+    wizardContextAbsPath,
+    wizardProductBriefInput,
+    wizardResearchInputs,
+    wizardResearchType,
+  ]);
+
+  const wizardCommand = React.useMemo(() => {
+    const wf = String(resolvedWizardWorkflow || "").trim();
+    if (!wf) return "";
+
+    const args = [];
+
+    if (wf === "research") {
+      if (wizardResearchType) args.push(`--type ${wizardResearchType}`);
+      const inputs = (wizardResearchInputs || [])
+        .map((v) => String(v || "").trim())
+        .filter(Boolean);
+      for (const input of inputs) args.push(`--input ${input}`);
+    }
+
+    if (wf === "product-brief") {
+      const input = String(wizardProductBriefInput || "").trim();
+      if (input) args.push(`--input ${input}`);
+    }
+
+    if (wf === "brainstorming") {
+      if (wizardContextAbsPath) args.push(`--data ${wizardContextAbsPath}`);
+    }
+
+    return args.length ? `workflow ${wf} ${args.join(" ")}` : `workflow ${wf}`;
+  }, [
+    resolvedWizardWorkflow,
+    wizardContextAbsPath,
+    wizardProductBriefInput,
+    wizardResearchInputs,
+    wizardResearchType,
+  ]);
+
+  const activeWorkflowCopyText = React.useMemo(() => {
+    return workflowsTab === "wizard" ? wizardCommand : workflowCommand;
+  }, [workflowCommand, workflowsTab, wizardCommand]);
+
+  const refreshWorkflowPreview = React.useCallback(async () => {
+    const root = String(projectRoot || "").trim();
+    const rel = String(wizardContextPath || "").trim();
+    if (!window.electronAPI?.readProjectFile) return;
+    if (!root) return;
+    if (!rel) return;
+    if (/^(?:[a-zA-Z]:\\|\/)/.test(rel)) {
+      setWorkflowPreviewError(
+        "Preview supports files inside the selected project root"
+      );
+      setWorkflowPreviewContent(null);
+      return;
+    }
+    setWorkflowPreviewBusy(true);
+    setWorkflowPreviewError(null);
+    try {
+      const result = await window.electronAPI.readProjectFile({
+        projectRoot: root,
+        relativePath: rel,
+      });
+      setWorkflowPreviewContent(String(result?.content || ""));
+    } catch (err) {
+      setWorkflowPreviewContent(null);
+      setWorkflowPreviewError(err?.message || "Failed to read file");
+    } finally {
+      setWorkflowPreviewBusy(false);
+    }
+  }, [projectRoot, wizardContextPath]);
+
+  const runWizardWorkflow = React.useCallback(async () => {
+    if (!window.electronAPI?.runBmadCli) return;
+    if (!hasProjectRoot) return;
+    if (!wizardCliArgs.length) return;
+    if (workflowRunBusy) return;
+
+    setWorkflowRunLogs([]);
+    workflowRunActiveRef.current = true;
+    setWorkflowRunBusy(true);
+    try {
+      await window.electronAPI.runBmadCli({
+        cwd: projectRoot,
+        mode: setup.bmadMode || "npx",
+        action: "workflow",
+        verbose: Boolean(setup.bmadVerbose),
+        interactive: true,
+        extraArgs: wizardCliArgs,
+      });
+    } finally {
+      workflowRunActiveRef.current = false;
+      setWorkflowRunBusy(false);
+      setWorkflowsTab("preview");
+    }
+  }, [
+    hasProjectRoot,
+    projectRoot,
+    setup.bmadMode,
+    setup.bmadVerbose,
+    wizardCliArgs,
+    workflowRunBusy,
+  ]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (workflowsTab !== "preview") return;
+    refreshWorkflowPreview();
+  }, [open, refreshWorkflowPreview, workflowsTab]);
 
   const buildPrdMarkdown = React.useCallback(() => {
     const title = String(setup.projectName || "Project").trim() || "Project";
@@ -1486,6 +1750,13 @@ const AgentAssistDialog = ({
             const next = [...prev, log].slice(-400);
             return next;
           });
+
+          if (workflowRunActiveRef.current) {
+            setWorkflowRunLogs((prev) => {
+              const next = [...prev, log].slice(-400);
+              return next;
+            });
+          }
         });
       }
     })();
@@ -1527,7 +1798,7 @@ const AgentAssistDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[720px] h-[560px] min-h-0 flex flex-col bg-background/95 backdrop-blur-lg">
+      <DialogContent className="sm:max-w-[960px] h-[75vh] max-h-[860px] min-h-[640px] flex flex-col bg-background/95 backdrop-blur-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -1615,6 +1886,508 @@ const AgentAssistDialog = ({
                           : "No BMAD logs yet"}
                       </pre>
                     </ScrollArea>
+                  </div>
+
+                  {bmadBusy && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <Input
+                        value={bmadInput}
+                        onChange={(e) => setBmadInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            sendBmadInput();
+                          }
+                        }}
+                        placeholder="Type a response for the BMAD installer and press Enter"
+                        className="bg-background/50"
+                        disabled={!bmadBusy}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!bmadBusy || !String(bmadInput || "").trim()}
+                        onClick={() => sendBmadInput()}
+                      >
+                        Send
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <div className="text-sm font-medium">Workflows</div>
+                      <div className="text-xs text-muted-foreground">
+                        Copy and run inside your BMAD agent chat (not the CLI)
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={!activeWorkflowCopyText}
+                      onClick={() =>
+                        copyText("workflow-active", activeWorkflowCopyText)
+                      }
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copiedKey === "workflow-active" ? "Copied" : "Copy"}
+                    </Button>
+                  </div>
+
+                  <div className="rounded-lg border border-border/50 bg-background/40 p-3">
+                    <div className="grid gap-3">
+                      <div className="grid gap-1">
+                        <div className="text-xs font-medium text-foreground">
+                          Phase 1 (Analysis) - Optional workflows
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          brainstorm-project - Ideation
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          research - Market/tech research
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          product-brief - Concept definition
+                        </div>
+                      </div>
+
+                      <div className="grid gap-1">
+                        <div className="text-xs font-medium text-foreground">
+                          Phase 2 (Planning) - Required
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          prd - Create Product Requirements Document
+                        </div>
+                      </div>
+
+                      <div className="grid gap-1">
+                        <div className="text-xs font-medium text-foreground">
+                          Phase 3 (Development) - Architecture & implementation
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <div className="text-xs font-medium text-foreground mb-2">
+                      Example Commands
+                    </div>
+                    <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                      <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                        {workflowExamples
+                          .map((ex) => String(ex.command || ""))
+                          .join("\n")}
+                      </pre>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {workflowExamples.map((ex) => (
+                        <Button
+                          key={ex.key}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => copyText(ex.key, ex.command)}
+                        >
+                          <Copy className="h-4 w-4" />
+                          {copiedKey === ex.key ? "Copied" : ex.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <Tabs value={workflowsTab} onValueChange={setWorkflowsTab}>
+                      <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="wizard">Wizard</TabsTrigger>
+                        <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                        <TabsTrigger value="preview">Preview</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="wizard" className="mt-4">
+                        <div className="grid gap-3">
+                          <div className="grid sm:grid-cols-3 gap-3">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">
+                                Step 1: Phase
+                              </Label>
+                              <Select
+                                value={String(wizardPhase)}
+                                onValueChange={(v) => setWizardPhase(v)}
+                              >
+                                <SelectTrigger className="w-full bg-background/50">
+                                  <SelectValue placeholder="Phase" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="phase-1">
+                                    Phase 1 (Analysis)
+                                  </SelectItem>
+                                  <SelectItem value="phase-2">
+                                    Phase 2 (Planning)
+                                  </SelectItem>
+                                  <SelectItem value="phase-3">
+                                    Phase 3 (Development)
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <Label className="text-xs text-muted-foreground">
+                                Step 2: Workflow
+                              </Label>
+                              <Select
+                                value={String(resolvedWizardWorkflow)}
+                                onValueChange={(v) => setWizardWorkflow(v)}
+                              >
+                                <SelectTrigger className="w-full bg-background/50">
+                                  <SelectValue placeholder="Workflow" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {wizardWorkflowOptions.map((opt) => (
+                                    <SelectItem
+                                      key={opt.value}
+                                      value={opt.value}
+                                    >
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          {resolvedWizardWorkflow === "research" && (
+                            <div className="grid gap-3">
+                              <div className="grid sm:grid-cols-3 gap-3">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    Research type
+                                  </Label>
+                                  <Select
+                                    value={String(wizardResearchType)}
+                                    onValueChange={(v) =>
+                                      setWizardResearchType(v)
+                                    }
+                                  >
+                                    <SelectTrigger className="w-full bg-background/50">
+                                      <SelectValue placeholder="Type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="market">
+                                        market
+                                      </SelectItem>
+                                      <SelectItem value="technical">
+                                        technical
+                                      </SelectItem>
+                                      <SelectItem value="deep_prompt">
+                                        deep_prompt
+                                      </SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              <div className="grid sm:grid-cols-3 gap-3">
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    Input 1
+                                  </Label>
+                                  <Input
+                                    value={wizardResearchInputs[0] || ""}
+                                    onChange={(e) => {
+                                      const next = [...wizardResearchInputs];
+                                      next[0] = e.target.value;
+                                      setWizardResearchInputs(next);
+                                    }}
+                                    placeholder="product-brief.md"
+                                    className="bg-background/50"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    Input 2
+                                  </Label>
+                                  <Input
+                                    value={wizardResearchInputs[1] || ""}
+                                    onChange={(e) => {
+                                      const next = [...wizardResearchInputs];
+                                      next[1] = e.target.value;
+                                      setWizardResearchInputs(next);
+                                    }}
+                                    placeholder="competitor-list.md"
+                                    className="bg-background/50"
+                                  />
+                                </div>
+                                <div>
+                                  <Label className="text-xs text-muted-foreground">
+                                    Input 3
+                                  </Label>
+                                  <Input
+                                    value={wizardResearchInputs[2] || ""}
+                                    onChange={(e) => {
+                                      const next = [...wizardResearchInputs];
+                                      next[2] = e.target.value;
+                                      setWizardResearchInputs(next);
+                                    }}
+                                    placeholder="requirements.md"
+                                    className="bg-background/50"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {resolvedWizardWorkflow === "product-brief" && (
+                            <div className="grid sm:grid-cols-2 gap-3">
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Optional input document
+                                </Label>
+                                <Input
+                                  value={wizardProductBriefInput}
+                                  onChange={(e) =>
+                                    setWizardProductBriefInput(e.target.value)
+                                  }
+                                  placeholder="market-research.md"
+                                  className="bg-background/50"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="grid sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2">
+                              <Label className="text-xs text-muted-foreground">
+                                Context file (for `--data` / preview)
+                              </Label>
+                              <Input
+                                value={wizardContextPath}
+                                onChange={(e) =>
+                                  setWizardContextPath(e.target.value)
+                                }
+                                placeholder="_bmad-output/prd.md"
+                                className="bg-background/50"
+                              />
+                            </div>
+                            <div className="flex items-end gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="gap-2"
+                                disabled={!wizardCommand}
+                                onClick={() =>
+                                  copyText("workflow-wizard", wizardCommand)
+                                }
+                              >
+                                <Copy className="h-4 w-4" />
+                                {copiedKey === "workflow-wizard"
+                                  ? "Copied"
+                                  : "Copy"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={
+                                  !hasProjectRoot ||
+                                  !wizardCliArgs.length ||
+                                  workflowRunBusy
+                                }
+                                onClick={() => runWizardWorkflow()}
+                              >
+                                {workflowRunBusy ? "Running" : "Run"}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={!wizardContextPath}
+                                onClick={() => setWorkflowsTab("preview")}
+                              >
+                                Preview
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                            <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                              {wizardCommand || "Select a workflow"}
+                            </pre>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="advanced" className="mt-4">
+                        <div className="grid gap-3">
+                          <div className="grid sm:grid-cols-3 gap-3">
+                            <div className="sm:col-span-2">
+                              <Label className="text-xs text-muted-foreground">
+                                Workflow
+                              </Label>
+                              <Select
+                                value={String(workflowName)}
+                                onValueChange={(v) => setWorkflowName(v)}
+                              >
+                                <SelectTrigger className="w-full bg-background/50">
+                                  <SelectValue placeholder="Workflow" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="status">status</SelectItem>
+                                  <SelectItem value="prd">prd</SelectItem>
+                                  <SelectItem value="brainstorm-project">
+                                    brainstorm-project
+                                  </SelectItem>
+                                  <SelectItem value="research">
+                                    research
+                                  </SelectItem>
+                                  <SelectItem value="product-brief">
+                                    product-brief
+                                  </SelectItem>
+                                  <SelectItem value="brainstorming">
+                                    brainstorming
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="flex items-end justify-between gap-3">
+                              <div className="grid gap-1">
+                                <Label className="text-xs text-muted-foreground">
+                                  Include --data
+                                </Label>
+                                <div className="flex items-center gap-2">
+                                  <Switch
+                                    checked={includeWorkflowData}
+                                    onCheckedChange={(v) =>
+                                      setIncludeWorkflowData(v)
+                                    }
+                                    disabled={!workflowDataPath}
+                                  />
+                                  <div className="text-xs text-muted-foreground truncate max-w-[220px]">
+                                    {workflowDataPath || "No PRD path"}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                            <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                              {workflowCommand}
+                            </pre>
+                          </div>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="preview" className="mt-4">
+                        <div className="grid gap-3">
+                          <Tabs defaultValue="data">
+                            <TabsList className="grid w-full grid-cols-2">
+                              <TabsTrigger value="data">Data File</TabsTrigger>
+                              <TabsTrigger value="output">
+                                Run Output
+                              </TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="data" className="mt-4">
+                              <div className="grid gap-3">
+                                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                                  <div className="flex-1">
+                                    <Label className="text-xs text-muted-foreground">
+                                      Preview file (relative to project root)
+                                    </Label>
+                                    <Input
+                                      value={wizardContextPath}
+                                      onChange={(e) =>
+                                        setWizardContextPath(e.target.value)
+                                      }
+                                      placeholder="_bmad-output/prd.md"
+                                      className="bg-background/50"
+                                    />
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-2"
+                                    disabled={
+                                      !hasProjectRoot ||
+                                      !wizardContextPath ||
+                                      workflowPreviewBusy
+                                    }
+                                    onClick={() => refreshWorkflowPreview()}
+                                  >
+                                    <RefreshCw className="h-4 w-4" />
+                                    {workflowPreviewBusy
+                                      ? "Loading"
+                                      : "Refresh"}
+                                  </Button>
+                                </div>
+
+                                {workflowPreviewError && (
+                                  <div className="text-xs text-red-400">
+                                    {workflowPreviewError}
+                                  </div>
+                                )}
+
+                                <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                                  <ScrollArea className="h-[180px]">
+                                    <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                                      {workflowPreviewContent
+                                        ? workflowPreviewContent
+                                        : hasProjectRoot
+                                        ? "No preview loaded"
+                                        : "Select a project root first"}
+                                    </pre>
+                                  </ScrollArea>
+                                </div>
+                              </div>
+                            </TabsContent>
+
+                            <TabsContent value="output" className="mt-4">
+                              <div className="grid gap-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="text-xs text-muted-foreground">
+                                    {workflowRunBusy
+                                      ? "Workflow running"
+                                      : workflowRunLogs.length
+                                      ? "Last workflow run output"
+                                      : "No workflow run yet"}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!workflowRunLogs.length}
+                                    onClick={() => setWorkflowRunLogs([])}
+                                  >
+                                    Clear
+                                  </Button>
+                                </div>
+
+                                <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                                  <ScrollArea className="h-[180px]">
+                                    <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                                      {workflowRunLogs.length
+                                        ? workflowRunLogs
+                                            .map((l) =>
+                                              String(l?.message || "")
+                                            )
+                                            .join("\n")
+                                        : ""}
+                                    </pre>
+                                  </ScrollArea>
+                                </div>
+                              </div>
+                            </TabsContent>
+                          </Tabs>
+                        </div>
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 </div>
 

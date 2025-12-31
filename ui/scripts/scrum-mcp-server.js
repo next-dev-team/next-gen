@@ -1,6 +1,9 @@
 const Conf = require("conf");
 const nodeCrypto = require("crypto");
+const { spawn } = require("child_process");
+const fs = require("fs");
 const http = require("http");
+const path = require("path");
 const url = require("url");
 
 const store = new Conf({ projectName: "next-gen-scrum" });
@@ -240,6 +243,120 @@ const withStructured = (output) => ({
   content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
   structuredContent: output,
 });
+
+const runCli = async ({ cwd, command, args }) => {
+  const workingDir = String(cwd || "").trim();
+  if (!workingDir || !path.isAbsolute(workingDir)) {
+    throw new Error("cwd must be an absolute path");
+  }
+  await fs.promises.access(workingDir);
+
+  return await new Promise((resolve) => {
+    const logs = [];
+    const startedAt = nowIso();
+    const child = spawn(command, args, {
+      cwd: workingDir,
+      shell: true,
+      env: { ...process.env, FORCE_COLOR: "1" },
+    });
+
+    logs.push(`▶ ${command} ${args.join(" ")}`);
+
+    child.stdout.on("data", (data) => {
+      const text = String(data || "");
+      const lines = text.split("\n").filter((l) => l.trim());
+      for (const line of lines) logs.push(line);
+    });
+
+    child.stderr.on("data", (data) => {
+      const text = String(data || "");
+      const lines = text.split("\n").filter((l) => l.trim());
+      for (const line of lines) logs.push(line);
+    });
+
+    child.on("error", (err) => {
+      logs.push(`Process error: ${err?.message || String(err)}`);
+      resolve({
+        success: false,
+        exitCode: -1,
+        logs,
+        startedAt,
+        endedAt: nowIso(),
+      });
+    });
+
+    child.on("close", (code) => {
+      resolve({
+        success: code === 0,
+        exitCode: typeof code === "number" ? code : -1,
+        logs,
+        startedAt,
+        endedAt: nowIso(),
+      });
+    });
+  });
+};
+
+const getBmadCommand = ({ mode, action, modules, full, verbose }) => {
+  const selectedMode = String(mode || "npx").trim();
+  const selectedAction = String(action || "status").trim();
+  const isVerbose = Boolean(verbose);
+
+  if (selectedMode === "bmad") {
+    const command = process.platform === "win32" ? "bmad.cmd" : "bmad";
+    const args = [selectedAction];
+    if (selectedAction === "install") {
+      const mods = Array.isArray(modules)
+        ? modules.map((m) => String(m).trim()).filter(Boolean)
+        : [];
+      if (mods.length > 0) args.push("-m", ...mods);
+      if (full) args.push("-f");
+    }
+    if (isVerbose) args.push("-v");
+    return { command, args };
+  }
+
+  const command = process.platform === "win32" ? "npx.cmd" : "npx";
+  const args = ["-y", "bmad-method@alpha", selectedAction];
+  if (isVerbose) args.push("-v");
+  return { command, args };
+};
+
+const safeWriteFile = async ({ cwd, relativePath, content, overwrite }) => {
+  const workingDir = String(cwd || "").trim();
+  const rel = String(relativePath || "").trim();
+  if (!workingDir || !path.isAbsolute(workingDir)) {
+    throw new Error("cwd must be an absolute path");
+  }
+  if (!rel || path.isAbsolute(rel)) {
+    throw new Error("relativePath must be a relative path");
+  }
+
+  const resolvedRoot = path.resolve(workingDir);
+  const target = path.resolve(resolvedRoot, rel);
+  const rootPrefix = resolvedRoot.endsWith(path.sep)
+    ? resolvedRoot
+    : resolvedRoot + path.sep;
+  if (!target.startsWith(rootPrefix)) {
+    throw new Error("Refusing to write outside cwd");
+  }
+
+  await fs.promises.mkdir(path.dirname(target), { recursive: true });
+
+  if (!overwrite) {
+    try {
+      await fs.promises.access(target);
+      throw new Error("File already exists");
+    } catch (err) {
+      if (String(err?.message || "").includes("File already exists")) {
+        throw err;
+      }
+    }
+  }
+
+  await fs.promises.writeFile(target, String(content || ""), "utf8");
+  return target;
+};
 
 // ============ HTTP SSE Server ============
 const SSE_PORT = process.env.SCRUM_MCP_PORT || 3847;
@@ -1190,6 +1307,179 @@ const main = async (enableStdio = true, logger = console) => {
     }
   );
 
+  server.registerTool(
+    "bmad_install",
+    {
+      title: "Install BMAD-Method",
+      description: "Run BMAD installation in the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        mode: z.enum(["npx", "bmad"]).optional(),
+        modules: z.array(z.string()).optional(),
+        full: z.boolean().optional(),
+        verbose: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        exitCode: z.number(),
+        logs: z.array(z.string()),
+        startedAt: z.string(),
+        endedAt: z.string(),
+      },
+    },
+    async ({ cwd, mode, modules, full, verbose }) => {
+      const startedAt = nowIso();
+      try {
+        const { command, args } = getBmadCommand({
+          mode,
+          action: "install",
+          modules,
+          full,
+          verbose,
+        });
+        const result = await runCli({ cwd, command, args });
+
+        const missingBmad =
+          String(mode || "npx").trim() === "bmad" &&
+          result.exitCode === 127 &&
+          result.logs.some((l) =>
+            String(l).toLowerCase().includes("command not found")
+          );
+
+        if (missingBmad) {
+          const fallback = getBmadCommand({
+            mode: "npx",
+            action: "install",
+            modules,
+            full,
+            verbose,
+          });
+          const second = await runCli({ cwd, ...fallback });
+          return withStructured({
+            ...second,
+            logs: [
+              ...result.logs,
+              "bmad CLI not found in PATH. Falling back to npx bmad-method@alpha.",
+              ...second.logs,
+            ],
+          });
+        }
+
+        return withStructured(result);
+      } catch (err) {
+        return withStructured({
+          success: false,
+          exitCode: -1,
+          logs: [err?.message || String(err)],
+          startedAt,
+          endedAt: nowIso(),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "bmad_status",
+    {
+      title: "BMAD Status",
+      description: "Check BMAD status in the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        mode: z.enum(["npx", "bmad"]).optional(),
+        verbose: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        exitCode: z.number(),
+        logs: z.array(z.string()),
+        startedAt: z.string(),
+        endedAt: z.string(),
+      },
+    },
+    async ({ cwd, mode, verbose }) => {
+      const startedAt = nowIso();
+      try {
+        const { command, args } = getBmadCommand({
+          mode,
+          action: "status",
+          verbose,
+        });
+        const result = await runCli({ cwd, command, args });
+
+        const missingBmad =
+          String(mode || "npx").trim() === "bmad" &&
+          result.exitCode === 127 &&
+          result.logs.some((l) =>
+            String(l).toLowerCase().includes("command not found")
+          );
+
+        if (missingBmad) {
+          const fallback = getBmadCommand({
+            mode: "npx",
+            action: "status",
+            verbose,
+          });
+          const second = await runCli({ cwd, ...fallback });
+          return withStructured({
+            ...second,
+            logs: [
+              ...result.logs,
+              "bmad CLI not found in PATH. Falling back to npx bmad-method@alpha.",
+              ...second.logs,
+            ],
+          });
+        }
+
+        return withStructured(result);
+      } catch (err) {
+        return withStructured({
+          success: false,
+          exitCode: -1,
+          logs: [err?.message || String(err)],
+          startedAt,
+          endedAt: nowIso(),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "generate_prd",
+    {
+      title: "Generate PRD",
+      description:
+        "Write PRD markdown to a file within the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        relativePath: z.string().optional(),
+        content: z.string(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({ cwd, relativePath, content, overwrite }) => {
+      try {
+        const rel = String(relativePath || "_bmad-output/prd.md").trim();
+        const target = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content,
+          overwrite: overwrite !== false,
+        });
+        return withStructured({ success: true, path: target });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
   // Start both MCP (stdio) and HTTP (SSE) servers
   if (enableStdio) {
     const transport = new StdioServerTransport();
@@ -1199,7 +1489,7 @@ const main = async (enableStdio = true, logger = console) => {
 
 let isRunning = false;
 
-const start = async (port = SSE_PORT, logCallback = null) => {
+const start = async (port = SSE_PORT, logCallback = null, enableStdio) => {
   if (isRunning) return;
   isRunning = true;
 
@@ -1214,6 +1504,15 @@ const start = async (port = SSE_PORT, logCallback = null) => {
     },
   };
 
+  const shouldEnableStdio =
+    typeof enableStdio === "boolean"
+      ? enableStdio
+      : process.env.MCP_STDIO === "1"
+      ? true
+      : process.versions && process.versions.electron
+      ? false
+      : !(process.stdin && process.stdin.isTTY);
+
   return new Promise((resolve, reject) => {
     const onListen = () => {
       logger.log(
@@ -1222,7 +1521,7 @@ const start = async (port = SSE_PORT, logCallback = null) => {
       logger.log(`Connect to SSE: http://localhost:${port}/sse`);
       logger.log(`API docs: http://localhost:${port}/`);
 
-      main(false, logger)
+      main(shouldEnableStdio, logger)
         .then(() => resolve(true))
         .catch((err) => {
           logger.error(`Failed to start MCP logic: ${err}`);

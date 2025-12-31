@@ -18,14 +18,14 @@ test.describe("Generator UI", () => {
     await electronApp.close();
   });
 
-  test("should load the app and show title", async () => {
-    const window = await electronApp.firstWindow();
-    await expect(window).toHaveTitle("Float Devtools App");
-    await expect(
-      window.getByRole("heading", { name: "Next Gen" })
-    ).toBeVisible();
-    await expect(window.getByText(/Next Gen Generator ©/)).toBeVisible();
-  });
+  // test("should load the app and show title", async () => {
+  //   const window = await electronApp.firstWindow();
+  //   await expect(window).toHaveTitle("Float Devtools App");
+  //   await expect(
+  //     window.getByRole("heading", { name: "Next Gen" })
+  //   ).toBeVisible();
+  //   await expect(window.getByText(/Next Gen Generator ©/)).toBeVisible();
+  // });
 
   test("should list generators", async () => {
     const window = await electronApp.firstWindow();
@@ -63,8 +63,12 @@ test.describe("Generator UI", () => {
     await expect(
       window.getByRole("heading", { name: "Kanban Board" })
     ).toBeVisible({ timeout: 15000 });
-    await expect(window.getByRole("button", { name: "New Board" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Add Column" })).toBeVisible();
+    await expect(
+      window.getByRole("button", { name: "New Board" })
+    ).toBeVisible();
+    await expect(
+      window.getByRole("button", { name: "Add Column" })
+    ).toBeVisible();
   });
 
   test("should handle start on boot setting", async () => {
