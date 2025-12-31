@@ -826,6 +826,7 @@ const ListColumn = ({
 const AddListColumn = ({ onAdd }) => {
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
+  const [submitting, setSubmitting] = React.useState(false);
 
   return (
     <div className="w-[320px] shrink-0">
@@ -839,11 +840,18 @@ const AddListColumn = ({ onAdd }) => {
             onChange={(e) => setName(e.target.value)}
             placeholder="Column name..."
             className="mt-2 bg-background/50"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && name.trim()) {
-                onAdd(name);
-                setName("");
-                setOpen(false);
+            onKeyDown={async (e) => {
+              if (e.key === "Enter" && name.trim() && !submitting) {
+                setSubmitting(true);
+                try {
+                  const ok = await onAdd(name.trim());
+                  if (ok) {
+                    setName("");
+                    setOpen(false);
+                  }
+                } finally {
+                  setSubmitting(false);
+                }
               }
               if (e.key === "Escape") {
                 setName("");
@@ -856,19 +864,28 @@ const AddListColumn = ({ onAdd }) => {
             <Button
               type="button"
               className="flex-1"
-              disabled={!name.trim()}
-              onClick={() => {
-                onAdd(name);
-                setName("");
-                setOpen(false);
+              disabled={!name.trim() || submitting}
+              onClick={async () => {
+                if (submitting) return;
+                setSubmitting(true);
+                try {
+                  const ok = await onAdd(name.trim());
+                  if (ok) {
+                    setName("");
+                    setOpen(false);
+                  }
+                } finally {
+                  setSubmitting(false);
+                }
               }}
             >
-              Add
+              {submitting ? "Adding..." : "Add"}
             </Button>
             <Button
               type="button"
               variant="outline"
               className="flex-1"
+              disabled={submitting}
               onClick={() => {
                 setName("");
                 setOpen(false);
@@ -1227,6 +1244,7 @@ export default function ScrumBoardView() {
     createBoard,
     deleteBoard,
     deleteList: deleteListApi,
+    addList: addListApi,
     addCard,
     updateCard,
     deleteCard,
@@ -1354,8 +1372,8 @@ export default function ScrumBoardView() {
 
   // List operations
   const addList = async (name) => {
-    // For now, using API call through store
-    console.log("Add list:", name);
+    if (!activeBoardId) return false;
+    return addListApi(activeBoardId, name);
   };
 
   const renameList = async (listId, name) => {

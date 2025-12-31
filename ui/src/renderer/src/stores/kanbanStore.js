@@ -433,6 +433,56 @@ export const useKanbanStore = create((set, get) => ({
     return true;
   },
 
+  addList: async (boardId, name, options = {}) => {
+    const { apiCall, connected, state } = get();
+    const listName = String(name || "").trim();
+    if (!listName) return false;
+
+    const color = options.color || STORY_STATUSES[0]?.color || "#6b7280";
+    const statusId = options.statusId || null;
+
+    if (connected) {
+      try {
+        await apiCall("/list/add", { boardId, name: listName, statusId, color });
+        return true;
+      } catch (err) {
+        set({ error: err.message });
+        return false;
+      }
+    }
+
+    if (!state?.boards?.length) return false;
+
+    const board = state.boards.find((b) => b.id === boardId);
+    if (!board) return false;
+
+    const nextBoard = {
+      ...board,
+      lists: [
+        ...board.lists,
+        {
+          id: createId(),
+          statusId,
+          name: listName,
+          color,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          cards: [],
+        },
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+
+    const newState = {
+      ...state,
+      boards: state.boards.map((b) => (b.id === boardId ? nextBoard : b)),
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(newState));
+    set({ state: newState });
+    return true;
+  },
+
   // Card operations
   addCard: async (boardId, listId, cardData) => {
     const { apiCall, connected } = get();
