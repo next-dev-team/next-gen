@@ -1,5 +1,8 @@
 🎯 ENHANCED FLOW: IDE & Agent Selection for Scrum MCP Module
 Updated Module Configuration
+
+More Details and question can check MCP context7 id: bmad-code-org/bmad-method
+
 Step 1: Enhanced module.yaml with IDE & Agent Selection
 
 # module.yaml
