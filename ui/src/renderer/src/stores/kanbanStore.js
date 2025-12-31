@@ -443,7 +443,12 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/list/add", { boardId, name: listName, statusId, color });
+        await apiCall("/list/add", {
+          boardId,
+          name: listName,
+          statusId,
+          color,
+        });
         return true;
       } catch (err) {
         set({ error: err.message });
