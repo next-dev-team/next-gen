@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from "react";
-import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   AppstoreOutlined,
   GithubOutlined,
@@ -11,6 +9,8 @@ import {
   TableOutlined,
 } from "@ant-design/icons";
 import { Button, Layout, Segmented, Switch, Tooltip, Typography } from "antd";
+import React, { useEffect, useState } from "react";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
@@ -303,20 +303,6 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
       >
         <Outlet />
       </Content>
-
-      {/* Footer */}
-      <Footer
-        style={{
-          background: "transparent",
-          borderTop: "1px solid var(--color-border)",
-          textAlign: "center",
-          padding: "16px 24px",
-        }}
-      >
-        <Text style={{ color: "var(--color-text-secondary)" }}>
-          Next Gen Generator © {new Date().getFullYear()}
-        </Text>
-      </Footer>
     </Layout>
   );
 }

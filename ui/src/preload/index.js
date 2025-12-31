@@ -67,6 +67,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
   getMcpLogs: () => ipcRenderer.invoke("get-mcp-logs"),
 
+  // ======= BMAD METHOD =======
+  runBmadCli: (options) => ipcRenderer.invoke("bmad-cli-run", options),
+  stopBmadCli: () => ipcRenderer.invoke("bmad-cli-stop"),
+  getBmadLogs: () => ipcRenderer.invoke("get-bmad-logs"),
+  onBmadLog: (callback) => {
+    const handler = (event, log) => callback(log);
+    ipcRenderer.on("bmad-cli-log", handler);
+    return () => ipcRenderer.removeListener("bmad-cli-log", handler);
+  },
+
+  writeProjectFile: (payload) => ipcRenderer.invoke("write-project-file", payload),
+
   // External links
   openExternal: (url) => {
     shell.openExternal(url);

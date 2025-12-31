@@ -1,43 +1,41 @@
-import * as React from "react";
 import {
+  AlertCircle,
+  ArrowRight,
   Book,
+  Calendar,
+  CheckCircle,
+  CheckCircle2,
+  ChevronDown,
+  Circle,
+  Clock,
   Copy,
-  Plus,
-  Trash2,
-  Pencil,
-  X,
+  Filter,
+  GitBranch,
   GripVertical,
-  LayoutGrid,
   Layout,
+  LayoutGrid,
+  Lock,
+  PauseCircle,
+  Pencil,
+  PlayCircle,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings,
+  Sparkles,
+  Tag,
+  Target,
+  Trash2,
+  TrendingUp,
+  Unlock,
+  User,
+  Users,
   Wifi,
   WifiOff,
-  Lock,
-  Unlock,
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Users,
-  Sparkles,
+  X,
   Zap,
-  Target,
-  TrendingUp,
-  RefreshCw,
-  Settings,
-  ChevronDown,
-  Search,
-  Filter,
-  Tag,
-  User,
-  Calendar,
-  ArrowRight,
-  PlayCircle,
-  PauseCircle,
-  CheckCircle,
-  Circle,
-  GitBranch,
 } from "lucide-react";
-
-import { cn } from "../lib/utils";
+import * as React from "react";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -46,7 +44,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
-import { Switch } from "../components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -58,7 +55,6 @@ import {
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { ScrollArea } from "../components/ui/scroll-area";
-import { Separator } from "../components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -66,6 +62,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import { Separator } from "../components/ui/separator";
+import { Switch } from "../components/ui/switch";
 import {
   Tabs,
   TabsContent,
@@ -78,11 +76,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "../components/ui/tooltip";
+import { cn } from "../lib/utils";
 
 import useKanbanStore, {
-  STORY_STATUSES,
   EPIC_STATUSES,
   PRIORITY_LEVELS,
+  STORY_STATUSES,
 } from "../stores/kanbanStore";
 
 // Board templates based on BMAD-Method
@@ -657,6 +656,8 @@ const DropZone = ({ isActive, onDrop }) => {
 
   return (
     <div
+      role="presentation"
+      aria-hidden="true"
       className={cn(
         "h-2 rounded transition-all duration-200",
         isActive ? "hover:bg-primary/20 hover:h-4" : "opacity-40",
@@ -702,12 +703,11 @@ const ListColumn = ({
 
   return (
     <div
+      role="presentation"
       className={cn(
         "w-[320px] rounded-xl border bg-background/50 backdrop-blur-sm flex flex-col h-full min-h-0",
         "border-border/50 hover:border-border transition-colors"
       )}
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onDropToEnd}
     >
       {/* List Header */}
       <div
@@ -1095,7 +1095,7 @@ const SettingsDialog = ({ open, onOpenChange }) => {
     if (open) {
       checkServerStatus();
     }
-  }, [open]);
+  }, [open, checkServerStatus]);
 
   // Subscribe to logs
   React.useEffect(() => {
@@ -1115,6 +1115,8 @@ const SettingsDialog = ({ open, onOpenChange }) => {
   }, []);
 
   React.useEffect(() => {
+    const lastLog = logs[logs.length - 1];
+    if (!lastLog) return;
     if (logsEndRef.current && open) {
       logsEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
@@ -1223,7 +1225,10 @@ const SettingsDialog = ({ open, onOpenChange }) => {
                     </div>
                   )}
                   {logs.map((log, i) => (
-                    <div key={i} className="flex gap-2 text-wrap break-all">
+                    <div
+                      key={`${log.timestamp}-${log.type}-${log.message}`}
+                      className="flex gap-2 text-wrap break-all"
+                    >
                       <span className="text-muted-foreground shrink-0">
                         [{new Date(log.timestamp).toLocaleTimeString()}]
                       </span>
@@ -1269,10 +1274,15 @@ const AgentAssistDialog = ({
   const { connected, serverRunning, toggleServer, checkServerStatus, syncNow } =
     useKanbanStore();
 
-  const [activeTab, setActiveTab] = React.useState("setup");
+  const [activeTab, setActiveTab] = React.useState("bmad");
   const [showComparison, setShowComparison] = React.useState(false);
   const [copiedKey, setCopiedKey] = React.useState(null);
   const copiedTimerRef = React.useRef(null);
+
+  const [bmadLogs, setBmadLogs] = React.useState([]);
+  const [bmadBusy, setBmadBusy] = React.useState(false);
+  const [prdBusy, setPrdBusy] = React.useState(false);
+  const [prdResult, setPrdResult] = React.useState(null);
 
   const recommendedAgent = React.useMemo(() => {
     return recommendAgent({
@@ -1332,6 +1342,126 @@ const AgentAssistDialog = ({
     }
   }, []);
 
+  const projectRoot = String(setup.projectRoot || "").trim();
+  const hasProjectRoot = Boolean(projectRoot);
+
+  const handlePickProjectRoot = React.useCallback(async () => {
+    if (!window.electronAPI?.selectFolder) return;
+    const selected = await window.electronAPI.selectFolder({
+      title: "Select project root",
+      defaultPath: projectRoot || undefined,
+    });
+    if (selected) {
+      onChangeSetup({ ...setup, projectRoot: selected });
+    }
+  }, [onChangeSetup, projectRoot, setup]);
+
+  const runBmadAction = React.useCallback(
+    async (action) => {
+      if (!window.electronAPI?.runBmadCli) return;
+      if (!hasProjectRoot) return;
+      setPrdResult(null);
+      setBmadBusy(true);
+      try {
+        await window.electronAPI.runBmadCli({
+          cwd: projectRoot,
+          mode: setup.bmadMode || "npx",
+          action,
+          verbose: Boolean(setup.bmadVerbose),
+        });
+      } finally {
+        setBmadBusy(false);
+      }
+    },
+    [hasProjectRoot, projectRoot, setup.bmadMode, setup.bmadVerbose]
+  );
+
+  const stopBmad = React.useCallback(async () => {
+    if (!window.electronAPI?.stopBmadCli) return;
+    await window.electronAPI.stopBmadCli();
+  }, []);
+
+  const prdPath = String(setup.prdPath || "_bmad-output/prd.md").trim();
+
+  const buildPrdMarkdown = React.useCallback(() => {
+    const title = String(setup.projectName || "Project").trim() || "Project";
+    const summary = String(setup.projectSummary || "").trim();
+    const goals = String(setup.projectGoals || "").trim();
+    const nonGoals = String(setup.projectNonGoals || "").trim();
+    const users = String(setup.projectUsers || "").trim();
+    const success = String(setup.projectSuccessMetrics || "").trim();
+    const constraints = String(setup.projectConstraints || "").trim();
+    const owner = String(setup.ownerName || "").trim();
+    const teamName = String(setup.teamName || "").trim();
+    const teamMembers = String(setup.teamMembers || "").trim();
+    const language = String(setup.language || "English").trim() || "English";
+
+    return [
+      `# PRD: ${title}`,
+      "",
+      "## Overview",
+      summary || "TBD",
+      "",
+      "## Goals",
+      goals || "TBD",
+      "",
+      "## Non-Goals",
+      nonGoals || "TBD",
+      "",
+      "## Target Users",
+      users || "TBD",
+      "",
+      "## Success Metrics",
+      success || "TBD",
+      "",
+      "## Constraints",
+      constraints || "TBD",
+      "",
+      "## Team",
+      `- Owner: ${owner || "TBD"}`,
+      `- Team: ${teamName || "TBD"}`,
+      `- Members: ${teamMembers || "TBD"}`,
+      `- Language: ${language}`,
+      "",
+      "## Notes",
+      "TBD",
+      "",
+    ].join("\n");
+  }, [
+    setup.language,
+    setup.ownerName,
+    setup.projectConstraints,
+    setup.projectGoals,
+    setup.projectName,
+    setup.projectNonGoals,
+    setup.projectSummary,
+    setup.projectSuccessMetrics,
+    setup.projectUsers,
+    setup.teamMembers,
+    setup.teamName,
+  ]);
+
+  const generatePrd = React.useCallback(async () => {
+    if (!window.electronAPI?.writeProjectFile) return;
+    if (!hasProjectRoot) return;
+    const rel = prdPath || "_bmad-output/prd.md";
+    setPrdBusy(true);
+    setPrdResult(null);
+    try {
+      const result = await window.electronAPI.writeProjectFile({
+        projectRoot,
+        relativePath: rel,
+        content: buildPrdMarkdown(),
+        overwrite: true,
+      });
+      setPrdResult({ ok: true, path: result?.path || rel });
+    } catch (err) {
+      setPrdResult({ ok: false, message: err?.message || "Failed" });
+    } finally {
+      setPrdBusy(false);
+    }
+  }, [buildPrdMarkdown, hasProjectRoot, prdPath, projectRoot]);
+
   React.useEffect(() => {
     if (!open) return;
     checkServerStatus();
@@ -1339,6 +1469,30 @@ const AgentAssistDialog = ({
       if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
     };
   }, [open, checkServerStatus]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    let unsubscribe;
+    (async () => {
+      if (window.electronAPI?.getBmadLogs) {
+        try {
+          const existing = await window.electronAPI.getBmadLogs();
+          if (Array.isArray(existing)) setBmadLogs(existing);
+        } catch {}
+      }
+      if (window.electronAPI?.onBmadLog) {
+        unsubscribe = window.electronAPI.onBmadLog((log) => {
+          setBmadLogs((prev) => {
+            const next = [...prev, log].slice(-400);
+            return next;
+          });
+        });
+      }
+    })();
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, [open]);
 
   const handleToggleIde = (ide) => {
     const next = new Set(Array.isArray(setup.ides) ? setup.ides : []);
@@ -1389,304 +1543,641 @@ const AgentAssistDialog = ({
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="setup">Setup</TabsTrigger>
-            <TabsTrigger value="agent">Agent</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="bmad">BMAD</TabsTrigger>
+            <TabsTrigger value="team">Team</TabsTrigger>
+            <TabsTrigger value="project">Project</TabsTrigger>
             <TabsTrigger value="actions">Actions</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="setup" className="flex-1 min-h-0">
+          <TabsContent value="bmad" className="flex-1 min-h-0">
             <ScrollArea className="h-full">
               <div className="grid gap-4 py-4">
-              <div className="rounded-xl border border-border/50 bg-secondary/10 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={cn(
-                        "w-2.5 h-2.5 rounded-full",
-                        connected
-                          ? "bg-green-500 animate-pulse"
-                          : serverRunning
-                          ? "bg-amber-500"
-                          : "bg-destructive"
-                      )}
-                    />
-                    <div className="text-sm font-medium">
-                      {connected
-                        ? "Connected (Live)"
-                        : serverRunning
-                        ? "Server running, reconnect needed"
-                        : "Server stopped"}
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <div className="text-sm font-medium">BMAD Method</div>
+                      <div className="text-xs text-muted-foreground">
+                        Install and check status in your project root
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={String(setup.bmadMode || "npx")}
+                        onValueChange={(v) =>
+                          onChangeSetup({ ...setup, bmadMode: v })
+                        }
+                      >
+                        <SelectTrigger className="w-[120px] bg-background/50">
+                          <SelectValue placeholder="Mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="npx">npx</SelectItem>
+                          <SelectItem value="bmad">bmad</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!hasProjectRoot || bmadBusy}
+                        onClick={() => runBmadAction("status")}
+                      >
+                        Status
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={!hasProjectRoot || bmadBusy}
+                        onClick={() => runBmadAction("install")}
+                      >
+                        Install
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!bmadBusy}
+                        onClick={() => stopBmad()}
+                      >
+                        Stop
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+
+                  <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                    <ScrollArea className="h-[140px]">
+                      <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                        {bmadLogs.length
+                          ? bmadLogs
+                              .map((l) => String(l?.message || ""))
+                              .join("\n")
+                          : "No BMAD logs yet"}
+                      </pre>
+                    </ScrollArea>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-secondary/10 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={cn(
+                          "w-2.5 h-2.5 rounded-full",
+                          connected
+                            ? "bg-green-500 animate-pulse"
+                            : serverRunning
+                            ? "bg-amber-500"
+                            : "bg-destructive"
+                        )}
+                      />
+                      <div className="text-sm font-medium">
+                        {connected
+                          ? "Connected (Live)"
+                          : serverRunning
+                          ? "Server running, reconnect needed"
+                          : "Server stopped"}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => syncNow()}
+                        className="gap-2"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Sync
+                      </Button>
+                      <Button
+                        variant={serverRunning ? "destructive" : "default"}
+                        size="sm"
+                        onClick={toggleServer}
+                        className="gap-2"
+                      >
+                        {serverRunning ? (
+                          <>
+                            <WifiOff className="h-4 w-4" />
+                            Stop
+                          </>
+                        ) : (
+                          <>
+                            <Wifi className="h-4 w-4" />
+                            Start
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-sm font-medium mb-2">
+                      Select your IDE
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {BMAD_IDE_OPTIONS.map((ide) => {
+                        const isActive = Array.isArray(setup.ides)
+                          ? setup.ides.includes(ide.id)
+                          : false;
+                        return (
+                          <Button
+                            key={ide.id}
+                            type="button"
+                            variant={isActive ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => handleToggleIde(ide.id)}
+                          >
+                            {ide.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-sm font-medium mb-2">Project root</div>
+                    <Input
+                      value={setup.projectRoot}
+                      onChange={(e) =>
+                        onChangeSetup({ ...setup, projectRoot: e.target.value })
+                      }
+                      placeholder="c:/path/to/next-gen/ui"
+                      className="bg-background/50"
+                    />
+                    <div className="flex items-center gap-2 mt-3">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handlePickProjectRoot()}
+                      >
+                        Browse
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          !hasProjectRoot || !window.electronAPI?.openFolder
+                        }
+                        onClick={() =>
+                          window.electronAPI.openFolder(projectRoot)
+                        }
+                      >
+                        Open
+                      </Button>
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-2">
+                      Used to generate your MCP config snippet
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="text-sm font-medium">MCP Server config</div>
                     <Button
+                      type="button"
+                      size="sm"
                       variant="outline"
-                      size="sm"
-                      onClick={() => syncNow()}
                       className="gap-2"
+                      onClick={() => copyText("mcp-config", mcpConfigSnippet)}
                     >
-                      <RefreshCw className="h-4 w-4" />
-                      Sync
-                    </Button>
-                    <Button
-                      variant={serverRunning ? "destructive" : "default"}
-                      size="sm"
-                      onClick={toggleServer}
-                      className="gap-2"
-                    >
-                      {serverRunning ? (
-                        <>
-                          <WifiOff className="h-4 w-4" />
-                          Stop
-                        </>
-                      ) : (
-                        <>
-                          <Wifi className="h-4 w-4" />
-                          Start
-                        </>
-                      )}
+                      <Copy className="h-4 w-4" />
+                      {copiedKey === "mcp-config" ? "Copied" : "Copy"}
                     </Button>
                   </div>
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="text-sm font-medium mb-2">
-                    Select your IDE
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {BMAD_IDE_OPTIONS.map((ide) => {
-                      const isActive = Array.isArray(setup.ides)
-                        ? setup.ides.includes(ide.id)
-                        : false;
-                      return (
-                        <Button
-                          key={ide.id}
-                          type="button"
-                          variant={isActive ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => handleToggleIde(ide.id)}
-                        >
-                          {ide.label}
-                        </Button>
-                      );
-                    })}
+                  <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                    <ScrollArea className="h-[160px]">
+                      <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                        {mcpConfigSnippet}
+                      </pre>
+                    </ScrollArea>
                   </div>
                 </div>
-
-                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="text-sm font-medium mb-2">Project root</div>
-                  <Input
-                    value={setup.projectRoot}
-                    onChange={(e) =>
-                      onChangeSetup({ ...setup, projectRoot: e.target.value })
-                    }
-                    placeholder="c:/path/to/next-gen/ui"
-                    className="bg-background/50"
-                  />
-                  <div className="text-[11px] text-muted-foreground mt-2">
-                    Used to generate your MCP config snippet
-                  </div>
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="text-sm font-medium">MCP Server config</div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => copyText("mcp-config", mcpConfigSnippet)}
-                  >
-                    <Copy className="h-4 w-4" />
-                    {copiedKey === "mcp-config" ? "Copied" : "Copy"}
-                  </Button>
-                </div>
-                <div className="rounded-lg border border-border/50 bg-black/90 p-3">
-                  <ScrollArea className="h-[160px]">
-                    <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
-                      {mcpConfigSnippet}
-                    </pre>
-                  </ScrollArea>
-                </div>
-              </div>
               </div>
             </ScrollArea>
           </TabsContent>
 
-          <TabsContent value="agent" className="flex-1 min-h-0">
+          <TabsContent value="team" className="flex-1 min-h-0">
             <ScrollArea className="h-full">
               <div className="grid gap-4 py-4">
-              <div className="grid sm:grid-cols-2 gap-4">
+                <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-sm font-medium mb-2">User context</div>
+                    <div className="grid gap-3">
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Your name</Label>
+                        <Input
+                          value={setup.ownerName || ""}
+                          onChange={(e) =>
+                            onChangeSetup({
+                              ...setup,
+                              ownerName: e.target.value,
+                            })
+                          }
+                          className="bg-background/50"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Language</Label>
+                        <Select
+                          value={String(setup.language || "English")}
+                          onValueChange={(v) =>
+                            onChangeSetup({ ...setup, language: v })
+                          }
+                        >
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="English">English</SelectItem>
+                            <SelectItem value="Vietnamese">
+                              Vietnamese
+                            </SelectItem>
+                            <SelectItem value="Spanish">Spanish</SelectItem>
+                            <SelectItem value="French">French</SelectItem>
+                            <SelectItem value="Japanese">Japanese</SelectItem>
+                            <SelectItem value="Chinese">Chinese</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Team name</Label>
+                        <Input
+                          value={setup.teamName || ""}
+                          onChange={(e) =>
+                            onChangeSetup({
+                              ...setup,
+                              teamName: e.target.value,
+                            })
+                          }
+                          className="bg-background/50"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Team members</Label>
+                        <Input
+                          value={setup.teamMembers || ""}
+                          onChange={(e) =>
+                            onChangeSetup({
+                              ...setup,
+                              teamMembers: e.target.value,
+                            })
+                          }
+                          placeholder="Alice, Bob, Carol"
+                          className="bg-background/50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-sm font-medium mb-2">Team context</div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Team size</Label>
+                        <Input
+                          inputMode="numeric"
+                          value={setup.teamSize}
+                          onChange={(e) =>
+                            onChangeSetup({
+                              ...setup,
+                              teamSize: e.target.value,
+                            })
+                          }
+                          className="bg-background/50"
+                        />
+                      </div>
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs">Sprint length (days)</Label>
+                        <Select
+                          value={String(setup.sprintLength || "14")}
+                          onValueChange={(v) =>
+                            onChangeSetup({ ...setup, sprintLength: v })
+                          }
+                        >
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="7">7</SelectItem>
+                            <SelectItem value="14">14</SelectItem>
+                            <SelectItem value="21">21</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-4">
+                      <Label className="flex flex-col gap-1">
+                        <span className="text-sm">Auto-sync</span>
+                        <span className="font-normal text-xs text-muted-foreground">
+                          Pull state every 30s (optional)
+                        </span>
+                      </Label>
+                      <Switch
+                        checked={Boolean(setup.autoSync)}
+                        onCheckedChange={(v) =>
+                          onChangeSetup({ ...setup, autoSync: v })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-sm font-medium mb-2">
+                      Recommendation
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-primary/15 text-primary">
+                        Recommended
+                      </Badge>
+                      <div className="text-sm">{recommendedAgent}</div>
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-2">
+                      You can override this based on your workflow
+                    </div>
+                  </div>
+                </div>
+
                 <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="text-sm font-medium mb-2">Team context</div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="text-sm font-medium mb-3">
+                    Select your agent
+                  </div>
+                  <div className="grid gap-2">
+                    {setupAgentList.map((agent) => (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        className={cn(
+                          "p-3 rounded-xl border text-left transition-all",
+                          "hover:bg-accent/50",
+                          agent.isSelected
+                            ? "border-primary bg-primary/5 ring-2 ring-primary/30"
+                            : "border-border/50 bg-background/30"
+                        )}
+                        onClick={() =>
+                          onChangeSetup({ ...setup, agent: agent.id })
+                        }
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="font-medium flex items-center gap-2">
+                              <span>{agent.label}</span>
+                              {agent.isRecommended && (
+                                <Badge className="bg-primary/15 text-primary">
+                                  ✨
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {agent.description}
+                            </div>
+                          </div>
+                          {agent.isSelected && (
+                            <CheckCircle2 className="h-5 w-5 text-primary" />
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 mt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => setShowComparison((s) => !s)}
+                    >
+                      <Search className="h-4 w-4" />
+                      See comparison
+                    </Button>
+                    <div className="flex-1" />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => copyText("slash", slashCommandSnippet)}
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copiedKey === "slash" ? "Copied" : "Copy command"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => {
+                        onChangeSetup({ ...setup, agent: selectedAgent });
+                        setActiveTab("project");
+                      }}
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                      Continue
+                    </Button>
+                  </div>
+
+                  {showComparison && (
+                    <div className="mt-4 rounded-xl border border-border/50 bg-secondary/10 p-4">
+                      <div className="text-sm font-medium mb-2">Comparison</div>
+                      <div className="grid gap-2">
+                        {BMAD_AGENT_OPTIONS.map((a) => (
+                          <div
+                            key={a.id}
+                            className="rounded-lg border border-border/50 bg-background/40 p-3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-sm font-medium">
+                                {a.label}
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px]"
+                              >
+                                {a.id}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {a.description}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="project" className="flex-1 min-h-0">
+            <ScrollArea className="h-full">
+              <div className="grid gap-4 py-4">
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-sm font-medium mb-2">PRD</div>
+                  <div className="grid sm:grid-cols-2 gap-4">
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">Team size</Label>
+                      <Label className="text-xs">Project name</Label>
                       <Input
-                        inputMode="numeric"
-                        value={setup.teamSize}
+                        value={setup.projectName || ""}
                         onChange={(e) =>
-                          onChangeSetup({ ...setup, teamSize: e.target.value })
+                          onChangeSetup({
+                            ...setup,
+                            projectName: e.target.value,
+                          })
                         }
                         className="bg-background/50"
                       />
                     </div>
                     <div className="grid gap-1.5">
-                      <Label className="text-xs">Sprint length (days)</Label>
-                      <Select
-                        value={String(setup.sprintLength || "14")}
-                        onValueChange={(v) =>
-                          onChangeSetup({ ...setup, sprintLength: v })
+                      <Label className="text-xs">PRD path (relative)</Label>
+                      <Input
+                        value={prdPath}
+                        onChange={(e) =>
+                          onChangeSetup({ ...setup, prdPath: e.target.value })
                         }
-                      >
-                        <SelectTrigger className="bg-background/50">
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="7">7</SelectItem>
-                          <SelectItem value="14">14</SelectItem>
-                          <SelectItem value="21">21</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        className="bg-background/50"
+                      />
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2 mt-4">
-                    <Label className="flex flex-col gap-1">
-                      <span className="text-sm">Auto-sync</span>
-                      <span className="font-normal text-xs text-muted-foreground">
-                        Pull state every 30s (optional)
-                      </span>
-                    </Label>
-                    <Switch
-                      checked={Boolean(setup.autoSync)}
-                      onCheckedChange={(v) =>
-                        onChangeSetup({ ...setup, autoSync: v })
-                      }
-                    />
-                  </div>
-                </div>
 
-                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="text-sm font-medium mb-2">Recommendation</div>
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-primary/15 text-primary">
-                      Recommended
-                    </Badge>
-                    <div className="text-sm">{recommendedAgent}</div>
+                  <div className="grid gap-3 mt-4">
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Overview</Label>
+                      <textarea
+                        value={setup.projectSummary || ""}
+                        onChange={(e) =>
+                          onChangeSetup({
+                            ...setup,
+                            projectSummary: e.target.value,
+                          })
+                        }
+                        className="min-h-[72px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Goals</Label>
+                      <textarea
+                        value={setup.projectGoals || ""}
+                        onChange={(e) =>
+                          onChangeSetup({
+                            ...setup,
+                            projectGoals: e.target.value,
+                          })
+                        }
+                        className="min-h-[72px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Non-goals</Label>
+                      <textarea
+                        value={setup.projectNonGoals || ""}
+                        onChange={(e) =>
+                          onChangeSetup({
+                            ...setup,
+                            projectNonGoals: e.target.value,
+                          })
+                        }
+                        className="min-h-[72px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Target users</Label>
+                      <textarea
+                        value={setup.projectUsers || ""}
+                        onChange={(e) =>
+                          onChangeSetup({
+                            ...setup,
+                            projectUsers: e.target.value,
+                          })
+                        }
+                        className="min-h-[72px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Success metrics</Label>
+                      <textarea
+                        value={setup.projectSuccessMetrics || ""}
+                        onChange={(e) =>
+                          onChangeSetup({
+                            ...setup,
+                            projectSuccessMetrics: e.target.value,
+                          })
+                        }
+                        className="min-h-[72px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm"
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label className="text-xs">Constraints</Label>
+                      <textarea
+                        value={setup.projectConstraints || ""}
+                        onChange={(e) =>
+                          onChangeSetup({
+                            ...setup,
+                            projectConstraints: e.target.value,
+                          })
+                        }
+                        className="min-h-[72px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm"
+                      />
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground mt-2">
-                    You can override this based on your workflow
-                  </div>
-                </div>
-              </div>
 
-              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                <div className="text-sm font-medium mb-3">
-                  Select your agent
-                </div>
-                <div className="grid gap-2">
-                  {setupAgentList.map((agent) => (
-                    <button
-                      key={agent.id}
+                  <div className="flex flex-wrap items-center gap-2 mt-4">
+                    <Button
                       type="button"
-                      className={cn(
-                        "p-3 rounded-xl border text-left transition-all",
-                        "hover:bg-accent/50",
-                        agent.isSelected
-                          ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                          : "border-border/50 bg-background/30"
-                      )}
-                      onClick={() =>
-                        onChangeSetup({ ...setup, agent: agent.id })
-                      }
+                      disabled={!hasProjectRoot || prdBusy}
+                      onClick={() => generatePrd()}
+                      className="gap-2"
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-medium flex items-center gap-2">
-                            <span>{agent.label}</span>
-                            {agent.isRecommended && (
-                              <Badge className="bg-primary/15 text-primary">
-                                ✨
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {agent.description}
-                          </div>
-                        </div>
-                        {agent.isSelected && (
-                          <CheckCircle2 className="h-5 w-5 text-primary" />
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between gap-2 mt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => setShowComparison((s) => !s)}
-                  >
-                    <Search className="h-4 w-4" />
-                    See comparison
-                  </Button>
-                  <div className="flex-1" />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => copyText("slash", slashCommandSnippet)}
-                  >
-                    <Copy className="h-4 w-4" />
-                    {copiedKey === "slash" ? "Copied" : "Copy command"}
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="gap-2"
-                    onClick={() => {
-                      onChangeSetup({ ...setup, agent: selectedAgent });
-                      setActiveTab("actions");
-                    }}
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                    Continue
-                  </Button>
-                </div>
-
-                {showComparison && (
-                  <div className="mt-4 rounded-xl border border-border/50 bg-secondary/10 p-4">
-                    <div className="text-sm font-medium mb-2">Comparison</div>
-                    <div className="grid gap-2">
-                      {BMAD_AGENT_OPTIONS.map((a) => (
-                        <div
-                          key={a.id}
-                          className="rounded-lg border border-border/50 bg-background/40 p-3"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-medium">{a.label}</div>
-                            <Badge variant="secondary" className="text-[10px]">
-                              {a.id}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {a.description}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                      Generate PRD
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!hasProjectRoot}
+                      onClick={() => copyText("prd", buildPrdMarkdown())}
+                      className="gap-2"
+                    >
+                      <Copy className="h-4 w-4" />
+                      {copiedKey === "prd" ? "Copied" : "Copy"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={
+                        !hasProjectRoot || !window.electronAPI?.openFolder
+                      }
+                      onClick={() => window.electronAPI.openFolder(projectRoot)}
+                    >
+                      Open project
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!hasProjectRoot}
+                      onClick={() => setActiveTab("actions")}
+                    >
+                      Continue
+                    </Button>
                   </div>
-                )}
-              </div>
+
+                  {prdResult && (
+                    <div
+                      className={cn(
+                        "mt-3 text-xs rounded-md border p-2",
+                        prdResult.ok
+                          ? "border-green-500/30 bg-green-500/10 text-green-200"
+                          : "border-destructive/30 bg-destructive/10 text-destructive"
+                      )}
+                    >
+                      {prdResult.ok
+                        ? `PRD written: ${prdResult.path}`
+                        : prdResult.message}
+                    </div>
+                  )}
+                </div>
               </div>
             </ScrollArea>
           </TabsContent>
@@ -1694,91 +2185,93 @@ const AgentAssistDialog = ({
           <TabsContent value="actions" className="flex-1 min-h-0">
             <ScrollArea className="h-full">
               <div className="grid gap-4 py-4">
-              <div className="grid sm:grid-cols-3 gap-3">
-                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="text-xs text-muted-foreground">Board</div>
-                  <div className="text-sm font-medium truncate">
-                    {activeBoard?.name || "No board selected"}
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-xs text-muted-foreground">Board</div>
+                    <div className="text-sm font-medium truncate">
+                      {activeBoard?.name || "No board selected"}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-xs text-muted-foreground">Stories</div>
+                    <div className="text-sm font-medium">
+                      {stats?.total || 0}
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="text-xs text-muted-foreground">Agent</div>
+                    <div className="text-sm font-medium">{selectedAgent}</div>
                   </div>
                 </div>
-                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="text-xs text-muted-foreground">Stories</div>
-                  <div className="text-sm font-medium">{stats?.total || 0}</div>
-                </div>
-                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="text-xs text-muted-foreground">Agent</div>
-                  <div className="text-sm font-medium">{selectedAgent}</div>
-                </div>
-              </div>
 
-              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                <div className="text-sm font-medium mb-3">Quick actions</div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    disabled={!boardId}
-                    onClick={() => onCreateStory()}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Create story
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    disabled={!boardId || !ready}
-                    onClick={() => onOpenStory(ready.listId, ready.card)}
-                  >
-                    <Book className="h-4 w-4" />
-                    Open next ready
-                  </Button>
-                  <Button
-                    type="button"
-                    className="gap-2"
-                    disabled={!boardId || !ready || !inProgressListId}
-                    onClick={() => onStartStory(ready, inProgressListId)}
-                  >
-                    <PlayCircle className="h-4 w-4" />
-                    Start next story
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => syncNow()}
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Sync MCP
-                  </Button>
-                </div>
-                {!ready && boardId && (
-                  <div className="text-xs text-muted-foreground mt-3">
-                    No stories in Ready for Dev
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="text-sm font-medium mb-3">Quick actions</div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={!boardId}
+                      onClick={() => onCreateStory()}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create story
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={!boardId || !ready}
+                      onClick={() => onOpenStory(ready.listId, ready.card)}
+                    >
+                      <Book className="h-4 w-4" />
+                      Open next ready
+                    </Button>
+                    <Button
+                      type="button"
+                      className="gap-2"
+                      disabled={!boardId || !ready || !inProgressListId}
+                      onClick={() => onStartStory(ready, inProgressListId)}
+                    >
+                      <PlayCircle className="h-4 w-4" />
+                      Start next story
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => syncNow()}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Sync MCP
+                    </Button>
                   </div>
-                )}
-              </div>
+                  {!ready && boardId && (
+                    <div className="text-xs text-muted-foreground mt-3">
+                      No stories in Ready for Dev
+                    </div>
+                  )}
+                </div>
 
-              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                <div className="flex items-center justify-between gap-3 mb-2">
-                  <div className="text-sm font-medium">Test agent</div>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => syncNow()}
-                  >
-                    <Zap className="h-4 w-4" />
-                    Run
-                  </Button>
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="text-sm font-medium">Test agent</div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => syncNow()}
+                    >
+                      <Zap className="h-4 w-4" />
+                      Run
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Verifies MCP connectivity by syncing state and reflecting
+                    updates in the board
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  Verifies MCP connectivity by syncing state and reflecting
-                  updates in the board
-                </div>
-              </div>
               </div>
             </ScrollArea>
           </TabsContent>
@@ -1875,10 +2368,24 @@ export default function ScrumBoardView() {
     const defaults = {
       ides: ["cursor"],
       projectRoot: "",
+      bmadMode: "npx",
+      bmadVerbose: false,
+      ownerName: "",
+      language: "English",
+      teamName: "",
+      teamMembers: "",
       teamSize: "5",
       sprintLength: "14",
       autoSync: false,
       agent: "",
+      projectName: "",
+      prdPath: "_bmad-output/prd.md",
+      projectSummary: "",
+      projectGoals: "",
+      projectNonGoals: "",
+      projectUsers: "",
+      projectSuccessMetrics: "",
+      projectConstraints: "",
     };
 
     const raw = safeJsonParse(
@@ -1947,26 +2454,29 @@ export default function ScrumBoardView() {
       clearTimeout(timeout);
       disconnect();
     };
-  }, []);
+  }, [checkServerStatus, connect, disconnect, loadLocalState]);
 
   const activeBoard = getActiveBoard();
   const epics = getEpics();
   const stats = getStats();
 
   // Card operations
-  const openNewCard = async (listId) => {
-    setCardDialogContext({ boardId: activeBoardId, listId, card: null });
-    setCardDialogOpen(true);
-  };
+  const openNewCard = React.useCallback(
+    async (listId) => {
+      setCardDialogContext({ boardId: activeBoardId, listId, card: null });
+      setCardDialogOpen(true);
+    },
+    [activeBoardId]
+  );
 
-  const openEditCard = async (listId, card) => {
-    const locked = await acquireLock(card.id);
-    if (!locked) {
-      // Still open but in read-only mode
-    }
-    setCardDialogContext({ boardId: activeBoardId, listId, card });
-    setCardDialogOpen(true);
-  };
+  const openEditCard = React.useCallback(
+    async (listId, card) => {
+      await acquireLock(card.id);
+      setCardDialogContext({ boardId: activeBoardId, listId, card });
+      setCardDialogOpen(true);
+    },
+    [acquireLock, activeBoardId]
+  );
 
   const handleCardDialogClose = async (open) => {
     if (!open && cardDialogContext?.card?.id) {
@@ -2046,10 +2556,13 @@ export default function ScrumBoardView() {
     openNewCard(backlogListId);
   }, [activeBoardId, getActiveBoard, openNewCard]);
 
-  const openAgentStory = React.useCallback((listId, card) => {
-    if (!activeBoardId || !listId || !card) return;
-    openEditCard(listId, card);
-  }, [activeBoardId, openEditCard]);
+  const openAgentStory = React.useCallback(
+    (listId, card) => {
+      if (!activeBoardId || !listId || !card) return;
+      openEditCard(listId, card);
+    },
+    [activeBoardId, openEditCard]
+  );
 
   const startAgentStory = React.useCallback(
     async (readyInfo, inProgressListId) => {

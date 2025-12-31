@@ -32,6 +32,21 @@ let serverRunning = false;
 const mcpLogBuffer = [];
 const MAX_LOG_BUFFER = 1000;
 
+const bmadLogBuffer = [];
+let bmadChildProcess = null;
+
+function sendBmadLog(type, message) {
+  const logEntry = { type, message, timestamp: new Date().toISOString() };
+  bmadLogBuffer.push(logEntry);
+  if (bmadLogBuffer.length > MAX_LOG_BUFFER) {
+    bmadLogBuffer.shift();
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("bmad-cli-log", logEntry);
+  }
+}
+
 function sendMcpLog(type, message) {
   const logEntry = { type, message, timestamp: new Date().toISOString() };
 
@@ -306,6 +321,163 @@ ipcMain.handle("check-path-exists", async (event, checkPath) => {
   } catch {
     return false;
   }
+});
+
+ipcMain.handle(
+  "write-project-file",
+  async (event, { projectRoot, relativePath, content, overwrite = true }) => {
+    const fs = require("fs");
+    const root = String(projectRoot || "").trim();
+    const rel = String(relativePath || "").trim();
+    if (!root || !path.isAbsolute(root)) {
+      throw new Error("projectRoot must be an absolute path");
+    }
+    if (!rel || path.isAbsolute(rel)) {
+      throw new Error("relativePath must be a relative path");
+    }
+
+    const resolvedRoot = path.resolve(root);
+    const target = path.resolve(resolvedRoot, rel);
+    const rootPrefix = resolvedRoot.endsWith(path.sep)
+      ? resolvedRoot
+      : resolvedRoot + path.sep;
+
+    if (!target.startsWith(rootPrefix)) {
+      throw new Error("Refusing to write outside projectRoot");
+    }
+
+    await fs.promises.mkdir(path.dirname(target), { recursive: true });
+
+    if (!overwrite) {
+      try {
+        await fs.promises.access(target);
+        throw new Error("File already exists");
+      } catch (err) {
+        if (String(err?.message || "").includes("File already exists")) {
+          throw err;
+        }
+      }
+    }
+
+    await fs.promises.writeFile(target, String(content || ""), "utf8");
+    return { success: true, path: target };
+  }
+);
+
+ipcMain.handle(
+  "bmad-cli-run",
+  async (
+    event,
+    { cwd, mode, action, moduleCodes, verbose, extraArgs } = {}
+  ) => {
+    const fs = require("fs");
+    const workingDir = String(cwd || "").trim();
+    if (!workingDir || !path.isAbsolute(workingDir)) {
+      throw new Error("cwd must be an absolute path");
+    }
+    await fs.promises.access(workingDir);
+
+    if (bmadChildProcess) {
+      throw new Error("BMAD command already running");
+    }
+
+    const selectedMode = String(mode || "npx").trim();
+    const selectedAction = String(action || "status").trim();
+    const extra = Array.isArray(extraArgs) ? extraArgs : [];
+    const isVerbose = Boolean(verbose);
+
+    let command;
+    let args;
+
+    if (selectedMode === "bmad") {
+      command = process.platform === "win32" ? "bmad.cmd" : "bmad";
+      args = [selectedAction];
+      if (selectedAction === "install") {
+        const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
+        if (mods.length > 0) args.push("-m", ...mods);
+      }
+      if (isVerbose) args.push("-v");
+      args.push(...extra);
+    } else {
+      command = process.platform === "win32" ? "npx.cmd" : "npx";
+      args = ["bmad-method@alpha", selectedAction];
+      if (isVerbose) args.push("-v");
+      args.push(...extra);
+    }
+
+    return new Promise((resolve, reject) => {
+      sendBmadLog("info", `▶ ${command} ${args.join(" ")}`);
+
+      const child = spawn(command, args, {
+        cwd: workingDir,
+        shell: true,
+        env: { ...process.env, FORCE_COLOR: "1" },
+      });
+      bmadChildProcess = child;
+
+      let stdout = "";
+      let stderr = "";
+
+      child.stdout.on("data", (data) => {
+        const text = data.toString();
+        stdout += text;
+        const lines = text.split("\n").filter((line) => line.trim());
+        lines.forEach((line) => {
+          sendBmadLog("info", line);
+        });
+      });
+
+      child.stderr.on("data", (data) => {
+        const text = data.toString();
+        stderr += text;
+        const lines = text.split("\n").filter((line) => line.trim());
+        lines.forEach((line) => {
+          const type =
+            line.includes("WARN") || line.includes("warning")
+              ? "warning"
+              : "error";
+          sendBmadLog(type, line);
+        });
+      });
+
+      child.on("error", (error) => {
+        bmadChildProcess = null;
+        sendBmadLog("error", `Process error: ${error.message}`);
+        reject(error);
+      });
+
+      child.on("close", (code) => {
+        bmadChildProcess = null;
+        if (code === 0) {
+          sendBmadLog("success", "✅ BMAD command completed");
+          resolve({ success: true, code, stdout, stderr });
+        } else {
+          sendBmadLog("error", `❌ BMAD command failed (exit ${code})`);
+          const err = new Error(
+            `BMAD command failed with exit code ${code}` +
+              (stderr ? `\n${stderr}` : "")
+          );
+          reject(err);
+        }
+      });
+    });
+  }
+);
+
+ipcMain.handle("bmad-cli-stop", async () => {
+  if (bmadChildProcess) {
+    try {
+      bmadChildProcess.kill();
+    } catch {}
+    bmadChildProcess = null;
+    sendBmadLog("warning", "Stopped BMAD command");
+    return true;
+  }
+  return false;
+});
+
+ipcMain.handle("get-bmad-logs", () => {
+  return bmadLogBuffer;
 });
 
 ipcMain.handle("get-scrum-state", async () => {
