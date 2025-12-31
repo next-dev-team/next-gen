@@ -53,7 +53,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // ======= SCRUM BOARD =======
 
   getScrumState: () => ipcRenderer.invoke("get-scrum-state"),
-  setScrumState: (nextState) => ipcRenderer.invoke("set-scrum-state", nextState),
+  setScrumState: (nextState) =>
+    ipcRenderer.invoke("set-scrum-state", nextState),
+
+  // ======= MCP SERVER =======
+  startMcpServer: () => ipcRenderer.invoke("mcp-server-start"),
+  stopMcpServer: () => ipcRenderer.invoke("mcp-server-stop"),
+  getMcpServerStatus: () => ipcRenderer.invoke("mcp-server-status"),
+  onMcpLog: (callback) => {
+    const handler = (event, log) => callback(log);
+    ipcRenderer.on("mcp-server-log", handler);
+    return () => ipcRenderer.removeListener("mcp-server-log", handler);
+  },
 
   // External links
   openExternal: (url) => {

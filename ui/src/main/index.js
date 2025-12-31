@@ -7,10 +7,11 @@ const {
   dialog,
 } = require("electron");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, fork } = require("child_process");
 const Conf = require("conf");
 
 const scrumStore = new Conf({ projectName: "next-gen-scrum" });
+const mcpServer = require("../../scripts/scrum-mcp-server.js");
 
 let store;
 
@@ -25,6 +26,57 @@ async function getStore() {
 
 let mainWindow = null;
 let devToolsWindow = null;
+let serverRunning = false;
+// Helper to send logs to renderer
+function sendLog(type, message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("generator-log", { type, message });
+  }
+}
+
+function sendMcpLog(type, message) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("mcp-server-log", {
+      type,
+      message,
+      timestamp: new Date().toISOString(),
+    });
+  }
+}
+async function startMcpServer() {
+  try {
+    console.log("Starting MCP Server (Internal)...");
+
+    // Pass logger callback to capture logs
+    await mcpServer.start(3847, (type, message) => {
+      // Map 'info'/'error' to suitable types if needed, or pass directly
+      if (type === "error") {
+        console.error(`[MCP Internal] ${message}`);
+        sendMcpLog("error", message);
+      } else {
+        console.log(`[MCP Internal] ${message}`);
+        sendMcpLog("info", message);
+      }
+    });
+
+    serverRunning = true;
+    sendLog("success", "MCP Server started internally");
+    sendMcpLog("success", "MCP Server started internally");
+  } catch (err) {
+    console.error("Failed to start MCP Server:", err);
+    sendLog("error", `Failed to start MCP Server: ${err.message}`);
+    sendMcpLog("error", `Failed to start MCP Server: ${err.message}`);
+    serverRunning = false;
+  }
+}
+
+function stopMcpServer() {
+  if (serverRunning) {
+    mcpServer.stop();
+    serverRunning = false;
+    sendLog("warning", "MCP Server stopped");
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -263,6 +315,21 @@ ipcMain.handle("set-scrum-state", async (event, nextState) => {
   return scrumStore.get("scrumState", null);
 });
 
+// MCP Server Control
+ipcMain.handle("mcp-server-start", () => {
+  startMcpServer();
+  return true;
+});
+
+ipcMain.handle("mcp-server-stop", () => {
+  stopMcpServer();
+  return true;
+});
+
+ipcMain.handle("mcp-server-status", () => {
+  return serverRunning;
+});
+
 ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
   return new Promise((resolve, reject) => {
     // Determine script path based on environment
@@ -374,6 +441,10 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
 
 app.whenReady().then(async () => {
   const currentStore = await getStore();
+
+  // Auto-start MCP Server
+  startMcpServer();
+
   createWindow();
 
   globalShortcut.register("CommandOrControl+Shift+I", () => {
@@ -391,6 +462,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  stopMcpServer();
   if (process.platform !== "darwin") {
     app.quit();
   }

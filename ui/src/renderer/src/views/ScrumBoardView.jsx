@@ -45,6 +45,7 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
+import { Switch } from "../components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -64,6 +65,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
@@ -999,6 +1006,203 @@ const CreateBoardDialog = ({ open, onOpenChange, onCreateBoard }) => {
   );
 };
 
+// ============ Settings Dialog ============
+const SettingsDialog = ({ open, onOpenChange }) => {
+  const {
+    connected,
+    autoConnect,
+    setAutoConnect,
+    serverRunning,
+    toggleServer,
+    checkServerStatus,
+  } = useKanbanStore();
+
+  const [logs, setLogs] = React.useState([]);
+  const logsEndRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (open) {
+      checkServerStatus();
+    }
+  }, [open]);
+
+  // Subscribe to logs
+  React.useEffect(() => {
+    if (!window.electronAPI || !window.electronAPI.onMcpLog) return;
+    const unsub = window.electronAPI.onMcpLog((log) => {
+      setLogs((prev) => [...prev, log]);
+    });
+    return () => unsub();
+  }, []);
+
+  React.useEffect(() => {
+    if (logsEndRef.current && open) {
+      logsEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [logs, open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px] h-[500px] flex flex-col bg-background/95 backdrop-blur-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5 text-primary" />
+            Kanban Settings
+          </DialogTitle>
+          <DialogDescription>
+            Configure connection or view server logs
+          </DialogDescription>
+        </DialogHeader>
+
+        <Tabs defaultValue="general" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="logs">Server Logs</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="general" className="space-y-6 py-4">
+            <div className="flex items-center justify-between space-x-2">
+              <Label htmlFor="auto-connect" className="flex flex-col gap-1">
+                <span>Auto-Connect</span>
+                <span className="font-normal text-xs text-muted-foreground">
+                  Automatically start and connect to local MCP server
+                </span>
+              </Label>
+              <Switch
+                id="auto-connect"
+                checked={autoConnect}
+                onCheckedChange={setAutoConnect}
+              />
+            </div>
+
+            <div className="space-y-4 border-t border-border/50 pt-4">
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium leading-none">
+                  Local Server Control
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Manually control the background MCP process
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-lg border border-border/50 bg-secondary/20">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={cn(
+                      "w-2.5 h-2.5 rounded-full shrink-0 transition-colors",
+                      connected
+                        ? "bg-green-500 animate-pulse"
+                        : "bg-destructive"
+                    )}
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">
+                      {connected
+                        ? serverRunning
+                          ? "Online (Internal)"
+                          : "Online (External)"
+                        : "Server Offline"}
+                    </span>
+                    {!connected && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {serverRunning
+                          ? "Process running, no connection"
+                          : "Process stopped"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  variant={serverRunning ? "destructive" : "default"}
+                  size="sm"
+                  onClick={toggleServer}
+                >
+                  {serverRunning ? (
+                    <>
+                      <WifiOff className="h-4 w-4 mr-2" />
+                      Stop Internal
+                    </>
+                  ) : (
+                    <>
+                      <Wifi className="h-4 w-4 mr-2" />
+                      Start Internal
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="logs" className="flex-1 min-h-0 py-4 relative">
+            <div className="absolute inset-0 top-4 bottom-0">
+              <ScrollArea className="h-full rounded-md border border-border bg-black/90 p-4 font-mono text-xs text-green-400">
+                <div className="space-y-1">
+                  {logs.length === 0 && (
+                    <div className="text-muted-foreground italic">
+                      No logs captured yet...
+                    </div>
+                  )}
+                  {logs.map((log, i) => (
+                    <div key={i} className="flex gap-2 text-wrap break-all">
+                      <span className="text-muted-foreground shrink-0">
+                        [{new Date(log.timestamp).toLocaleTimeString()}]
+                      </span>
+                      <span
+                        className={cn(
+                          log.type === "error"
+                            ? "text-red-400"
+                            : log.type === "success"
+                            ? "text-green-400"
+                            : "text-gray-300"
+                        )}
+                      >
+                        {log.message}
+                      </span>
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </div>
+              </ScrollArea>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// ============ Offline State ============
+const OfflineState = ({ onReconnect, onOpenSettings, serverRunning }) => (
+  <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-8 h-full flex flex-col items-center justify-center gap-6 text-center">
+    <div className="p-4 rounded-full bg-muted/50">
+      <WifiOff className="h-12 w-12 text-muted-foreground" />
+    </div>
+    <div className="max-w-md space-y-2">
+      <h3 className="text-xl font-semibold">Connection Lost</h3>
+      <p className="text-muted-foreground">
+        {serverRunning
+          ? "The Kanban server is running but cannot be reached. It may be blocked or busy."
+          : "The Kanban server is currently stopped. Please start the server to access the board."}
+      </p>
+    </div>
+    <div className="flex items-center gap-3">
+      <Button variant="outline" onClick={onOpenSettings}>
+        <Settings className="h-4 w-4 mr-2" />
+        Settings
+      </Button>
+      <Button onClick={onReconnect}>
+        <RefreshCw className="h-4 w-4 mr-2" />
+        Try Reconnecting
+      </Button>
+    </div>
+  </div>
+);
+
 // ============ Main Component ============
 export default function ScrumBoardView() {
   const {
@@ -1025,16 +1229,20 @@ export default function ScrumBoardView() {
     getActiveBoard,
     getEpics,
     getStats,
-    clearError,
+    // Settings
+    checkServerStatus,
+    serverRunning,
   } = useKanbanStore();
 
   const [cardDialogOpen, setCardDialogOpen] = React.useState(false);
   const [cardDialogContext, setCardDialogContext] = React.useState(null);
   const [createBoardOpen, setCreateBoardOpen] = React.useState(false);
+  const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
 
   // Initialize connection
   React.useEffect(() => {
+    checkServerStatus(); // Check if already running
     connect();
 
     // Fallback to local state if connection fails after a timeout
@@ -1162,6 +1370,23 @@ export default function ScrumBoardView() {
     );
   }
 
+  // Offline/Blocking State
+  if (!connected && !loading) {
+    return (
+      <>
+        <OfflineState
+          onReconnect={() => {
+            checkServerStatus();
+            connect();
+          }}
+          onOpenSettings={() => setSettingsOpen(true)}
+          serverRunning={serverRunning}
+        />
+        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      </>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 h-full min-h-0 flex flex-col gap-4">
       {/* Error Banner */}
@@ -1194,6 +1419,15 @@ export default function ScrumBoardView() {
         <div className="flex-1" />
 
         <div className="flex flex-wrap gap-2 items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <Settings className="h-5 w-5 text-muted-foreground" />
+          </Button>
+
           <ConnectionStatus connected={connected} onReconnect={connect} />
 
           <Select value={activeBoardId || ""} onValueChange={setActiveBoard}>
@@ -1291,6 +1525,8 @@ export default function ScrumBoardView() {
         onOpenChange={setCreateBoardOpen}
         onCreateBoard={createBoard}
       />
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

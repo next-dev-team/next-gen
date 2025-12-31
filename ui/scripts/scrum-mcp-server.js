@@ -774,7 +774,7 @@ async function handleUpdateEpic(data) {
 }
 
 // ============ MCP Server (stdio) ============
-const main = async () => {
+const main = async (enableStdio = true, logger = console) => {
   const [{ McpServer }, { StdioServerTransport }, zod] = await Promise.all([
     import("@modelcontextprotocol/sdk/server/mcp.js"),
     import("@modelcontextprotocol/sdk/server/stdio.js"),
@@ -1191,20 +1191,77 @@ const main = async () => {
   );
 
   // Start both MCP (stdio) and HTTP (SSE) servers
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  if (enableStdio) {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+  }
 };
 
-// Start HTTP server for SSE
-httpServer.listen(SSE_PORT, () => {
-  console.error(
-    `BMAD-Method Kanban MCP SSE Server running on http://localhost:${SSE_PORT}`
-  );
-  console.error(`Connect to SSE: http://localhost:${SSE_PORT}/sse`);
-  console.error(`API docs: http://localhost:${SSE_PORT}/`);
-});
+let isRunning = false;
 
-main().catch((err) => {
-  process.stderr.write(`${err?.message || String(err)}\n`);
-  process.exit(1);
-});
+const start = async (port = SSE_PORT, logCallback = null) => {
+  if (isRunning) return;
+  isRunning = true;
+
+  const logger = {
+    log: (msg) => {
+      console.log(msg);
+      if (logCallback) logCallback("info", msg);
+    },
+    error: (msg) => {
+      console.error(msg);
+      if (logCallback) logCallback("error", msg);
+    },
+  };
+
+  return new Promise((resolve, reject) => {
+    const onListen = () => {
+      logger.log(
+        `BMAD-Method Kanban MCP SSE Server running on http://localhost:${port}`
+      );
+      logger.log(`Connect to SSE: http://localhost:${port}/sse`);
+      logger.log(`API docs: http://localhost:${port}/`);
+
+      main(false, logger)
+        .then(() => resolve(true))
+        .catch((err) => {
+          logger.error(`Failed to start MCP logic: ${err}`);
+          // resolve(false); // Don't reject entire app if MCP stdio fails, but logging is good
+          resolve(true);
+        });
+    };
+
+    if (httpServer.listening) {
+      onListen();
+      return;
+    }
+
+    httpServer.listen(port, onListen);
+
+    httpServer.on("error", (err) => {
+      if (err.code === "EADDRINUSE") {
+        logger.log(`Port ${port} in use, assuming server is running.`);
+        resolve(true);
+      } else {
+        logger.error(`HTTP Server Error: ${err}`);
+        reject(err);
+      }
+    });
+  });
+};
+
+const stop = () => {
+  if (httpServer.listening) {
+    httpServer.close();
+  }
+  isRunning = false;
+};
+
+if (require.main === module) {
+  start().catch((err) => {
+    process.stderr.write(`${err?.message || String(err)}\n`);
+    process.exit(1);
+  });
+}
+
+module.exports = { start, stop };

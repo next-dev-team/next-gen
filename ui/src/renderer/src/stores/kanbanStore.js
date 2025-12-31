@@ -77,7 +77,10 @@ export const useKanbanStore = create((set, get) => ({
   loading: true,
   error: null,
   connected: false,
+  connected: false,
   userId: getUserId(),
+  autoConnect: localStorage.getItem("kanban-auto-connect") !== "false",
+  serverRunning: false,
 
   // SSE Connection
   eventSource: null,
@@ -91,7 +94,7 @@ export const useKanbanStore = create((set, get) => ({
   lockedCards: {}, // { cardId: { userId, expiresAt } }
 
   // Initialize connection to MCP server
-  connect: () => {
+  connect: async () => {
     const { eventSource, userId } = get();
 
     // Close existing connection
@@ -101,10 +104,22 @@ export const useKanbanStore = create((set, get) => ({
 
     set({ loading: true, error: null });
 
+    // Start server if auto-connect is enabled (Electron only)
+    if (get().autoConnect && window.electronAPI) {
+      try {
+        await window.electronAPI.startMcpServer();
+        set({ serverRunning: true });
+        // Give it a moment to start listening
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } catch (err) {
+        console.error("Failed to start MCP server:", err);
+      }
+    }
+
     const es = new EventSource(`${SSE_URL}?userId=${userId}`);
 
     es.onopen = () => {
-      set({ connected: true, reconnectAttempts: 0 });
+      set({ connected: true, reconnectAttempts: 0, serverRunning: true });
     };
 
     es.addEventListener("connected", (event) => {
@@ -646,6 +661,39 @@ export const useKanbanStore = create((set, get) => ({
         : 0;
 
     return stats;
+  },
+
+  // Server Management
+  setAutoConnect: (enabled) => {
+    localStorage.setItem("kanban-auto-connect", String(enabled));
+    set({ autoConnect: enabled });
+    if (enabled && !get().connected) {
+      get().connect();
+    }
+  },
+
+  checkServerStatus: async () => {
+    if (window.electronAPI) {
+      const running = await window.electronAPI.getMcpServerStatus();
+      set({ serverRunning: running });
+      return running;
+    }
+    return false;
+  },
+
+  toggleServer: async () => {
+    if (!window.electronAPI) return;
+
+    const { serverRunning } = get();
+    if (serverRunning) {
+      await window.electronAPI.stopMcpServer();
+      set({ serverRunning: false, connected: false });
+      get().disconnect();
+    } else {
+      await window.electronAPI.startMcpServer();
+      set({ serverRunning: true });
+      setTimeout(() => get().connect(), 1000);
+    }
   },
 }));
 
