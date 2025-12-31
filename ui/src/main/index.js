@@ -27,20 +27,22 @@ async function getStore() {
 let mainWindow = null;
 let devToolsWindow = null;
 let serverRunning = false;
-// Helper to send logs to renderer
-function sendLog(type, message) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("generator-log", { type, message });
-  }
-}
+
+// Log buffering
+const mcpLogBuffer = [];
+const MAX_LOG_BUFFER = 1000;
 
 function sendMcpLog(type, message) {
+  const logEntry = { type, message, timestamp: new Date().toISOString() };
+
+  // Add to buffer
+  mcpLogBuffer.push(logEntry);
+  if (mcpLogBuffer.length > MAX_LOG_BUFFER) {
+    mcpLogBuffer.shift();
+  }
+
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("mcp-server-log", {
-      type,
-      message,
-      timestamp: new Date().toISOString(),
-    });
+    mainWindow.webContents.send("mcp-server-log", logEntry);
   }
 }
 async function startMcpServer() {
@@ -324,6 +326,10 @@ ipcMain.handle("mcp-server-start", () => {
 ipcMain.handle("mcp-server-stop", () => {
   stopMcpServer();
   return true;
+});
+
+ipcMain.handle("get-mcp-logs", () => {
+  return mcpLogBuffer;
 });
 
 ipcMain.handle("mcp-server-status", () => {

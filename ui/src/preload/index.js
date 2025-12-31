@@ -65,6 +65,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("mcp-server-log", handler);
     return () => ipcRenderer.removeListener("mcp-server-log", handler);
   },
+  getMcpLogs: () => ipcRenderer.invoke("get-mcp-logs"),
 
   // External links
   openExternal: (url) => {

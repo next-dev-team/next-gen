@@ -1028,11 +1028,19 @@ const SettingsDialog = ({ open, onOpenChange }) => {
 
   // Subscribe to logs
   React.useEffect(() => {
-    if (!window.electronAPI || !window.electronAPI.onMcpLog) return;
-    const unsub = window.electronAPI.onMcpLog((log) => {
-      setLogs((prev) => [...prev, log]);
-    });
-    return () => unsub();
+    if (!window.electronAPI) return;
+
+    // Load initial logs
+    if (window.electronAPI.getMcpLogs) {
+      window.electronAPI.getMcpLogs().then(setLogs);
+    }
+
+    if (window.electronAPI.onMcpLog) {
+      const unsub = window.electronAPI.onMcpLog((log) => {
+        setLogs((prev) => [...prev, log]);
+      });
+      return () => unsub();
+    }
   }, []);
 
   React.useEffect(() => {
@@ -1232,6 +1240,7 @@ export default function ScrumBoardView() {
     // Settings
     checkServerStatus,
     serverRunning,
+    clearError,
   } = useKanbanStore();
 
   const [cardDialogOpen, setCardDialogOpen] = React.useState(false);
