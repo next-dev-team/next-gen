@@ -7,6 +7,7 @@ import {
   X,
   GripVertical,
   LayoutGrid,
+  Layout,
 } from "lucide-react";
 
 import { cn } from "../lib/utils";
@@ -40,6 +41,24 @@ const createId = () =>
     : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const nowIso = () => new Date().toISOString();
+
+const BOARD_TEMPLATES = [
+  {
+    id: "general-dev",
+    name: "General Development",
+    lists: ["Backlog", "To Do", "In Progress", "Review", "Done"],
+  },
+  {
+    id: "kanban",
+    name: "Kanban",
+    lists: ["Backlog", "Ready", "In Progress", "Done"],
+  },
+  {
+    id: "scrum-basic",
+    name: "Scrum Basic",
+    lists: ["To Do", "In Progress", "Done"],
+  },
+];
 
 const defaultState = () => {
   const boardId = createId();
@@ -270,6 +289,15 @@ export default function ScrumBoardView() {
   const [activeBoardId, setActiveBoardId] = React.useState(null);
   const [newBoardName, setNewBoardName] = React.useState("");
   const [isNewBoardOpen, setIsNewBoardOpen] = React.useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] =
+    React.useState("general-dev");
+
+  const isDuplicateName = React.useMemo(() => {
+    if (!state?.boards || !newBoardName.trim()) return false;
+    return state.boards.some(
+      (b) => b.name.toLowerCase() === newBoardName.trim().toLowerCase()
+    );
+  }, [state?.boards, newBoardName]);
 
   const [cardDialogOpen, setCardDialogOpen] = React.useState(false);
   const [cardDialogContext, setCardDialogContext] = React.useState(null);
@@ -325,18 +353,23 @@ export default function ScrumBoardView() {
   const addList = async (name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    await addLists([trimmed]);
+  };
+
+  const addLists = async (names) => {
+    if (!names || names.length === 0) return;
     await mutate((prev) =>
       updateBoardInState(prev, activeId, (board) => ({
         ...board,
         lists: [
           ...board.lists,
-          {
+          ...names.map((name) => ({
             id: createId(),
-            name: trimmed,
+            name: name.trim(),
             createdAt: nowIso(),
             updatedAt: nowIso(),
             cards: [],
-          },
+          })),
         ],
       }))
     );
@@ -424,8 +457,13 @@ export default function ScrumBoardView() {
 
   const createBoard = async () => {
     const name = newBoardName.trim();
-    if (!name) return;
+    if (!name || isDuplicateName) return;
     const boardId = createId();
+
+    const template =
+      BOARD_TEMPLATES.find((t) => t.id === selectedTemplateId) ||
+      BOARD_TEMPLATES[0];
+
     const next = {
       ...state,
       activeBoardId: boardId,
@@ -436,36 +474,13 @@ export default function ScrumBoardView() {
           name,
           createdAt: nowIso(),
           updatedAt: nowIso(),
-          lists: [
-            {
-              id: createId(),
-              name: "Backlog",
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              cards: [],
-            },
-            {
-              id: createId(),
-              name: "Todo",
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              cards: [],
-            },
-            {
-              id: createId(),
-              name: "In Progress",
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              cards: [],
-            },
-            {
-              id: createId(),
-              name: "Done",
-              createdAt: nowIso(),
-              updatedAt: nowIso(),
-              cards: [],
-            },
-          ],
+          lists: template.lists.map((listName) => ({
+            id: createId(),
+            name: listName,
+            createdAt: nowIso(),
+            updatedAt: nowIso(),
+            cards: [],
+          })),
         },
       ],
     };
@@ -627,16 +642,56 @@ export default function ScrumBoardView() {
               <Plus className="h-4 w-4 mr-2" />
               New Board
             </Button>
-            <DialogContent>
+            <DialogContent className="sm:max-w-[425px]">
               <DialogHeader>
-                <DialogTitle>Create Board</DialogTitle>
+                <DialogTitle>Create New Board</DialogTitle>
+                <DialogDescription>
+                  Give your board a name and choose a workflow template.
+                </DialogDescription>
               </DialogHeader>
-              <div className="grid gap-2">
-                <Label>Name</Label>
-                <Input
-                  value={newBoardName}
-                  onChange={(e) => setNewBoardName(e.target.value)}
-                />
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="board-name">Board Name</Label>
+                  <Input
+                    id="board-name"
+                    placeholder="Enter board name..."
+                    value={newBoardName}
+                    onChange={(e) => setNewBoardName(e.target.value)}
+                    autoFocus
+                    className={cn(
+                      isDuplicateName &&
+                        "border-destructive focus-visible:ring-destructive"
+                    )}
+                  />
+                  {isDuplicateName && (
+                    <p className="text-[10px] font-medium text-destructive">
+                      A board with this name already exists.
+                    </p>
+                  )}
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="template">Workflow Template</Label>
+                  <Select
+                    value={selectedTemplateId}
+                    onValueChange={setSelectedTemplateId}
+                  >
+                    <SelectTrigger id="template" className="w-full">
+                      <SelectValue placeholder="Select a template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BOARD_TEMPLATES.map((tpl) => (
+                        <SelectItem key={tpl.id} value={tpl.id}>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium">{tpl.name}</span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {tpl.lists.join(" → ")}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <DialogFooter>
                 <Button
@@ -649,9 +704,9 @@ export default function ScrumBoardView() {
                 <Button
                   type="button"
                   onClick={createBoard}
-                  disabled={!newBoardName.trim()}
+                  disabled={!newBoardName.trim() || isDuplicateName}
                 >
-                  Create
+                  Create Board
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -691,7 +746,7 @@ export default function ScrumBoardView() {
             />
           ))}
 
-          <AddListColumn onAdd={addList} />
+          <AddListColumn onAdd={addList} onAddTemplate={addLists} />
         </div>
       </div>
 
@@ -933,66 +988,101 @@ const ScrumCard = ({ card, onClick, onDragStart }) => {
   );
 };
 
-const AddListColumn = ({ onAdd }) => {
+const AddListColumn = ({ onAdd, onAddTemplate }) => {
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
 
   return (
     <div className="w-[320px]">
       {open ? (
-        <div className="rounded-xl border bg-background p-3 flex flex-col gap-2">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="List name"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                onAdd(name);
-                setName("");
-                setOpen(false);
-              }
-              if (e.key === "Escape") {
-                setName("");
-                setOpen(false);
-              }
-            }}
-            autoFocus
-          />
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              className="flex-1"
-              disabled={!name.trim()}
-              onClick={() => {
-                onAdd(name);
-                setName("");
-                setOpen(false);
+        <div className="rounded-xl border bg-background p-3 flex flex-col gap-3 shadow-sm animate-in fade-in zoom-in-95 duration-200">
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+              Custom List
+            </label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="List name..."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && name.trim()) {
+                  onAdd(name);
+                  setName("");
+                  setOpen(false);
+                }
+                if (e.key === "Escape") {
+                  setName("");
+                  setOpen(false);
+                }
               }}
-            >
-              Add
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={() => {
-                setName("");
-                setOpen(false);
-              }}
-            >
-              Cancel
-            </Button>
+              autoFocus
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                className="flex-1 h-8 text-xs"
+                disabled={!name.trim()}
+                onClick={() => {
+                  onAdd(name);
+                  setName("");
+                  setOpen(false);
+                }}
+              >
+                Add
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1 h-8 text-xs"
+                onClick={() => {
+                  setName("");
+                  setOpen(false);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-t pt-3 flex flex-col gap-2">
+            <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+              Templates
+            </label>
+            <div className="flex flex-col gap-1">
+              {BOARD_TEMPLATES.map((tpl) => (
+                <Button
+                  key={tpl.id}
+                  type="button"
+                  variant="ghost"
+                  className="justify-start h-auto py-2 px-2 hover:bg-accent group"
+                  onClick={() => {
+                    onAddTemplate(tpl.lists);
+                    setOpen(false);
+                  }}
+                >
+                  <div className="flex flex-col items-start gap-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <Layout className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
+                      <span className="text-xs font-semibold">{tpl.name}</span>
+                    </div>
+                    <span className="text-[10px] text-muted-foreground leading-tight text-left">
+                      {tpl.lists.join(" → ")}
+                    </span>
+                  </div>
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       ) : (
         <Button
           type="button"
           variant="outline"
-          className="w-full justify-start"
+          className="w-full justify-start h-12 border-dashed border-2 hover:border-primary/50 hover:bg-primary/5 transition-all group"
           onClick={() => setOpen(true)}
         >
-          <Plus className="h-4 w-4 mr-2" />
-          Add list
+          <Plus className="h-5 w-5 mr-2 text-muted-foreground group-hover:text-primary transition-colors" />
+          <span className="font-medium">Add list or template</span>
         </Button>
       )}
     </div>
