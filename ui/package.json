@@ -12,7 +12,9 @@
     "postinstall": "electron-builder install-app-deps",
     "build:win": "npm run build && electron-builder --win",
     "test": "playwright test",
-    "mcp:scrum": "node scripts/scrum-mcp-server.js"
+    "mcp:scrum": "node scripts/scrum-mcp-server.js",
+    "mcp:sse": "node scripts/scrum-mcp-server.js",
+    "dev:full": "concurrently \"npm run dev\" \"npm run mcp:sse\""
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

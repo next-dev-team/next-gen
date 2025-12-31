@@ -253,8 +253,21 @@ ${childrenJsx}
         indent(`<CardFooter>\n  <p>Card Footer</p>\n</CardFooter>`, level + 1);
     }
 
+    // Fix: allAttrs is not defined yet, so we calculate attributes locally
+    const {
+      showHeader: _sh,
+      showFooter: _sf,
+      title: _t,
+      description: _d,
+      ...restProps
+    } = attributes;
+
+    const cardPropsStr = propsToJsx(restProps, ["children"]);
+    const cardStyleStr = styleToJsx(style);
+    const cardAttrs = [cardPropsStr, cardStyleStr].filter(Boolean).join(" ");
+
     return indent(
-      `<Card${allAttrs ? " " + allAttrs : ""}>\n${cardInner}\n</Card>`,
+      `<Card${cardAttrs ? " " + cardAttrs : ""}>\n${cardInner}\n</Card>`,
       level
     );
   }

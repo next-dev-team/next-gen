@@ -1,0 +1,27 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/specification/main/schemas/mcp-config.json",
+  "mcpServers": {
+    "scrum-kanban": {
+      "command": "node",
+      "args": ["scripts/scrum-mcp-server.js"],
+      "description": "BMAD-Method Kanban board for agile story management",
+      "env": {
+        "SCRUM_MCP_PORT": "3847"
+      },
+      "metadata": {
+        "name": "Next-Gen Scrum Kanban",
+        "version": "2.0.0",
+        "author": "Next Dev Team",
+        "homepage": "https://github.com/next-dev-team/next-gen",
+        "features": [
+          "BMAD-Method workflow (backlog → ready-for-dev → in-progress → review → done)",
+          "Real-time SSE updates",
+          "Optimistic locking for conflict prevention",
+          "Epic and Story management"
+        ],
+        "sseEndpoint": "http://localhost:3847/sse",
+        "restEndpoint": "http://localhost:3847/api"
+      }
+    }
+  }
+}
