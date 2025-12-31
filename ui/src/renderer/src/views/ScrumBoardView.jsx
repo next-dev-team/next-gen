@@ -1256,7 +1256,9 @@ export default function ScrumBoardView() {
 
     // Fallback to local state if connection fails after a timeout
     const timeout = setTimeout(() => {
-      if (!connected && loading) {
+      const { connected: isConnected, loading: isLoading } =
+        useKanbanStore.getState();
+      if (!isConnected && isLoading) {
         loadLocalState();
       }
     }, 3000);
