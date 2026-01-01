@@ -1544,10 +1544,12 @@ const DropZone = ({ isActive, onDrop }) => {
       role="presentation"
       aria-hidden="true"
       className={cn(
-        "h-4 rounded transition-all duration-300 ease-in-out relative",
-        isActive ? "hover:bg-primary/10 hover:h-12" : "opacity-0 h-1",
-        over &&
-          "bg-primary/20 h-16 border-2 border-dashed border-primary/40 shadow-inner"
+        "rounded-lg transition-all duration-200 ease-out relative w-full",
+        isActive
+          ? over
+            ? "h-24 bg-primary/15 border-2 border-dashed border-primary/40 shadow-sm my-2"
+            : "h-6 bg-primary/5 hover:h-24 hover:bg-primary/10 my-1"
+          : "h-0 opacity-0 overflow-hidden m-0"
       )}
       onDragOver={(e) => {
         e.preventDefault();
@@ -1560,9 +1562,14 @@ const DropZone = ({ isActive, onDrop }) => {
         onDrop(e);
       }}
     >
-      {over && (
-        <div className="absolute inset-0 flex items-center justify-center text-primary/40 text-[10px] font-medium uppercase tracking-wider">
-          Drop here
+      {isActive && (
+        <div
+          className={cn(
+            "absolute inset-0 flex items-center justify-center text-[10px] font-medium uppercase tracking-wider transition-opacity duration-200",
+            over ? "text-primary/60 opacity-100" : "opacity-0"
+          )}
+        >
+          {over ? "Drop here" : ""}
         </div>
       )}
     </div>
@@ -5466,6 +5473,12 @@ export default function ScrumBoardView() {
   };
 
   const onDragOverListColumn = (e, overListId, overIndex) => {
+    if (dragState?.type === "card") {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      return;
+    }
+
     if (dragState?.type !== "list") return;
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
@@ -5484,6 +5497,7 @@ export default function ScrumBoardView() {
   const onDropListToIndex = async (e, overListId, overIndex) => {
     if (dragState?.type !== "list") return;
     e.preventDefault();
+    e.stopPropagation();
 
     const payload = safeParse(e.dataTransfer.getData("application/json"));
     if (!payload || payload.type !== "scrum-list") return;
@@ -5502,6 +5516,7 @@ export default function ScrumBoardView() {
 
   const onDropCardToList = async (e, toListId, toIndex) => {
     e.preventDefault();
+    e.stopPropagation();
     const payload = safeParse(e.dataTransfer.getData("application/json"));
     if (!payload || payload.type !== "scrum-card") return;
 
@@ -5706,7 +5721,13 @@ export default function ScrumBoardView() {
               onDragStartList={(e) => onDragStartList(e, list.id)}
               onDragEndList={onDragEndList}
               onDragOverList={(e) => onDragOverListColumn(e, list.id, index)}
-              onDropList={(e) => onDropListToIndex(e, list.id, index)}
+              onDropList={(e) => {
+                if (dragState?.type === "card") {
+                  onDropCardToList(e, list.id, list.cards.length);
+                } else {
+                  onDropListToIndex(e, list.id, index);
+                }
+              }}
               onAddCard={() => openNewCard(list.id)}
               onEditCard={(card) => openEditCard(list.id, card)}
               onRename={(name) => renameList(list.id, name)}
