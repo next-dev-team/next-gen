@@ -52,8 +52,15 @@ export const PRIORITY_LEVELS = [
 ];
 
 // MCP Server connection settings
-const SSE_URL = "http://localhost:3847/sse";
-const API_BASE = "http://localhost:3847/api";
+const DEFAULT_SERVER_BASE_URL = "http://localhost:3847";
+const SERVER_BASE_URL_KEY = "kanban-server-base-url";
+const USE_REMOTE_SERVER_KEY = "kanban-use-remote-server";
+
+const normalizeBaseUrl = (raw) => {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  return value.replace(/[\\/]+$/, "");
+};
 
 // Generate unique ID
 const createId = () =>
@@ -77,10 +84,13 @@ export const useKanbanStore = create((set, get) => ({
   loading: true,
   error: null,
   connected: false,
-  connected: false,
   userId: getUserId(),
   autoConnect: localStorage.getItem("kanban-auto-connect") !== "false",
   serverRunning: false,
+  useRemoteServer: localStorage.getItem(USE_REMOTE_SERVER_KEY) === "true",
+  serverBaseUrl: normalizeBaseUrl(
+    localStorage.getItem(SERVER_BASE_URL_KEY) || DEFAULT_SERVER_BASE_URL
+  ),
 
   // SSE Connection
   eventSource: null,
@@ -95,7 +105,7 @@ export const useKanbanStore = create((set, get) => ({
 
   // Initialize connection to MCP server
   connect: async () => {
-    const { eventSource, userId } = get();
+    const { eventSource, userId, serverBaseUrl, useRemoteServer } = get();
 
     // Close existing connection
     if (eventSource) {
@@ -105,7 +115,7 @@ export const useKanbanStore = create((set, get) => ({
     set({ loading: true, error: null });
 
     // Start server if auto-connect is enabled (Electron only)
-    if (get().autoConnect && window.electronAPI) {
+    if (!useRemoteServer && get().autoConnect && window.electronAPI) {
       try {
         await window.electronAPI.startMcpServer();
         set({ serverRunning: true });
@@ -116,7 +126,9 @@ export const useKanbanStore = create((set, get) => ({
       }
     }
 
-    const es = new EventSource(`${SSE_URL}?userId=${userId}`);
+    const baseUrl = normalizeBaseUrl(serverBaseUrl) || DEFAULT_SERVER_BASE_URL;
+    const sseUrl = `${baseUrl}/sse`;
+    const es = new EventSource(`${sseUrl}?userId=${userId}`);
 
     es.onopen = () => {
       set({ connected: true, reconnectAttempts: 0, serverRunning: true });
@@ -284,10 +296,12 @@ export const useKanbanStore = create((set, get) => ({
 
   // API calls
   apiCall: async (endpoint, data = {}) => {
-    const { userId, state } = get();
+    const { userId, state, serverBaseUrl } = get();
+    const baseUrl = normalizeBaseUrl(serverBaseUrl) || DEFAULT_SERVER_BASE_URL;
+    const apiBase = `${baseUrl}/api`;
 
     try {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
+      const response = await fetch(`${apiBase}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -795,7 +809,9 @@ export const useKanbanStore = create((set, get) => ({
 
   syncNow: async () => {
     try {
-      const response = await fetch(`${API_BASE}/state`, {
+      const { serverBaseUrl } = get();
+      const baseUrl = normalizeBaseUrl(serverBaseUrl) || DEFAULT_SERVER_BASE_URL;
+      const response = await fetch(`${baseUrl}/api/state`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
@@ -820,6 +836,24 @@ export const useKanbanStore = create((set, get) => ({
   },
 
   // Server Management
+  setUseRemoteServer: (enabled) => {
+    localStorage.setItem(USE_REMOTE_SERVER_KEY, String(Boolean(enabled)));
+    set({ useRemoteServer: Boolean(enabled) });
+    if (get().connected) {
+      get().connect();
+    }
+  },
+
+  setServerBaseUrl: (nextUrl) => {
+    const normalized =
+      normalizeBaseUrl(nextUrl) || DEFAULT_SERVER_BASE_URL;
+    localStorage.setItem(SERVER_BASE_URL_KEY, normalized);
+    set({ serverBaseUrl: normalized });
+    if (get().connected) {
+      get().connect();
+    }
+  },
+
   setAutoConnect: (enabled) => {
     localStorage.setItem("kanban-auto-connect", String(enabled));
     set({ autoConnect: enabled });
@@ -829,6 +863,24 @@ export const useKanbanStore = create((set, get) => ({
   },
 
   checkServerStatus: async () => {
+    const { useRemoteServer, serverBaseUrl } = get();
+    const baseUrl = normalizeBaseUrl(serverBaseUrl) || DEFAULT_SERVER_BASE_URL;
+
+    if (useRemoteServer) {
+      try {
+        const response = await fetch(`${baseUrl}/api/state`, {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        const running = Boolean(response.ok);
+        set({ serverRunning: running });
+        return running;
+      } catch {
+        set({ serverRunning: false });
+        return false;
+      }
+    }
+
     if (window.electronAPI) {
       const running = await window.electronAPI.getMcpServerStatus();
       set({ serverRunning: running });
@@ -839,6 +891,7 @@ export const useKanbanStore = create((set, get) => ({
 
   toggleServer: async () => {
     if (!window.electronAPI) return;
+    if (get().useRemoteServer) return;
 
     const { serverRunning } = get();
     if (serverRunning) {

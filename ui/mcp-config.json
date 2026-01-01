@@ -19,9 +19,14 @@
           "Optimistic locking for conflict prevention",
           "Epic and Story management"
         ],
+        "mcpEndpoint": "http://localhost:3847/mcp",
         "sseEndpoint": "http://localhost:3847/sse",
         "restEndpoint": "http://localhost:3847/api"
       }
+    },
+    "scrum-kanban-remote": {
+      "url": "http://localhost:3847/mcp",
+      "description": "BMAD-Method Kanban MCP server (remote)"
     }
   }
 }

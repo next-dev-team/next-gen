@@ -1271,8 +1271,17 @@ const AgentAssistDialog = ({
   onOpenStory,
   onStartStory,
 }) => {
-  const { connected, serverRunning, toggleServer, checkServerStatus, syncNow } =
-    useKanbanStore();
+  const {
+    connected,
+    serverRunning,
+    toggleServer,
+    checkServerStatus,
+    syncNow,
+    useRemoteServer,
+    serverBaseUrl,
+    setUseRemoteServer,
+    setServerBaseUrl,
+  } = useKanbanStore();
 
   const [activeTab, setActiveTab] = React.useState("bmad");
   const [showComparison, setShowComparison] = React.useState(false);
@@ -1349,6 +1358,22 @@ const AgentAssistDialog = ({
   }, [mcpRootPath]);
 
   const mcpConfigSnippet = React.useMemo(() => {
+    if (useRemoteServer) {
+      const base = String(serverBaseUrl || "")
+        .trim()
+        .replace(/[\\/]+$/, "");
+      const url = base ? `${base}/mcp` : "<server-base-url>/mcp";
+      return JSON.stringify(
+        {
+          "scrum-kanban": {
+            url,
+          },
+        },
+        null,
+        2
+      );
+    }
+
     const args = scriptPath
       ? [scriptPath]
       : ["<mcp-root>/scripts/scrum-mcp-server.js"];
@@ -1363,7 +1388,7 @@ const AgentAssistDialog = ({
       null,
       2
     );
-  }, [scriptPath]);
+  }, [scriptPath, serverBaseUrl, useRemoteServer]);
 
   const slashCommandSnippet = React.useMemo(() => {
     const byAgent = {
@@ -2451,6 +2476,7 @@ const AgentAssistDialog = ({
                         variant={serverRunning ? "destructive" : "default"}
                         size="sm"
                         onClick={toggleServer}
+                        disabled={useRemoteServer}
                         className="gap-2"
                       >
                         {serverRunning ? (
@@ -2529,6 +2555,32 @@ const AgentAssistDialog = ({
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-2">
                       Used for BMAD CLI runs and file generation
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium">Remote URL</div>
+                        <div className="text-[11px] text-muted-foreground mt-1">
+                          Generates URL-based config and skips internal
+                          start/stop
+                        </div>
+                      </div>
+                      <Switch
+                        checked={Boolean(useRemoteServer)}
+                        onCheckedChange={(v) => setUseRemoteServer(v)}
+                      />
+                    </div>
+                    <div className="grid gap-1.5 mt-3">
+                      <Label className="text-xs">Server base URL</Label>
+                      <Input
+                        value={String(serverBaseUrl || "")}
+                        onChange={(e) => setServerBaseUrl(e.target.value)}
+                        placeholder="http://localhost:3847"
+                        className="bg-background/50"
+                        disabled={!useRemoteServer}
+                      />
                     </div>
                   </div>
                 </div>

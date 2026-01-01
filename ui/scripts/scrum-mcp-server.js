@@ -358,6 +358,94 @@ const safeWriteFile = async ({ cwd, relativePath, content, overwrite }) => {
   return target;
 };
 
+const mcpHttpSessions = new Map();
+let mcpHttpDepsPromise = null;
+
+const getMcpHttpDeps = async () => {
+  if (!mcpHttpDepsPromise) {
+    mcpHttpDepsPromise = Promise.all([
+      import("@modelcontextprotocol/sdk/server/streamableHttp.js"),
+      import("@modelcontextprotocol/sdk/types.js"),
+    ]).then(([transportModule, typesModule]) => {
+      return {
+        StreamableHTTPServerTransport:
+          transportModule.StreamableHTTPServerTransport,
+        isInitializeRequest: typesModule.isInitializeRequest,
+      };
+    });
+  }
+  return mcpHttpDepsPromise;
+};
+
+const writeMcpHttpError = (res, status, message) => {
+  res.writeHead(status, { "Content-Type": "application/json" });
+  res.end(
+    JSON.stringify({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: String(message || "Invalid session") },
+      id: null,
+    })
+  );
+};
+
+const handleMcpHttpRequest = async (req, res, parsedBody, logger) => {
+  const { StreamableHTTPServerTransport, isInitializeRequest } =
+    await getMcpHttpDeps();
+
+  const headerSessionId = req.headers["mcp-session-id"];
+  const sessionId = headerSessionId ? String(headerSessionId) : "";
+
+  if (sessionId && mcpHttpSessions.has(sessionId)) {
+    const { transport } = mcpHttpSessions.get(sessionId);
+    if (req.method === "POST") {
+      await transport.handleRequest(req, res, parsedBody);
+    } else {
+      await transport.handleRequest(req, res);
+    }
+    return;
+  }
+
+  if (req.method === "POST" && !sessionId && isInitializeRequest(parsedBody)) {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => createId(),
+      onsessioninitialized: (id) => {
+        mcpHttpSessions.set(String(id), { transport, server: null });
+      },
+      onsessionclosed: (id) => {
+        mcpHttpSessions.delete(String(id));
+      },
+    });
+
+    transport.onclose = () => {
+      if (transport.sessionId) {
+        mcpHttpSessions.delete(String(transport.sessionId));
+      }
+    };
+
+    const server = await main(false, logger);
+    await server.connect(transport);
+
+    if (
+      transport.sessionId &&
+      mcpHttpSessions.has(String(transport.sessionId))
+    ) {
+      const existing = mcpHttpSessions.get(String(transport.sessionId));
+      mcpHttpSessions.set(String(transport.sessionId), { ...existing, server });
+    } else {
+      transport.onclose = () => {
+        if (transport.sessionId) {
+          mcpHttpSessions.delete(String(transport.sessionId));
+        }
+      };
+    }
+
+    await transport.handleRequest(req, res, parsedBody);
+    return;
+  }
+
+  writeMcpHttpError(res, 400, "Invalid session");
+};
+
 // ============ HTTP SSE Server ============
 const SSE_PORT = process.env.SCRUM_MCP_PORT || 3847;
 
@@ -367,15 +455,26 @@ const httpServer = http.createServer((req, res) => {
 
   // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-User-Id, X-State-Version"
+    "Content-Type, X-User-Id, X-State-Version, Mcp-Session-Id"
   );
 
   if (req.method === "OPTIONS") {
     res.writeHead(204);
     res.end();
+    return;
+  }
+
+  if (
+    pathname === "/mcp" &&
+    (req.method === "GET" || req.method === "DELETE")
+  ) {
+    handleMcpHttpRequest(req, res, undefined, console).catch((err) => {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err?.message || String(err) }));
+    });
     return;
   }
 
@@ -435,6 +534,12 @@ const httpServer = http.createServer((req, res) => {
     req.on("end", async () => {
       try {
         const data = body ? JSON.parse(body) : {};
+
+        if (pathname === "/mcp") {
+          await handleMcpHttpRequest(req, res, data, console);
+          return;
+        }
+
         const userId = req.headers["x-user-id"] || data.userId || "anonymous";
         const clientStateVersion =
           parseInt(req.headers["x-state-version"]) || data.stateVersion;
@@ -1485,6 +1590,8 @@ const main = async (enableStdio = true, logger = console) => {
     const transport = new StdioServerTransport();
     await server.connect(transport);
   }
+
+  return server;
 };
 
 let isRunning = false;
@@ -1519,6 +1626,7 @@ const start = async (port = SSE_PORT, logCallback = null, enableStdio) => {
         `BMAD-Method Kanban MCP SSE Server running on http://localhost:${port}`
       );
       logger.log(`Connect to SSE: http://localhost:${port}/sse`);
+      logger.log(`Connect to MCP: http://localhost:${port}/mcp`);
       logger.log(`API docs: http://localhost:${port}/`);
 
       main(shouldEnableStdio, logger)
