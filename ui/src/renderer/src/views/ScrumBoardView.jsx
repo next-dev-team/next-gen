@@ -162,7 +162,134 @@ const BMAD_IDE_OPTIONS = [
   { id: "cursor", label: "Cursor" },
   { id: "windsurf", label: "Windsurf" },
   { id: "vscode", label: "VS Code" },
+  { id: "trae", label: "Trae" },
+  { id: "cline", label: "Cline" },
+  { id: "copilot", label: "GitHub Copilot" },
 ];
+
+// BMAD Context Types - based on agent-rules.ts generator configuration
+// These are the standard context files used in BMAD workflow
+const BMAD_CONTEXT_CATEGORIES = [
+  {
+    id: "bmad-docs",
+    label: "BMAD Documents",
+    icon: "📋",
+    description: "Core BMAD workflow documents",
+    items: [
+      { id: "prd", label: "PRD", path: "_bmad-output/prd.md", required: true },
+      {
+        id: "product-brief",
+        label: "Product Brief",
+        path: "_bmad-output/product-brief.md",
+      },
+      { id: "research", label: "Research", path: "_bmad-output/research.md" },
+      {
+        id: "brainstorm",
+        label: "Brainstorm",
+        path: "_bmad-output/brainstorm.md",
+      },
+      {
+        id: "tech-spec",
+        label: "Tech Spec",
+        path: "_bmad-output/tech-spec.md",
+      },
+      {
+        id: "architecture",
+        label: "Architecture",
+        path: "_bmad-output/architecture.md",
+      },
+      {
+        id: "ux-design",
+        label: "UX Design",
+        path: "_bmad-output/ux-design.md",
+      },
+      { id: "stories", label: "Stories", path: "_bmad-output/stories.md" },
+    ],
+  },
+  {
+    id: "agent-rules",
+    label: "Agent Rules",
+    icon: "🤖",
+    description: "IDE/Agent instruction files (from agent-rules.ts)",
+    items: [
+      { id: "agents-md", label: "AGENTS.md (Base)", path: "AGENTS.md" },
+      {
+        id: "claude-md",
+        label: "CLAUDE.md",
+        path: "CLAUDE.md",
+        ide: "claude-code",
+      },
+      { id: "gemini-md", label: "GEMINI.md", path: "GEMINI.md", ide: "gemini" },
+      { id: "qwen-md", label: "QWEN.md", path: "QWEN.md", ide: "qwen" },
+      {
+        id: "cursor-rules",
+        label: ".cursorrules",
+        path: ".cursorrules",
+        ide: "cursor",
+      },
+      {
+        id: "windsurf-rules",
+        label: ".windsurfrules",
+        path: ".windsurfrules",
+        ide: "windsurf",
+      },
+      {
+        id: "cline-rules",
+        label: ".clinerules",
+        path: ".clinerules",
+        ide: "cline",
+      },
+      {
+        id: "trae-rules",
+        label: "Trae Rules",
+        path: ".trae/rule/main.md",
+        ide: "trae",
+      },
+      {
+        id: "copilot-instructions",
+        label: "Copilot Instructions",
+        path: ".github/copilot-instructions.md",
+        ide: "copilot",
+      },
+    ],
+  },
+  {
+    id: "project-config",
+    label: "Project Config",
+    icon: "⚙️",
+    description: "Project configuration files",
+    items: [
+      { id: "spec-md", label: "SPEC.md", path: "SPEC.md" },
+      { id: "readme", label: "README.md", path: "README.md" },
+      { id: "changelog", label: "CHANGELOG.md", path: "CHANGELOG.md" },
+      { id: "contributing", label: "CONTRIBUTING.md", path: "CONTRIBUTING.md" },
+    ],
+  },
+  {
+    id: "bmad-config",
+    label: "BMAD Config",
+    icon: "🔧",
+    description: "BMAD method configuration",
+    items: [
+      { id: "bmad-config", label: "BMAD Config", path: "_bmad/config.yaml" },
+      { id: "bmad-agents", label: "BMAD Agents", path: "_bmad/agents/" },
+      {
+        id: "bmad-workflows",
+        label: "BMAD Workflows",
+        path: "_bmad/workflows/",
+      },
+    ],
+  },
+];
+
+// Flatten all context items for easy lookup
+const ALL_BMAD_CONTEXT_ITEMS = BMAD_CONTEXT_CATEGORIES.flatMap((cat) =>
+  cat.items.map((item) => ({
+    ...item,
+    category: cat.id,
+    categoryLabel: cat.label,
+  }))
+);
 
 const MCP_KANBAN_TOOL_OPTIONS = [
   {
@@ -284,6 +411,21 @@ const MCP_KANBAN_TOOL_OPTIONS = [
     id: "add_prd_features",
     label: "add_prd_features",
     description: "Add feature bullets into a PRD section.",
+  },
+  {
+    id: "context_list_files",
+    label: "context_list_files",
+    description: "List BMAD context files and check which exist.",
+  },
+  {
+    id: "context_read",
+    label: "context_read",
+    description: "Read a BMAD context file (PRD, agent rules, etc.).",
+  },
+  {
+    id: "context_write",
+    label: "context_write",
+    description: "Write content to a BMAD context file.",
   },
 ];
 
@@ -517,23 +659,71 @@ const MarkdownPreview = ({ value }) => {
   );
 };
 
-const normalizeContextDocs = ({ docs, prdPath }) => {
+const normalizeContextDocs = ({ docs, prdPath, selectedIdes }) => {
+  // PRD is always first and required
   const prd = {
     id: "prd",
     label: "PRD",
     path:
       String(prdPath || "_bmad-output/prd.md").trim() || "_bmad-output/prd.md",
+    category: "bmad-docs",
+    required: true,
   };
+
+  // Get custom docs from user
   const raw = Array.isArray(docs) ? docs : [];
-  const cleaned = raw
+  const customDocs = raw
     .map((d) => ({
       id: String(d?.id || "").trim(),
       label: String(d?.label || "").trim() || "Context",
       path: String(d?.path || "").trim(),
+      category: String(d?.category || "custom").trim(),
     }))
     .filter((d) => d.id && d.id !== "prd");
 
-  return [prd, ...cleaned];
+  return [prd, ...customDocs];
+};
+
+// Get all predefined context items, optionally filtered by selected IDEs
+const getPredefinedContextItems = ({ selectedIdes, includeAll = false }) => {
+  const ideSet = new Set(Array.isArray(selectedIdes) ? selectedIdes : []);
+  const items = [];
+
+  for (const cat of BMAD_CONTEXT_CATEGORIES) {
+    for (const item of cat.items) {
+      // If item is IDE-specific, only include if that IDE is selected (or includeAll)
+      if (item.ide && !includeAll && ideSet.size > 0 && !ideSet.has(item.ide)) {
+        continue;
+      }
+      items.push({
+        ...item,
+        category: cat.id,
+        categoryLabel: cat.label,
+        categoryIcon: cat.icon,
+      });
+    }
+  }
+
+  return items;
+};
+
+// Group context items by category for display
+const groupContextItemsByCategory = (items) => {
+  const groups = {};
+  for (const item of items) {
+    const catId = item.category || "custom";
+    if (!groups[catId]) {
+      const catDef = BMAD_CONTEXT_CATEGORIES.find((c) => c.id === catId);
+      groups[catId] = {
+        id: catId,
+        label: catDef?.label || "Custom",
+        icon: catDef?.icon || "📄",
+        items: [],
+      };
+    }
+    groups[catId].items.push(item);
+  }
+  return Object.values(groups);
 };
 
 // ============ Card Editor Dialog ============
@@ -1749,8 +1939,15 @@ const AgentAssistDialog = ({
   const [contextStatus, setContextStatus] = React.useState(null);
   const loadedContextRef = React.useRef(new Set());
 
+  // New: Context category management
+  const [contextCategoryTab, setContextCategoryTab] =
+    React.useState("bmad-docs");
+  const [detectedContextFiles, setDetectedContextFiles] = React.useState({});
+  const [detectingFiles, setDetectingFiles] = React.useState(false);
+
   const [newContextLabel, setNewContextLabel] = React.useState("");
   const [newContextPath, setNewContextPath] = React.useState("");
+  const [newContextCategory, setNewContextCategory] = React.useState("custom");
 
   const [mcpRootPath, setMcpRootPath] = React.useState("");
 
@@ -2001,9 +2198,49 @@ const AgentAssistDialog = ({
     });
   }, [activeTab, contextDocs, hasProjectRoot, loadContextDoc, open]);
 
+  // Detect which predefined context files exist in the project
+  const detectContextFiles = React.useCallback(async () => {
+    if (!window.electronAPI?.checkPathExists) return;
+    const root = String(projectRoot || "").trim();
+    if (!root) return;
+
+    setDetectingFiles(true);
+    const selectedIdes = Array.isArray(setup.ides) ? setup.ides : [];
+    const predefined = getPredefinedContextItems({
+      selectedIdes,
+      includeAll: true,
+    });
+    const results = {};
+
+    try {
+      for (const item of predefined) {
+        try {
+          // Combine projectRoot with relative path
+          const fullPath = `${root}/${item.path}`;
+          const exists = await window.electronAPI.checkPathExists(fullPath);
+          results[item.id] = { exists: Boolean(exists), path: item.path };
+        } catch {
+          results[item.id] = { exists: false, path: item.path };
+        }
+      }
+      setDetectedContextFiles(results);
+    } finally {
+      setDetectingFiles(false);
+    }
+  }, [projectRoot, setup.ides]);
+
+  // Auto-detect files when project tab is opened
+  React.useEffect(() => {
+    if (!open) return;
+    if (!hasProjectRoot) return;
+    if (activeTab !== "project") return;
+    detectContextFiles();
+  }, [activeTab, detectContextFiles, hasProjectRoot, open]);
+
   const addContextDoc = React.useCallback(() => {
     const label = String(newContextLabel || "").trim();
     const rel = String(newContextPath || "").trim();
+    const category = String(newContextCategory || "custom").trim();
     if (!rel) return;
     const id = `ctx_${Date.now().toString(36)}_${Math.random()
       .toString(36)
@@ -2011,12 +2248,49 @@ const AgentAssistDialog = ({
     const nextDocs = Array.isArray(setup.contextDocs) ? setup.contextDocs : [];
     onChangeSetup({
       ...setup,
-      contextDocs: [...nextDocs, { id, label: label || "Context", path: rel }],
+      contextDocs: [
+        ...nextDocs,
+        { id, label: label || "Context", path: rel, category },
+      ],
     });
     setNewContextLabel("");
     setNewContextPath("");
+    setNewContextCategory("custom");
     setActiveContextId(id);
-  }, [newContextLabel, newContextPath, onChangeSetup, setup]);
+  }, [
+    newContextLabel,
+    newContextPath,
+    newContextCategory,
+    onChangeSetup,
+    setup,
+  ]);
+
+  // Quick add a predefined context item
+  const addPredefinedContext = React.useCallback(
+    (item) => {
+      if (!item?.id || !item?.path) return;
+      const nextDocs = Array.isArray(setup.contextDocs)
+        ? setup.contextDocs
+        : [];
+      // Check if already added
+      if (nextDocs.some((d) => d.path === item.path)) return;
+      const id = `ctx_${item.id}_${Date.now().toString(36)}`;
+      onChangeSetup({
+        ...setup,
+        contextDocs: [
+          ...nextDocs,
+          {
+            id,
+            label: item.label,
+            path: item.path,
+            category: item.category || "custom",
+          },
+        ],
+      });
+      setActiveContextId(id);
+    },
+    [onChangeSetup, setup]
+  );
 
   const removeContextDoc = React.useCallback(
     (docId) => {
@@ -3600,303 +3874,400 @@ const AgentAssistDialog = ({
                 </div>
 
                 <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start justify-between gap-3 mb-4">
                     <div>
-                      <div className="text-sm font-medium">Context</div>
-                      <div className="text-xs text-muted-foreground">
-                        Markdown files for PRD-first context
+                      <div className="text-sm font-medium flex items-center gap-2">
+                        📋 Context Management
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        BMAD workflow documents, agent rules, and project
+                        context files
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="gap-2"
-                      disabled={!hasProjectRoot || contextBusy}
-                      onClick={() => {
-                        contextDocs.forEach((doc) => {
-                          if (!doc?.path) return;
-                          loadContextDoc({
-                            docId: doc.id,
-                            relativePath: doc.path,
-                            force: true,
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        disabled={!hasProjectRoot || detectingFiles}
+                        onClick={() => detectContextFiles()}
+                      >
+                        <RefreshCw
+                          className={cn(
+                            "h-4 w-4",
+                            detectingFiles && "animate-spin"
+                          )}
+                        />
+                        Scan
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        disabled={!hasProjectRoot || contextBusy}
+                        onClick={() => {
+                          contextDocs.forEach((doc) => {
+                            if (!doc?.path) return;
+                            loadContextDoc({
+                              docId: doc.id,
+                              relativePath: doc.path,
+                              force: true,
+                            });
                           });
-                        });
-                      }}
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Reload
-                    </Button>
+                        }}
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Reload All
+                      </Button>
+                    </div>
                   </div>
 
-                  <div className="mt-4 grid sm:grid-cols-3 gap-2">
-                    <Input
-                      value={newContextLabel}
-                      onChange={(e) => setNewContextLabel(e.target.value)}
-                      placeholder="Label (e.g. Tech Spec)"
-                      className="bg-background/50"
-                      disabled={!hasProjectRoot}
-                    />
-                    <Input
-                      value={newContextPath}
-                      onChange={(e) => setNewContextPath(e.target.value)}
-                      placeholder="Relative path (e.g. docs/tech-spec.md)"
-                      className="bg-background/50"
-                      disabled={!hasProjectRoot}
-                    />
-                    <Button
-                      type="button"
-                      className="gap-2"
-                      disabled={
-                        !hasProjectRoot || !String(newContextPath || "").trim()
-                      }
-                      onClick={() => addContextDoc()}
-                    >
-                      <Plus className="h-4 w-4" />
-                      Add
-                    </Button>
-                  </div>
+                  {/* Category Tabs */}
+                  <Tabs
+                    value={contextCategoryTab}
+                    onValueChange={setContextCategoryTab}
+                  >
+                    <TabsList className="grid w-full grid-cols-4 mb-4">
+                      {BMAD_CONTEXT_CATEGORIES.map((cat) => (
+                        <TabsTrigger
+                          key={cat.id}
+                          value={cat.id}
+                          className="text-xs gap-1"
+                        >
+                          <span>{cat.icon}</span>
+                          <span className="hidden sm:inline">{cat.label}</span>
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
 
-                  <div className="mt-4 md:hidden">
-                    <Tabs
-                      value={activeContextId}
-                      onValueChange={setActiveContextId}
-                    >
-                      <TabsList className="w-full overflow-x-auto justify-start">
-                        {contextDocs.map((doc) => (
-                          <TabsTrigger
-                            key={doc.id}
-                            value={doc.id}
-                            className="shrink-0"
-                          >
-                            {doc.label}
-                          </TabsTrigger>
-                        ))}
-                      </TabsList>
-                      {contextDocs.map((doc) => {
-                        const draft =
-                          Object.hasOwn(contextDrafts, doc.id) &&
-                          typeof contextDrafts[doc.id] === "string"
-                            ? contextDrafts[doc.id]
-                            : "";
-                        const statusForDoc =
-                          contextStatus && contextStatus.docId === doc.id
-                            ? contextStatus
-                            : null;
-                        return (
-                          <TabsContent
-                            key={doc.id}
-                            value={doc.id}
-                            className="mt-4"
-                          >
-                            <Card className="border-border/50 bg-background/40">
-                              <CardHeader className="pb-3">
-                                <CardTitle className="text-sm">
-                                  {doc.label}
-                                </CardTitle>
-                                <div className="flex items-center justify-between gap-2 mt-1">
-                                  <div className="text-xs text-muted-foreground truncate">
-                                    {doc.path}
+                    {/* Category Content */}
+                    {BMAD_CONTEXT_CATEGORIES.map((category) => (
+                      <TabsContent
+                        key={category.id}
+                        value={category.id}
+                        className="mt-0"
+                      >
+                        <div className="rounded-lg border border-border/30 bg-black/20 p-3">
+                          <div className="text-xs text-muted-foreground mb-3">
+                            {category.description}
+                          </div>
+
+                          {/* Predefined files for this category */}
+                          <div className="grid gap-2">
+                            {category.items.map((item) => {
+                              const detected = detectedContextFiles[item.id];
+                              const exists = detected?.exists;
+                              const isAdded = contextDocs.some(
+                                (d) => d.path === item.path
+                              );
+                              const isIdeSpecific = !!item.ide;
+                              const selectedIdes = Array.isArray(setup.ides)
+                                ? setup.ides
+                                : [];
+                              const isIdeSelected =
+                                !isIdeSpecific ||
+                                selectedIdes.includes(item.ide);
+
+                              return (
+                                <div
+                                  key={item.id}
+                                  className={cn(
+                                    "flex items-center justify-between gap-3 rounded-md border p-2 transition-colors",
+                                    exists
+                                      ? "border-green-500/30 bg-green-500/5"
+                                      : "border-border/30 bg-background/30",
+                                    !isIdeSelected && "opacity-50"
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <div
+                                      className={cn(
+                                        "w-2 h-2 rounded-full shrink-0",
+                                        exists
+                                          ? "bg-green-500"
+                                          : "bg-muted-foreground/30"
+                                      )}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-xs font-medium truncate flex items-center gap-2">
+                                        {item.label}
+                                        {item.required && (
+                                          <Badge
+                                            variant="secondary"
+                                            className="text-[9px] px-1"
+                                          >
+                                            Required
+                                          </Badge>
+                                        )}
+                                        {isIdeSpecific && (
+                                          <Badge
+                                            variant="outline"
+                                            className="text-[9px] px-1"
+                                          >
+                                            {item.ide}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="text-[10px] text-muted-foreground truncate">
+                                        {item.path}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-1">
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      disabled={!hasProjectRoot || contextBusy}
-                                      onClick={() =>
-                                        loadContextDoc({
-                                          docId: doc.id,
-                                          relativePath: doc.path,
-                                          force: true,
-                                        })
-                                      }
-                                    >
-                                      <RefreshCw className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      disabled={!hasProjectRoot || contextBusy}
-                                      onClick={() =>
-                                        saveContextDoc({
-                                          docId: doc.id,
-                                          relativePath: doc.path,
-                                        })
-                                      }
-                                    >
-                                      <CheckCircle2 className="h-4 w-4" />
-                                    </Button>
-                                    {doc.id !== "prd" && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {exists && !isAdded && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 text-xs"
+                                        disabled={!hasProjectRoot}
+                                        onClick={() =>
+                                          addPredefinedContext(item)
+                                        }
+                                      >
+                                        <Plus className="h-3 w-3 mr-1" />
+                                        Add
+                                      </Button>
+                                    )}
+                                    {isAdded && (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[9px]"
+                                      >
+                                        Added
+                                      </Badge>
+                                    )}
+                                    {!exists && (
+                                      <span className="text-[10px] text-muted-foreground">
+                                        Not found
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+
+                  {/* Custom Context Add */}
+                  <div className="mt-4 pt-4 border-t border-border/30">
+                    <div className="text-xs font-medium mb-2">
+                      Add Custom Context
+                    </div>
+                    <div className="grid sm:grid-cols-4 gap-2">
+                      <Input
+                        value={newContextLabel}
+                        onChange={(e) => setNewContextLabel(e.target.value)}
+                        placeholder="Label"
+                        className="bg-background/50 text-xs"
+                        disabled={!hasProjectRoot}
+                      />
+                      <Input
+                        value={newContextPath}
+                        onChange={(e) => setNewContextPath(e.target.value)}
+                        placeholder="Relative path (e.g. docs/spec.md)"
+                        className="bg-background/50 text-xs sm:col-span-2"
+                        disabled={!hasProjectRoot}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="gap-1"
+                        disabled={
+                          !hasProjectRoot ||
+                          !String(newContextPath || "").trim()
+                        }
+                        onClick={() => addContextDoc()}
+                      >
+                        <Plus className="h-3 w-3" />
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Active Context Docs */}
+                  {contextDocs.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-border/30">
+                      <div className="text-xs font-medium mb-2">
+                        Active Context Files ({contextDocs.length})
+                      </div>
+                      <Tabs
+                        value={activeContextId}
+                        onValueChange={setActiveContextId}
+                      >
+                        <TabsList className="w-full overflow-x-auto justify-start mb-3">
+                          {contextDocs.map((doc) => {
+                            const catDef = BMAD_CONTEXT_CATEGORIES.find(
+                              (c) => c.id === doc.category
+                            );
+                            return (
+                              <TabsTrigger
+                                key={doc.id}
+                                value={doc.id}
+                                className="shrink-0 text-xs gap-1"
+                              >
+                                <span>{catDef?.icon || "📄"}</span>
+                                {doc.label}
+                              </TabsTrigger>
+                            );
+                          })}
+                        </TabsList>
+                        {contextDocs.map((doc) => {
+                          const draft =
+                            Object.hasOwn(contextDrafts, doc.id) &&
+                            typeof contextDrafts[doc.id] === "string"
+                              ? contextDrafts[doc.id]
+                              : "";
+                          const statusForDoc =
+                            contextStatus && contextStatus.docId === doc.id
+                              ? contextStatus
+                              : null;
+                          return (
+                            <TabsContent
+                              key={doc.id}
+                              value={doc.id}
+                              className="mt-0"
+                            >
+                              <Card className="border-border/50 bg-background/40">
+                                <CardHeader className="pb-2 pt-3 px-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <CardTitle className="text-sm">
+                                        {doc.label}
+                                      </CardTitle>
+                                      <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                                        {doc.path}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
                                       <Button
                                         type="button"
                                         size="icon"
                                         variant="ghost"
+                                        className="h-7 w-7"
                                         disabled={
                                           !hasProjectRoot || contextBusy
                                         }
-                                        onClick={() => removeContextDoc(doc.id)}
+                                        onClick={() =>
+                                          loadContextDoc({
+                                            docId: doc.id,
+                                            relativePath: doc.path,
+                                            force: true,
+                                          })
+                                        }
                                       >
-                                        <Trash2 className="h-4 w-4" />
+                                        <RefreshCw className="h-3.5 w-3.5" />
                                       </Button>
-                                    )}
-                                  </div>
-                                </div>
-                                {statusForDoc && (
-                                  <div
-                                    className={cn(
-                                      "mt-2 text-[11px] rounded-md border px-2 py-1",
-                                      statusForDoc.ok
-                                        ? "border-green-500/30 bg-green-500/10 text-green-200"
-                                        : "border-destructive/30 bg-destructive/10 text-destructive"
-                                    )}
-                                  >
-                                    {statusForDoc.message}
-                                  </div>
-                                )}
-                              </CardHeader>
-                              <CardContent>
-                                <Tabs defaultValue="preview">
-                                  <TabsList className="grid w-full grid-cols-2">
-                                    <TabsTrigger value="preview">
-                                      Preview
-                                    </TabsTrigger>
-                                    <TabsTrigger value="edit">Edit</TabsTrigger>
-                                  </TabsList>
-                                  <TabsContent value="preview" className="mt-3">
-                                    <div className="rounded-md border border-border/50 bg-black/50 p-3">
-                                      <MarkdownPreview value={draft} />
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7"
+                                        disabled={
+                                          !hasProjectRoot || contextBusy
+                                        }
+                                        onClick={() =>
+                                          saveContextDoc({
+                                            docId: doc.id,
+                                            relativePath: doc.path,
+                                          })
+                                        }
+                                      >
+                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-7 w-7"
+                                        disabled={!hasProjectRoot}
+                                        onClick={() =>
+                                          copyText(`ctx-${doc.id}`, draft)
+                                        }
+                                      >
+                                        <Copy className="h-3.5 w-3.5" />
+                                      </Button>
+                                      {doc.id !== "prd" && (
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7 text-destructive"
+                                          disabled={
+                                            !hasProjectRoot || contextBusy
+                                          }
+                                          onClick={() =>
+                                            removeContextDoc(doc.id)
+                                          }
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </Button>
+                                      )}
                                     </div>
-                                  </TabsContent>
-                                  <TabsContent value="edit" className="mt-3">
-                                    <textarea
-                                      className="min-h-[260px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm font-mono"
-                                      value={draft}
-                                      onChange={(e) =>
-                                        setContextDraft(doc.id, e.target.value)
-                                      }
-                                    />
-                                  </TabsContent>
-                                </Tabs>
-                              </CardContent>
-                            </Card>
-                          </TabsContent>
-                        );
-                      })}
-                    </Tabs>
-                  </div>
-
-                  <div className="mt-4 hidden md:block overflow-x-auto">
-                    <div className="flex gap-3 min-w-max">
-                      {contextDocs.map((doc) => {
-                        const draft =
-                          Object.hasOwn(contextDrafts, doc.id) &&
-                          typeof contextDrafts[doc.id] === "string"
-                            ? contextDrafts[doc.id]
-                            : "";
-                        const statusForDoc =
-                          contextStatus && contextStatus.docId === doc.id
-                            ? contextStatus
-                            : null;
-                        return (
-                          <Card
-                            key={doc.id}
-                            className="w-[380px] border-border/50 bg-background/40"
-                          >
-                            <CardHeader className="pb-3">
-                              <CardTitle className="text-sm">
-                                {doc.label}
-                              </CardTitle>
-                              <div className="flex items-center justify-between gap-2 mt-1">
-                                <div className="text-xs text-muted-foreground truncate">
-                                  {doc.path}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    disabled={!hasProjectRoot || contextBusy}
-                                    onClick={() =>
-                                      loadContextDoc({
-                                        docId: doc.id,
-                                        relativePath: doc.path,
-                                        force: true,
-                                      })
-                                    }
-                                  >
-                                    <RefreshCw className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    disabled={!hasProjectRoot || contextBusy}
-                                    onClick={() =>
-                                      saveContextDoc({
-                                        docId: doc.id,
-                                        relativePath: doc.path,
-                                      })
-                                    }
-                                  >
-                                    <CheckCircle2 className="h-4 w-4" />
-                                  </Button>
-                                  {doc.id !== "prd" && (
-                                    <Button
-                                      type="button"
-                                      size="icon"
-                                      variant="ghost"
-                                      disabled={!hasProjectRoot || contextBusy}
-                                      onClick={() => removeContextDoc(doc.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                              {statusForDoc && (
-                                <div
-                                  className={cn(
-                                    "mt-2 text-[11px] rounded-md border px-2 py-1",
-                                    statusForDoc.ok
-                                      ? "border-green-500/30 bg-green-500/10 text-green-200"
-                                      : "border-destructive/30 bg-destructive/10 text-destructive"
-                                  )}
-                                >
-                                  {statusForDoc.message}
-                                </div>
-                              )}
-                            </CardHeader>
-                            <CardContent>
-                              <Tabs defaultValue="preview">
-                                <TabsList className="grid w-full grid-cols-2">
-                                  <TabsTrigger value="preview">
-                                    Preview
-                                  </TabsTrigger>
-                                  <TabsTrigger value="edit">Edit</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="preview" className="mt-3">
-                                  <div className="rounded-md border border-border/50 bg-black/50 p-3 h-[360px] overflow-auto">
-                                    <MarkdownPreview value={draft} />
                                   </div>
-                                </TabsContent>
-                                <TabsContent value="edit" className="mt-3">
-                                  <textarea
-                                    className="h-[360px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm font-mono"
-                                    value={draft}
-                                    onChange={(e) =>
-                                      setContextDraft(doc.id, e.target.value)
-                                    }
-                                  />
-                                </TabsContent>
-                              </Tabs>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
+                                  {statusForDoc && (
+                                    <div
+                                      className={cn(
+                                        "mt-2 text-[10px] rounded-md border px-2 py-1",
+                                        statusForDoc.ok
+                                          ? "border-green-500/30 bg-green-500/10 text-green-200"
+                                          : "border-destructive/30 bg-destructive/10 text-destructive"
+                                      )}
+                                    >
+                                      {statusForDoc.message}
+                                    </div>
+                                  )}
+                                </CardHeader>
+                                <CardContent className="px-3 pb-3">
+                                  <Tabs defaultValue="preview">
+                                    <TabsList className="grid w-full grid-cols-2 h-8">
+                                      <TabsTrigger
+                                        value="preview"
+                                        className="text-xs"
+                                      >
+                                        Preview
+                                      </TabsTrigger>
+                                      <TabsTrigger
+                                        value="edit"
+                                        className="text-xs"
+                                      >
+                                        Edit
+                                      </TabsTrigger>
+                                    </TabsList>
+                                    <TabsContent
+                                      value="preview"
+                                      className="mt-2"
+                                    >
+                                      <div className="rounded-md border border-border/50 bg-black/50 p-3 h-[240px] overflow-auto">
+                                        <MarkdownPreview value={draft} />
+                                      </div>
+                                    </TabsContent>
+                                    <TabsContent value="edit" className="mt-2">
+                                      <textarea
+                                        className="h-[240px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-xs font-mono"
+                                        value={draft}
+                                        onChange={(e) =>
+                                          setContextDraft(
+                                            doc.id,
+                                            e.target.value
+                                          )
+                                        }
+                                      />
+                                    </TabsContent>
+                                  </Tabs>
+                                </CardContent>
+                              </Card>
+                            </TabsContent>
+                          );
+                        })}
+                      </Tabs>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </ScrollArea>

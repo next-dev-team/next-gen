@@ -2953,6 +2953,259 @@ const main = async (enableStdio = true, logger = console) => {
     }
   );
 
+  // ============ BMAD Context Management Tools ============
+
+  // Predefined BMAD context file types
+  const BMAD_CONTEXT_FILES = [
+    // BMAD Documents
+    {
+      id: "prd",
+      label: "PRD",
+      path: "_bmad-output/prd.md",
+      category: "bmad-docs",
+    },
+    {
+      id: "product-brief",
+      label: "Product Brief",
+      path: "_bmad-output/product-brief.md",
+      category: "bmad-docs",
+    },
+    {
+      id: "research",
+      label: "Research",
+      path: "_bmad-output/research.md",
+      category: "bmad-docs",
+    },
+    {
+      id: "brainstorm",
+      label: "Brainstorm",
+      path: "_bmad-output/brainstorm.md",
+      category: "bmad-docs",
+    },
+    {
+      id: "tech-spec",
+      label: "Tech Spec",
+      path: "_bmad-output/tech-spec.md",
+      category: "bmad-docs",
+    },
+    {
+      id: "architecture",
+      label: "Architecture",
+      path: "_bmad-output/architecture.md",
+      category: "bmad-docs",
+    },
+    {
+      id: "ux-design",
+      label: "UX Design",
+      path: "_bmad-output/ux-design.md",
+      category: "bmad-docs",
+    },
+    {
+      id: "stories",
+      label: "Stories",
+      path: "_bmad-output/stories.md",
+      category: "bmad-docs",
+    },
+    // Agent Rules
+    {
+      id: "agents-md",
+      label: "AGENTS.md",
+      path: "AGENTS.md",
+      category: "agent-rules",
+    },
+    {
+      id: "claude-md",
+      label: "CLAUDE.md",
+      path: "CLAUDE.md",
+      category: "agent-rules",
+      ide: "claude-code",
+    },
+    {
+      id: "gemini-md",
+      label: "GEMINI.md",
+      path: "GEMINI.md",
+      category: "agent-rules",
+      ide: "gemini",
+    },
+    {
+      id: "cursor-rules",
+      label: ".cursorrules",
+      path: ".cursorrules",
+      category: "agent-rules",
+      ide: "cursor",
+    },
+    {
+      id: "windsurf-rules",
+      label: ".windsurfrules",
+      path: ".windsurfrules",
+      category: "agent-rules",
+      ide: "windsurf",
+    },
+    {
+      id: "cline-rules",
+      label: ".clinerules",
+      path: ".clinerules",
+      category: "agent-rules",
+      ide: "cline",
+    },
+    // Project Config
+    {
+      id: "spec-md",
+      label: "SPEC.md",
+      path: "SPEC.md",
+      category: "project-config",
+    },
+    {
+      id: "readme",
+      label: "README.md",
+      path: "README.md",
+      category: "project-config",
+    },
+  ];
+
+  server.registerTool(
+    "context_list_files",
+    {
+      title: "List BMAD Context Files",
+      description:
+        "List all predefined BMAD context files and check which ones exist in the project",
+      inputSchema: {
+        cwd: z.string(),
+        category: z
+          .enum(["all", "bmad-docs", "agent-rules", "project-config"])
+          .optional(),
+      },
+      outputSchema: {
+        files: z.array(z.any()),
+        existing: z.array(z.string()),
+        missing: z.array(z.string()),
+      },
+    },
+    async ({ cwd, category }) => {
+      const fs = require("fs");
+      const pathModule = require("path");
+
+      const filterCategory = String(category || "all").trim();
+      const files =
+        filterCategory === "all"
+          ? BMAD_CONTEXT_FILES
+          : BMAD_CONTEXT_FILES.filter((f) => f.category === filterCategory);
+
+      const existing = [];
+      const missing = [];
+      const results = [];
+
+      for (const file of files) {
+        const fullPath = pathModule.resolve(cwd, file.path);
+        let exists = false;
+        try {
+          await fs.promises.access(fullPath);
+          exists = true;
+          existing.push(file.id);
+        } catch {
+          missing.push(file.id);
+        }
+        results.push({ ...file, exists, fullPath });
+      }
+
+      return withStructured({ files: results, existing, missing });
+    }
+  );
+
+  server.registerTool(
+    "context_read",
+    {
+      title: "Read Context File",
+      description: "Read the content of a BMAD context file",
+      inputSchema: {
+        cwd: z.string(),
+        fileId: z.string().optional(),
+        relativePath: z.string().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        content: z.string().optional(),
+        path: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({ cwd, fileId, relativePath }) => {
+      try {
+        let rel = String(relativePath || "").trim();
+
+        // If fileId is provided, look up the path
+        if (!rel && fileId) {
+          const found = BMAD_CONTEXT_FILES.find((f) => f.id === fileId);
+          if (found) rel = found.path;
+        }
+
+        if (!rel) {
+          throw new Error("Either fileId or relativePath is required");
+        }
+
+        const result = await safeReadFile({ cwd, relativePath: rel });
+        return withStructured({
+          success: true,
+          content: result.content,
+          path: result.path,
+        });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "context_write",
+    {
+      title: "Write Context File",
+      description: "Write content to a BMAD context file",
+      inputSchema: {
+        cwd: z.string(),
+        fileId: z.string().optional(),
+        relativePath: z.string().optional(),
+        content: z.string(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({ cwd, fileId, relativePath, content, overwrite }) => {
+      try {
+        let rel = String(relativePath || "").trim();
+
+        // If fileId is provided, look up the path
+        if (!rel && fileId) {
+          const found = BMAD_CONTEXT_FILES.find((f) => f.id === fileId);
+          if (found) rel = found.path;
+        }
+
+        if (!rel) {
+          throw new Error("Either fileId or relativePath is required");
+        }
+
+        const target = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content,
+          overwrite: overwrite !== false,
+        });
+        return withStructured({ success: true, path: target });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
   // Start both MCP (stdio) and HTTP (SSE) servers
   if (enableStdio) {
     const transport = new StdioServerTransport();
