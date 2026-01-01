@@ -4,6 +4,7 @@ import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import { shadcnTokenKeys, usePuckStore } from "./stores/puckStore";
 import { darkTheme, lightTheme } from "./theme";
+import { Toaster } from "./components/ui/sonner";
 
 const GeneratorView = lazy(() => import("./views/GeneratorView"));
 const ProjectsView = lazy(() => import("./views/ProjectsView"));
@@ -89,6 +90,7 @@ function App() {
         algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
       }}
     >
+      <Toaster position="bottom-right" richColors />
       <HashRouter>
         <Suspense
           fallback={

@@ -5,6 +5,7 @@ import {
   Calendar,
   CheckCircle,
   CheckCircle2,
+  Check,
   ChevronDown,
   Circle,
   Clock,
@@ -36,6 +37,7 @@ import {
   Zap,
 } from "lucide-react";
 import * as React from "react";
+import { toast } from "sonner";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -207,7 +209,7 @@ const BMAD_V6_PHASES = [
     description: "Research and product brief creation",
     required: false,
     agent: "analyst",
-    workflows: ["research", "create-product-brief"],
+    workflows: ["brainstorm-project", "research", "product-brief"],
     outputs: ["brainstorm-analysis.md", "product-brief.md"],
   },
   {
@@ -250,6 +252,13 @@ const BMAD_V6_PHASES = [
 const BMAD_V6_WORKFLOWS = [
   // Phase 1: Analysis
   {
+    id: "brainstorm-project",
+    name: "Brainstorm Project",
+    phase: "phase-1",
+    agent: "analyst",
+    description: "Guided brainstorming to define the project",
+  },
+  {
     id: "research",
     name: "Research",
     phase: "phase-1",
@@ -257,7 +266,7 @@ const BMAD_V6_WORKFLOWS = [
     description: "Market and technical research",
   },
   {
-    id: "create-product-brief",
+    id: "product-brief",
     name: "Product Brief",
     phase: "phase-1",
     agent: "analyst",
@@ -1245,6 +1254,7 @@ const StatsCard = ({ stats }) => {
 
 const McpToolsUsage = ({ activeBoard, projectRoot }) => {
   const [toolId, setToolId] = React.useState("scrum_get_state");
+  const [copied, setCopied] = React.useState(false);
 
   const toolMeta = React.useMemo(
     () => MCP_KANBAN_TOOL_OPTIONS.find((t) => t.id === toolId) || null,
@@ -1256,26 +1266,51 @@ const McpToolsUsage = ({ activeBoard, projectRoot }) => {
     [toolId, activeBoard, projectRoot]
   );
 
-  const handleCopyUsage = React.useCallback(async () => {
-    if (!usageText) return;
-    try {
-      await navigator.clipboard.writeText(usageText);
-    } catch {}
-  }, [usageText]);
+  const handleCopyUsage = React.useCallback(
+    async (textOverride) => {
+      const textToCopy =
+        typeof textOverride === "string" ? textOverride : usageText;
+      if (!textToCopy) return;
+      try {
+        await navigator.clipboard.writeText(textToCopy);
+        setCopied(true);
+        toast.success("Usage instructions copied to clipboard", {
+          description: "You can now paste them into your AI agent's chat.",
+        });
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        toast.error("Failed to copy to clipboard");
+      }
+    },
+    [usageText]
+  );
+
+  const onToolChange = (val) => {
+    setToolId(val);
+    const newText = getMcpToolUsageText({
+      toolId: val,
+      activeBoard,
+      projectRoot,
+    });
+    handleCopyUsage(newText);
+  };
 
   return (
     <div className="rounded-xl border border-border/50 bg-background/40 p-4">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <div className="text-sm font-medium">MCP tool usage</div>
+          <div className="text-sm font-medium">MCP tool</div>
           <div className="text-xs text-muted-foreground">
-            {toolMeta?.description || "Select a tool and copy the call"}
+            {toolMeta?.description}
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <Select value={toolId} onValueChange={setToolId}>
-            <SelectTrigger className="w-[260px] bg-background/50">
+          <Select value={toolId} onValueChange={onToolChange}>
+            <SelectTrigger
+              className="w-[260px] bg-background/50"
+              onClick={() => handleCopyUsage()}
+            >
               <SelectValue placeholder="Select tool" />
             </SelectTrigger>
             <SelectContent>
@@ -1294,21 +1329,28 @@ const McpToolsUsage = ({ activeBoard, projectRoot }) => {
             </SelectContent>
           </Select>
 
-          <Button
+          {/* <Button
             type="button"
             size="sm"
             variant="outline"
             className="gap-2"
-            onClick={handleCopyUsage}
+            onClick={() => handleCopyUsage()}
             disabled={!usageText}
           >
-            <Copy className="h-4 w-4" />
-            Copy
-          </Button>
+            {copied ? (
+              <Check className="h-4 w-4 text-green-500" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+            {copied ? "Copied" : "Copy"}
+          </Button> */}
         </div>
       </div>
 
-      <div className="mt-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">
+      <div
+        className="mt-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words cursor-pointer hover:bg-background/80 transition-colors"
+        onClick={() => handleCopyUsage()}
+      >
         {usageText}
       </div>
     </div>
@@ -1325,17 +1367,22 @@ const ScrumCard = ({
   listColor,
   storyKey,
 }) => {
+  const [copied, setCopied] = React.useState(false);
   const priorityConfig =
     PRIORITY_CONFIG[card.priority] || PRIORITY_CONFIG.medium;
 
   const handleCopyStoryId = React.useCallback(
     async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       if (!storyKey) return;
       const text = `scrum-kanban/scrum_get_story_by_id here is id: ${storyKey}`;
       try {
         await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
       } catch {}
     },
     [storyKey]
@@ -1346,7 +1393,7 @@ const ScrumCard = ({
       draggable={!isLocked}
       onDragStart={onDragStart}
       className={cn(
-        "cursor-grab active:cursor-grabbing transition-all duration-200",
+        "cursor-grab active:cursor-grabbing transition-all duration-200 group",
         "hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30",
         "bg-card/50 backdrop-blur-sm border-border/50",
         isLocked && "opacity-60 cursor-not-allowed ring-2 ring-amber-500/50"
@@ -1357,7 +1404,10 @@ const ScrumCard = ({
           <button
             type="button"
             className="flex-1 text-left"
-            onClick={onClick}
+            onClick={(e) => {
+              handleCopyStoryId(e);
+              onClick(e);
+            }}
             disabled={isLocked}
           >
             <div className="flex items-center gap-2">
@@ -1394,7 +1444,11 @@ const ScrumCard = ({
                 onClick={handleCopyStoryId}
                 disabled={!storyKey}
               >
-                <Copy className="h-3.5 w-3.5" />
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-green-500" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
               </Button>
             )}
 
@@ -1506,6 +1560,11 @@ const DropZone = ({ isActive, onDrop }) => {
 // ============ List Column ============
 const ListColumn = ({
   list,
+  listDrop,
+  onDragOverList,
+  onDropList,
+  onDragStartList,
+  onDragEndList,
   dragState,
   onAddCard,
   onEditCard,
@@ -1520,7 +1579,10 @@ const ListColumn = ({
 }) => {
   const [isEditingName, setIsEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState(list.name);
-  const isDragFromHere = dragState?.listId === list.id;
+  const isCardDrag = dragState?.type === "card";
+  const isDragFromHere = isCardDrag && dragState?.listId === list.id;
+  const isListDropTarget =
+    dragState?.type === "list" && listDrop?.overListId === list.id;
 
   const StatusIcon = STATUS_ICONS[list.statusId] || Circle;
 
@@ -1532,10 +1594,22 @@ const ListColumn = ({
     <div
       role="presentation"
       className={cn(
-        "w-[320px] rounded-xl border bg-background/50 backdrop-blur-sm flex flex-col h-full min-h-0",
-        "border-border/50 hover:border-border transition-colors"
+        "relative w-[320px] rounded-xl border bg-background/50 backdrop-blur-sm flex flex-col h-full min-h-0",
+        "border-border/50 hover:border-border transition-colors",
+        isListDropTarget && "ring-2 ring-primary/30"
       )}
+      onDragOver={onDragOverList}
+      onDrop={onDropList}
     >
+      {isListDropTarget && (
+        <div
+          aria-hidden="true"
+          className={cn(
+            "absolute inset-y-2 w-1 rounded bg-primary/50",
+            listDrop?.position === "after" ? "right-0" : "left-0"
+          )}
+        />
+      )}
       {/* List Header */}
       <div
         className="px-3 py-3 border-b border-border/30 flex items-center gap-2"
@@ -1546,6 +1620,21 @@ const ListColumn = ({
           borderTopRightRadius: 12,
         }}
       >
+        <div
+          draggable={!isEditingName}
+          className={cn(
+            "shrink-0 rounded p-1 -ml-1 text-muted-foreground",
+            isEditingName
+              ? "cursor-not-allowed opacity-40"
+              : "cursor-grab active:cursor-grabbing hover:text-foreground"
+          )}
+          onDragStart={onDragStartList}
+          onDragEnd={onDragEndList}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+
         <StatusIcon
           className="h-4 w-4 shrink-0"
           style={{ color: list.color || "#6b7280" }}
@@ -1661,7 +1750,7 @@ const ListColumn = ({
             return (
               <React.Fragment key={card.id}>
                 <DropZone
-                  isActive={!isDragFromHere}
+                  isActive={isCardDrag && !isDragFromHere}
                   onDrop={(e) => onDropToIndex(e, index)}
                 />
                 <div className="group">
@@ -1679,7 +1768,7 @@ const ListColumn = ({
             );
           })}
           <DropZone
-            isActive={!isDragFromHere}
+            isActive={isCardDrag && !isDragFromHere}
             onDrop={(e) => onDropToIndex(e, list.cards.length)}
           />
 
@@ -1849,7 +1938,12 @@ const CreateBoardDialog = ({ open, onOpenChange, onCreateBoard }) => {
                         ? "border-primary bg-primary/5 ring-2 ring-primary/30"
                         : "border-border/50 bg-background/30"
                     )}
-                    onClick={() => setSelectedTemplate(template.id)}
+                    onClick={() => {
+                      setSelectedTemplate(template.id);
+                      navigator.clipboard
+                        .writeText(template.id)
+                        .catch(() => {});
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       <div
@@ -2361,6 +2455,9 @@ const AgentAssistDialog = ({
           projectRoot: root,
           relativePath: rel,
         });
+        if (!result?.success) {
+          throw new Error(result?.message || "Failed to load");
+        }
         setContextDraft(id, String(result?.content || ""));
         loadedContextRef.current.add(id);
         setContextStatus({ ok: true, docId: id, message: "Loaded" });
@@ -2589,12 +2686,12 @@ const AgentAssistDialog = ({
   ]);
 
   // Auto-check BMAD installation when dialog opens
-  React.useEffect(() => {
-    if (!open) return;
-    if (!hasProjectRoot) return;
-    checkBmadInstallation();
-    checkPhaseCompletion();
-  }, [checkBmadInstallation, checkPhaseCompletion, hasProjectRoot, open]);
+  // React.useEffect(() => {
+  //   if (!open) return;
+  //   if (!hasProjectRoot) return;
+  //   checkBmadInstallation();
+  //   checkPhaseCompletion();
+  // }, [checkBmadInstallation, checkPhaseCompletion, hasProjectRoot, open]);
 
   const addContextDoc = React.useCallback(() => {
     const label = String(newContextLabel || "").trim();
@@ -2840,6 +2937,9 @@ const AgentAssistDialog = ({
         projectRoot: root,
         relativePath: rel,
       });
+      if (!result?.success) {
+        throw new Error(result?.message || "Failed to read file");
+      }
       setWorkflowPreviewContent(String(result?.content || ""));
     } catch (err) {
       setWorkflowPreviewContent(null);
@@ -3283,7 +3383,11 @@ const AgentAssistDialog = ({
                                   : "outline"
                               }
                               className="h-6 text-[10px] px-2"
-                              onClick={() => setSelectedWorkflow(wf.id)}
+                              onClick={() => {
+                                setSelectedWorkflow(wf.id);
+                                const command = `@${wf.agent} *${wf.id}`;
+                                copyText(`wf-${wf.id}`, command);
+                              }}
                             >
                               {wf.name}
                             </Button>
@@ -3301,11 +3405,20 @@ const AgentAssistDialog = ({
                             const command = `@${wf.agent} *${wf.id}`;
                             return (
                               <div className="mt-3 p-2 rounded border border-border/30 bg-black/50">
-                                <div className="flex items-center justify-between gap-2 mb-1">
+                                <div
+                                  className="flex items-center justify-between gap-2 mb-1"
+                                  onClick={() =>
+                                    copyText(`wf-${wf.id}`, command)
+                                  }
+                                >
                                   <div className="text-[10px] text-muted-foreground">
-                                    {wf.description}
+                                    {wf.description}{" "}
+                                    <Copy className="h-3 w-3" />
+                                    {copiedKey === `wf-${wf.id}`
+                                      ? "Copied!"
+                                      : "Copy"}
                                   </div>
-                                  <Button
+                                  {/* <Button
                                     type="button"
                                     size="sm"
                                     variant="ghost"
@@ -3318,7 +3431,7 @@ const AgentAssistDialog = ({
                                     {copiedKey === `wf-${wf.id}`
                                       ? "Copied!"
                                       : "Copy"}
-                                  </Button>
+                                  </Button> */}
                                 </div>
                                 <code className="text-xs text-green-400 font-mono">
                                   {command}
@@ -3990,13 +4103,7 @@ const AgentAssistDialog = ({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="English">English</SelectItem>
-                            <SelectItem value="Vietnamese">
-                              Vietnamese
-                            </SelectItem>
-                            <SelectItem value="Spanish">Spanish</SelectItem>
-                            <SelectItem value="French">French</SelectItem>
-                            <SelectItem value="Japanese">Japanese</SelectItem>
-                            <SelectItem value="Chinese">Chinese</SelectItem>
+                            <SelectItem value="Khmer">Khmer</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -4113,9 +4220,12 @@ const AgentAssistDialog = ({
                             ? "border-primary bg-primary/5 ring-2 ring-primary/30"
                             : "border-border/50 bg-background/30"
                         )}
-                        onClick={() =>
-                          onChangeSetup({ ...setup, agent: agent.id })
-                        }
+                        onClick={() => {
+                          onChangeSetup({ ...setup, agent: agent.id });
+                          navigator.clipboard
+                            .writeText(agent.id)
+                            .catch(() => {});
+                        }}
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -4936,6 +5046,7 @@ export default function ScrumBoardView() {
     updateCard,
     deleteCard,
     moveCard,
+    moveList,
     acquireLock,
     releaseLock,
     isCardLocked,
@@ -4956,6 +5067,7 @@ export default function ScrumBoardView() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [agentAssistOpen, setAgentAssistOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
+  const [listDrop, setListDrop] = React.useState(null);
   const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
   const [projectPickerValue, setProjectPickerValue] = React.useState("");
   const projectPickerFileRef = React.useRef(null);
@@ -5307,7 +5419,56 @@ export default function ScrumBoardView() {
     const payload = { type: "scrum-card", listId, cardId };
     e.dataTransfer.setData("application/json", JSON.stringify(payload));
     e.dataTransfer.effectAllowed = "move";
-    setDragState({ listId, cardId });
+    setDragState({ type: "card", listId, cardId });
+    setListDrop(null);
+  };
+
+  const onDragStartList = (e, listId) => {
+    const payload = { type: "scrum-list", listId };
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = "move";
+    setDragState({ type: "list", listId });
+    setListDrop(null);
+  };
+
+  const onDragEndList = () => {
+    setDragState(null);
+    setListDrop(null);
+  };
+
+  const onDragOverListColumn = (e, overListId, overIndex) => {
+    if (dragState?.type !== "list") return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isAfter = e.clientX > rect.left + rect.width / 2;
+    const toIndex = overIndex + (isAfter ? 1 : 0);
+
+    setListDrop({
+      overListId,
+      position: isAfter ? "after" : "before",
+      toIndex,
+    });
+  };
+
+  const onDropListToIndex = async (e, overListId, overIndex) => {
+    if (dragState?.type !== "list") return;
+    e.preventDefault();
+
+    const payload = safeParse(e.dataTransfer.getData("application/json"));
+    if (!payload || payload.type !== "scrum-list") return;
+
+    const fromListId = payload.listId;
+    if (!fromListId || !activeBoardId) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isAfter = e.clientX > rect.left + rect.width / 2;
+    const toIndex = overIndex + (isAfter ? 1 : 0);
+
+    await moveList(activeBoardId, fromListId, toIndex);
+    setDragState(null);
+    setListDrop(null);
   };
 
   const onDropCardToList = async (e, toListId, toIndex) => {
@@ -5507,11 +5668,16 @@ export default function ScrumBoardView() {
       {/* Board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
         <div className="min-w-max flex gap-4 items-stretch pb-2 h-full">
-          {activeBoard?.lists?.map((list) => (
+          {activeBoard?.lists?.map((list, index) => (
             <ListColumn
               key={list.id}
               list={list}
+              listDrop={listDrop}
               dragState={dragState}
+              onDragStartList={(e) => onDragStartList(e, list.id)}
+              onDragEndList={onDragEndList}
+              onDragOverList={(e) => onDragOverListColumn(e, list.id, index)}
+              onDropList={(e) => onDropListToIndex(e, list.id, index)}
               onAddCard={() => openNewCard(list.id)}
               onEditCard={(card) => openEditCard(list.id, card)}
               onRename={(name) => renameList(list.id, name)}

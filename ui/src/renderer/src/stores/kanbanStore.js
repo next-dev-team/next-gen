@@ -543,6 +543,58 @@ export const useKanbanStore = create((set, get) => ({
     return true;
   },
 
+  moveList: async (boardId, listId, toIndex) => {
+    const { apiCall, connected, state } = get();
+    if (!state?.boards?.length) return false;
+
+    const board = state.boards.find((b) => b.id === boardId);
+    if (!board?.lists?.length) return false;
+
+    const fromIndex = board.lists.findIndex((l) => l.id === listId);
+    if (fromIndex < 0) return false;
+
+    const rawTarget = Number(toIndex);
+    const clampedTarget = Number.isFinite(rawTarget)
+      ? Math.max(0, Math.min(rawTarget, board.lists.length))
+      : 0;
+
+    const nextLists = [...board.lists];
+    const [moved] = nextLists.splice(fromIndex, 1);
+    if (!moved) return false;
+
+    let targetIndex = clampedTarget;
+    if (fromIndex < targetIndex) targetIndex -= 1;
+    targetIndex = Math.max(0, Math.min(targetIndex, nextLists.length));
+
+    nextLists.splice(targetIndex, 0, moved);
+
+    const nextBoard = {
+      ...board,
+      lists: nextLists,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const newState = {
+      ...state,
+      boards: state.boards.map((b) => (b.id === boardId ? nextBoard : b)),
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(newState));
+    set({ state: newState });
+
+    if (connected) {
+      try {
+        await apiCall("/state", { state: newState });
+        return true;
+      } catch (err) {
+        set({ error: err.message });
+        return false;
+      }
+    }
+
+    return true;
+  },
+
   // Card operations
   addCard: async (boardId, listId, cardData) => {
     const { apiCall, connected } = get();

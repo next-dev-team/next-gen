@@ -17,6 +17,7 @@ import {
 import { ScrollArea } from "./ui/scroll-area";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -80,6 +81,7 @@ export default function ComponentBuilder() {
   const copyToClipboard = (text, setCopied) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
+    toast.success("Copied to clipboard");
     setTimeout(() => setCopied(false), 2000);
   };
 

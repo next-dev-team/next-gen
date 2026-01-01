@@ -385,10 +385,11 @@ ipcMain.handle(
       throw new Error("relativePath is required");
     }
 
-    const target = path.resolve(resolvedRoot, rel);
-    const rootPrefix = resolvedRoot.endsWith(path.sep)
-      ? resolvedRoot
-      : resolvedRoot + path.sep;
+    const normalizedRoot = path.resolve(resolvedRoot);
+    const target = path.resolve(normalizedRoot, rel);
+    const rootPrefix = normalizedRoot.endsWith(path.sep)
+      ? normalizedRoot
+      : normalizedRoot + path.sep;
     if (!target.startsWith(rootPrefix)) {
       throw new Error("Refusing to read outside projectRoot");
     }
@@ -398,13 +399,35 @@ ipcMain.handle(
         ? Math.floor(maxBytes)
         : 250_000;
 
-    const stat = await fs.promises.stat(target);
-    if (stat.size > limit) {
-      throw new Error(`File too large to preview (${stat.size} bytes)`);
-    }
+    try {
+      const stat = await fs.promises.stat(target);
+      if (stat.size > limit) {
+        return {
+          success: false,
+          path: target,
+          message: `File too large to preview (${stat.size} bytes)`,
+        };
+      }
 
-    const content = await fs.promises.readFile(target, "utf8");
-    return { success: true, path: target, content };
+      const content = await fs.promises.readFile(target, "utf8");
+      return { success: true, path: target, content };
+    } catch (err) {
+      const code = String(err?.code || "").trim();
+      if (code === "ENOENT") {
+        return {
+          success: false,
+          path: target,
+          message: `File not found: ${rel}`,
+          code,
+        };
+      }
+      return {
+        success: false,
+        path: target,
+        message: err?.message || String(err),
+        code: code || undefined,
+      };
+    }
   }
 );
 
@@ -446,24 +469,408 @@ ipcMain.handle(
     const extra = Array.isArray(extraArgs) ? extraArgs : [];
     const isVerbose = Boolean(verbose);
 
+    const BMAD_NPX_PACKAGE = "bmad-method@alpha";
+    const getBmadFolderStatus = async () => {
+      const folders = ["_bmad", "_config"];
+      const results = await Promise.all(
+        folders.map(async (folder) => {
+          const target = path.join(workingDir, folder);
+          try {
+            const stat = await fs.promises.stat(target);
+            return { folder, exists: stat.isDirectory(), target };
+          } catch {
+            return { folder, exists: false, target };
+          }
+        })
+      );
+
+      const installed = results.every((r) => r.exists);
+      const lines = ["▶ local folder check"];
+      for (const r of results) {
+        lines.push(`${r.folder}: ${r.exists ? "present" : "missing"}`);
+      }
+      if (!installed) {
+        lines.push(
+          "BMAD appears not installed (expected _bmad and _config directories)."
+        );
+      }
+
+      for (const line of lines) sendBmadLog("info", line);
+
+      return {
+        success: installed,
+        code: installed ? 0 : 1,
+        stdout: `${lines.join("\n")}\n`,
+        stderr: "",
+      };
+    };
+
+    const resolveLocalCliBinary = async (binBaseName) => {
+      const safeBase = String(binBaseName || "").trim();
+      if (!safeBase) return null;
+      const binName =
+        process.platform === "win32" ? `${safeBase}.cmd` : safeBase;
+      const candidate = path.join(workingDir, "node_modules", ".bin", binName);
+      try {
+        await fs.promises.access(candidate);
+        return candidate;
+      } catch {
+        return null;
+      }
+    };
+
+    const runLocalWorkflow = async () => {
+      const rawArgs = Array.isArray(extraArgs) ? extraArgs : [];
+      const nameRaw = String(rawArgs[0] || "").trim();
+      if (!nameRaw) {
+        const message = "Workflow name is required";
+        sendBmadLog("error", message);
+        return { success: false, code: 1, stdout: "", stderr: message };
+      }
+
+      const normalizeWorkflowName = (value) => {
+        const v = String(value || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/_/g, "-");
+        if (!v) return "";
+        if (v === "create-product-brief") return "product-brief";
+        if (v === "create-ux-design") return "ux-design";
+        if (v === "create-architecture") return "architecture";
+        if (v === "create-epics-and-stories") return "stories";
+        if (v === "check-implementation-readiness")
+          return "implementation-readiness";
+        if (v === "brainstorming") return "brainstorm";
+        if (v === "brainstorm-project") return "brainstorm";
+        return v;
+      };
+
+      const workflowName = normalizeWorkflowName(nameRaw);
+      const args = rawArgs.slice(1).map((a) => String(a));
+
+      const parseOptionValues = (flag) => {
+        const values = [];
+        for (let i = 0; i < args.length; i++) {
+          if (args[i] !== flag) continue;
+          const next = args[i + 1];
+          if (next && !String(next).startsWith("--")) {
+            values.push(String(next));
+            i += 1;
+          }
+        }
+        return values;
+      };
+
+      const inputs = parseOptionValues("--input");
+      const types = parseOptionValues("--type");
+      const datas = parseOptionValues("--data");
+
+      const resolveProjectPath = (value) => {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        const candidate = path.isAbsolute(raw)
+          ? raw
+          : path.join(workingDir, raw);
+        const rel = path.relative(workingDir, candidate);
+        if (rel.startsWith("..") || path.isAbsolute(rel)) {
+          return "";
+        }
+        return candidate;
+      };
+
+      const resolvedInputs = inputs
+        .map((p) => ({ raw: p, abs: resolveProjectPath(p) }))
+        .filter((p) => p.abs);
+      const resolvedData = datas
+        .map((p) => ({ raw: p, abs: resolveProjectPath(p) }))
+        .filter((p) => p.abs);
+
+      const readIfExists = async (absPath) => {
+        if (!absPath) return "";
+        try {
+          return await fs.promises.readFile(absPath, "utf8");
+        } catch {
+          return "";
+        }
+      };
+
+      const buildTemplate = async () => {
+        const header = `# ${workflowName}`;
+        const blocks = [header, ""];
+
+        if (types.length || resolvedInputs.length || resolvedData.length) {
+          blocks.push("## Inputs", "");
+          if (types.length) blocks.push(`- type: ${types.join(", ")}`);
+          for (const item of resolvedInputs)
+            blocks.push(`- input: ${item.raw}`);
+          for (const item of resolvedData) blocks.push(`- data: ${item.raw}`);
+          blocks.push("");
+        }
+
+        if (workflowName === "product-brief") {
+          blocks.push(
+            "## Vision",
+            "(fill in)",
+            "",
+            "## Target Users",
+            "- (fill in)",
+            "",
+            "## Value Proposition",
+            "(fill in)",
+            "",
+            "## Goals",
+            "- (fill in)",
+            "",
+            "## Non-Goals",
+            "- (fill in)",
+            "",
+            "## Differentiators",
+            "- (fill in)",
+            ""
+          );
+        } else if (workflowName === "prd") {
+          blocks.push(
+            "## Overview",
+            "(fill in)",
+            "",
+            "## Functional Requirements",
+            "- (fill in)",
+            "",
+            "## Non-Functional Requirements",
+            "- (fill in)",
+            "",
+            "## Epics & Stories",
+            "- (fill in)",
+            ""
+          );
+        } else if (workflowName === "ux-design" || workflowName === "ux-spec") {
+          blocks.push(
+            "## UX Goals",
+            "(fill in)",
+            "",
+            "## Key Flows",
+            "- (fill in)",
+            "",
+            "## Screens",
+            "- (fill in)",
+            "",
+            "## Accessibility",
+            "- (fill in)",
+            ""
+          );
+        } else if (
+          workflowName === "architecture" ||
+          workflowName === "solution-architecture"
+        ) {
+          blocks.push(
+            "## Overview",
+            "(fill in)",
+            "",
+            "## Components",
+            "- (fill in)",
+            "",
+            "## Data Flows",
+            "- (fill in)",
+            "",
+            "## Integrations",
+            "- (fill in)",
+            "",
+            "## Key Decisions",
+            "- (fill in)",
+            ""
+          );
+        } else if (workflowName === "research") {
+          blocks.push(
+            "## Findings",
+            "- (fill in)",
+            "",
+            "## Sources",
+            "- (fill in)",
+            "",
+            "## Risks",
+            "- (fill in)",
+            ""
+          );
+        } else if (workflowName === "brainstorm") {
+          blocks.push(
+            "## Problem",
+            "(fill in)",
+            "",
+            "## Ideas",
+            "- (fill in)",
+            "",
+            "## Constraints",
+            "- (fill in)",
+            ""
+          );
+        } else if (workflowName === "stories") {
+          blocks.push(
+            "## Epics",
+            "- (fill in)",
+            "",
+            "## Stories",
+            "- (fill in)",
+            ""
+          );
+        } else if (workflowName === "implementation-readiness") {
+          blocks.push(
+            "## Checklist",
+            "- [ ] PRD ready",
+            "- [ ] UX ready (if applicable)",
+            "- [ ] Architecture ready (if applicable)",
+            "- [ ] Stories ready",
+            ""
+          );
+        } else {
+          blocks.push("## Output", "(fill in)", "");
+        }
+
+        const inputContent = await Promise.all(
+          resolvedInputs.map(async (item) => {
+            const content = await readIfExists(item.abs);
+            if (!content) return null;
+            return { label: item.raw, content };
+          })
+        );
+
+        const dataContent = await Promise.all(
+          resolvedData.map(async (item) => {
+            const content = await readIfExists(item.abs);
+            if (!content) return null;
+            return { label: item.raw, content };
+          })
+        );
+
+        const referenced = [...inputContent, ...dataContent].filter(Boolean);
+        if (referenced.length) {
+          blocks.push("## Reference", "");
+          for (const ref of referenced) {
+            blocks.push(`### ${ref.label}`, "", ref.content.trim(), "");
+          }
+        }
+
+        return blocks.join("\n");
+      };
+
+      const outputRelByWorkflow = {
+        brainstorm: "_bmad-output/brainstorm.md",
+        research: "_bmad-output/research.md",
+        "product-brief": "_bmad-output/product-brief.md",
+        prd: "_bmad-output/prd.md",
+        "ux-design": "_bmad-output/ux-design.md",
+        "ux-spec": "_bmad-output/ux-design.md",
+        "tech-spec": "_bmad-output/tech-spec.md",
+        architecture: "_bmad-output/architecture.md",
+        "solution-architecture": "_bmad-output/architecture.md",
+        stories: "_bmad-output/stories.md",
+        "implementation-readiness": "_bmad-output/implementation-readiness.md",
+      };
+
+      const toSafeWorkflowFileBase = (value) => {
+        const safe = String(value || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/_/g, "-")
+          .replace(/[^a-z0-9._-]+/g, "-")
+          .replace(/^-+/, "")
+          .replace(/-+$/, "")
+          .slice(0, 80);
+        if (!safe || safe.includes("..")) return "";
+        return safe;
+      };
+
+      let outputRel = outputRelByWorkflow[workflowName] || "";
+      if (!outputRel) {
+        const safeBase = toSafeWorkflowFileBase(workflowName);
+        if (!safeBase) {
+          const message = `Unsupported workflow: ${nameRaw}`;
+          sendBmadLog("error", message);
+          return { success: false, code: 1, stdout: "", stderr: message };
+        }
+        outputRel = `_bmad-output/${safeBase}.md`;
+      }
+
+      const outputAbs = path.join(workingDir, outputRel);
+      await fs.promises.mkdir(path.dirname(outputAbs), { recursive: true });
+
+      sendBmadLog("info", `▶ workflow ${nameRaw}`);
+      const content = await buildTemplate();
+      await fs.promises.writeFile(outputAbs, content, "utf8");
+      sendBmadLog("success", `Wrote ${outputRel}`);
+
+      return {
+        success: true,
+        code: 0,
+        stdout: `Wrote ${outputRel}\n`,
+        stderr: "",
+      };
+    };
+
+    if (selectedMode === "npx" && selectedAction === "status") {
+      return await getBmadFolderStatus();
+    }
+
+    if (selectedAction === "workflow") {
+      return await runLocalWorkflow();
+    }
+
     let command;
     let args;
 
+    const isWorkflowAction = selectedAction === "workflow";
+
     if (selectedMode === "bmad") {
-      command = process.platform === "win32" ? "bmad.cmd" : "bmad";
-      args = [selectedAction];
-      if (selectedAction === "install") {
-        const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
-        if (mods.length > 0) args.push("-m", ...mods);
+      const baseCommand = isWorkflowAction ? "workflow" : "bmad";
+      command =
+        process.platform === "win32" ? `${baseCommand}.cmd` : baseCommand;
+      const localBin = await resolveLocalCliBinary(baseCommand);
+      if (localBin) command = localBin;
+
+      if (isWorkflowAction) {
+        args = [...extra];
+      } else {
+        args = [selectedAction];
+        if (selectedAction === "install") {
+          const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
+          if (mods.length > 0) args.push("-m", ...mods);
+        }
+        args.push(...extra);
       }
-      if (isVerbose) args.push("-v");
-      args.push(...extra);
     } else {
       command = process.platform === "win32" ? "npx.cmd" : "npx";
-      args = ["-y", "bmad-method@alpha", selectedAction];
-      if (isVerbose) args.push("-v");
-      args.push(...extra);
+      if (isWorkflowAction) {
+        args = ["-y", "--package", BMAD_NPX_PACKAGE, "workflow", ...extra];
+      } else {
+        args = ["-y", "--package", BMAD_NPX_PACKAGE, "bmad", selectedAction];
+        if (selectedAction === "install") {
+          const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
+          if (mods.length > 0) args.push("-m", ...mods);
+        }
+        args.push(...extra);
+      }
     }
+
+    const maybeRetryWithoutVerbose = async (result, runCommand, runArgs) => {
+      if (!isVerbose) return result;
+      if (!Array.isArray(runArgs) || !runArgs.includes("-v")) return result;
+      const combined = `${String(result?.stdout || "")}\n${String(
+        result?.stderr || ""
+      )}`;
+      if (!/unknown option ['"]-v['"]/i.test(combined)) return result;
+      const nextArgs = runArgs.filter((a) => a !== "-v");
+      return await runOnce(runCommand, nextArgs, { autoAcceptDefaults });
+    };
+
+    const maybeFallbackStatus = async (result) => {
+      if (selectedAction !== "status") return null;
+      const combined = `${String(result?.stdout || "")}\n${String(
+        result?.stderr || ""
+      )}`;
+      if (!/unknown command ['"]status['"]/i.test(combined)) return null;
+      return await getBmadFolderStatus();
+    };
 
     const runOnceSpawn = (runCommand, runArgs, { autoAcceptDefaults } = {}) =>
       new Promise((resolve) => {
@@ -534,17 +941,21 @@ ipcMain.handle(
           });
         });
 
-        child.on("close", (code) => {
+        child.on("close", (code, signal) => {
           bmadChildProcess = null;
           try {
             if (autoInputInterval) clearInterval(autoInputInterval);
             if (autoInputTimeout) clearTimeout(autoInputTimeout);
           } catch {}
+          const normalizedCode = typeof code === "number" ? code : -1;
+          const normalizedStderr =
+            stderr || (signal ? `Process terminated (${signal})` : "");
           resolve({
-            success: code === 0,
-            code,
+            success: normalizedCode === 0,
+            code: normalizedCode,
             stdout,
-            stderr,
+            stderr: normalizedStderr,
+            signal,
           });
         });
       });
@@ -710,20 +1121,26 @@ ipcMain.handle(
       return result;
     };
 
-    const looksLikeMissingBmadBinary = (result, attemptedCommand) => {
+    const looksLikeMissingCliBinary = (result, attemptedCommand) => {
       if (!attemptedCommand) return false;
       const attempted = String(attemptedCommand);
-      const isBmad = attempted === "bmad" || attempted === "bmad.cmd";
-      if (!isBmad) return false;
+      const base = path.basename(attempted).toLowerCase();
+      const isKnownCli =
+        base === "bmad" ||
+        base === "bmad.cmd" ||
+        base === "workflow" ||
+        base === "workflow.cmd";
+      if (!isKnownCli) return false;
 
       const stderrText = String(result?.stderr || "");
       const stdoutText = String(result?.stdout || "");
+      const combined = `${stdoutText}\n${stderrText}`.toLowerCase();
       return (
         result?.code === 127 ||
-        stderrText.includes("command not found") ||
-        stderrText.includes("not recognized") ||
-        stdoutText.includes("command not found") ||
-        stdoutText.includes("not recognized")
+        combined.includes("command not found") ||
+        combined.includes("not recognized") ||
+        combined.includes("enoent") ||
+        combined.includes("file not found")
       );
     };
 
@@ -737,33 +1154,49 @@ ipcMain.handle(
         ? autoAcceptDefaultsOption
         : !wantsInteractive && selectedAction === "install";
 
-    const first = await runOnce(command, args, { autoAcceptDefaults });
+    let first = await runOnce(command, args, { autoAcceptDefaults });
+    first = await maybeRetryWithoutVerbose(first, command, args);
+
+    const statusFromFirst = await maybeFallbackStatus(first);
+    if (statusFromFirst) return statusFromFirst;
+
     if (
       !first.success &&
       selectedMode === "bmad" &&
-      looksLikeMissingBmadBinary(first, command)
+      looksLikeMissingCliBinary(first, command)
     ) {
       sendBmadLog(
         "warning",
-        "bmad CLI not found in PATH. Falling back to npx bmad-method@alpha."
+        `bmad CLI not found in PATH. Falling back to npx ${BMAD_NPX_PACKAGE}.`
       );
       const fallbackCommand = process.platform === "win32" ? "npx.cmd" : "npx";
-      const fallbackArgs = ["-y", "bmad-method@alpha", selectedAction];
-      if (isVerbose) fallbackArgs.push("-v");
-      fallbackArgs.push(...extra);
-      const second = await runOnce(fallbackCommand, fallbackArgs, {
+      const fallbackArgs = ["-y", "--package", BMAD_NPX_PACKAGE];
+
+      if (isWorkflowAction) {
+        fallbackArgs.push("workflow", ...extra);
+      } else {
+        fallbackArgs.push("bmad", selectedAction);
+        if (selectedAction === "install") {
+          const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
+          if (mods.length > 0) fallbackArgs.push("-m", ...mods);
+        }
+        fallbackArgs.push(...extra);
+      }
+
+      let second = await runOnce(fallbackCommand, fallbackArgs, {
         autoAcceptDefaults,
       });
+
+      const statusFromSecond = await maybeFallbackStatus(second);
+      if (statusFromSecond) return statusFromSecond;
+
       if (second.success) {
         await finalizeInstallIfNeeded(second);
         sendBmadLog("success", "✅ BMAD command completed");
         return second;
       }
       sendBmadLog("error", `❌ BMAD command failed (exit ${second.code})`);
-      throw new Error(
-        `BMAD command failed with exit code ${second.code}` +
-          (second.stderr ? `\n${second.stderr}` : "")
-      );
+      return second;
     }
 
     if (first.success) {
@@ -773,10 +1206,7 @@ ipcMain.handle(
     }
 
     sendBmadLog("error", `❌ BMAD command failed (exit ${first.code})`);
-    throw new Error(
-      `BMAD command failed with exit code ${first.code}` +
-        (first.stderr ? `\n${first.stderr}` : "")
-    );
+    return first;
   }
 );
 

@@ -500,12 +500,21 @@ const getBmadCommand = ({ mode, action, modules, full, args: extraArgs }) => {
   }
 
   const command = process.platform === "win32" ? "npx.cmd" : "npx";
-  const args = ["-y", "bmad-method@alpha", selectedAction];
+  const args = ["-y", "--package", BMAD_NPX_PACKAGE, "bmad", selectedAction];
+  if (selectedAction === "install") {
+    const mods = Array.isArray(modules)
+      ? modules.map((m) => String(m).trim()).filter(Boolean)
+      : [];
+    if (mods.length > 0) args.push("-m", ...mods);
+    if (full) args.push("-f");
+  }
   if (Array.isArray(extraArgs)) {
     args.push(...extraArgs);
   }
   return { command, args };
 };
+
+const BMAD_NPX_PACKAGE = "bmad-method@alpha";
 
 const getBmadFolderStatusLogs = async ({ cwd }) => {
   const workingDir = String(cwd || "").trim();
@@ -2177,10 +2186,16 @@ const main = async (enableStdio = true, logger = console) => {
 
         const missingBmad =
           String(mode || "npx").trim() === "bmad" &&
-          result.exitCode === 127 &&
-          result.logs.some((l) =>
-            String(l).toLowerCase().includes("command not found")
-          );
+          (result.exitCode === 127 || result.exitCode === -1) &&
+          result.logs.some((l) => {
+            const line = String(l).toLowerCase();
+            return (
+              line.includes("command not found") ||
+              line.includes("not recognized") ||
+              line.includes("enoent") ||
+              line.includes("file not found")
+            );
+          });
 
         if (missingBmad) {
           const fallback = getBmadCommand({
@@ -2205,7 +2220,7 @@ const main = async (enableStdio = true, logger = console) => {
             ...second,
             logs: [
               ...result.logs,
-              "bmad CLI not found in PATH. Falling back to npx bmad-method@alpha.",
+              `bmad CLI not found in PATH. Falling back to npx ${BMAD_NPX_PACKAGE}.`,
               ...second.logs,
             ],
           });
@@ -2254,10 +2269,16 @@ const main = async (enableStdio = true, logger = console) => {
 
         const missingBmad =
           String(mode || "npx").trim() === "bmad" &&
-          result.exitCode === 127 &&
-          result.logs.some((l) =>
-            String(l).toLowerCase().includes("command not found")
-          );
+          (result.exitCode === 127 || result.exitCode === -1) &&
+          result.logs.some((l) => {
+            const line = String(l).toLowerCase();
+            return (
+              line.includes("command not found") ||
+              line.includes("not recognized") ||
+              line.includes("enoent") ||
+              line.includes("file not found")
+            );
+          });
 
         if (missingBmad) {
           const fallback = getBmadCommand({
@@ -2270,7 +2291,7 @@ const main = async (enableStdio = true, logger = console) => {
             ...second,
             logs: [
               ...result.logs,
-              "bmad CLI not found in PATH. Falling back to npx bmad-method@alpha.",
+              `bmad CLI not found in PATH. Falling back to npx ${BMAD_NPX_PACKAGE}.`,
               ...second.logs,
             ],
           });
