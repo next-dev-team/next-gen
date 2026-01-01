@@ -1307,6 +1307,8 @@ const AgentAssistDialog = ({
   const [workflowRunLogs, setWorkflowRunLogs] = React.useState([]);
   const workflowRunActiveRef = React.useRef(false);
 
+  const [mcpRootPath, setMcpRootPath] = React.useState("");
+
   const recommendedAgent = React.useMemo(() => {
     return recommendAgent({
       teamSize: setup.teamSize,
@@ -1317,16 +1319,39 @@ const AgentAssistDialog = ({
 
   const selectedAgent = setup.agent || recommendedAgent;
 
+  React.useEffect(() => {
+    if (!open) return;
+    if (!window.electronAPI?.getProjectRoot) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const root = await window.electronAPI.getProjectRoot();
+        if (cancelled) return;
+        setMcpRootPath(String(root || "").trim());
+      } catch {
+        if (cancelled) return;
+        setMcpRootPath("");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const scriptPath = React.useMemo(() => {
-    const root = String(setup.projectRoot || "").trim();
+    const root = String(mcpRootPath || "")
+      .trim()
+      .replace(/[\\/]+$/, "");
     if (!root) return "";
     return normalizeMcpPath(`${root}/scripts/scrum-mcp-server.js`);
-  }, [setup.projectRoot]);
+  }, [mcpRootPath]);
 
   const mcpConfigSnippet = React.useMemo(() => {
     const args = scriptPath
       ? [scriptPath]
-      : ["<project-root>/scripts/scrum-mcp-server.js"];
+      : ["<mcp-root>/scripts/scrum-mcp-server.js"];
     return JSON.stringify(
       {
         "scrum-kanban": {
@@ -2503,7 +2528,7 @@ const AgentAssistDialog = ({
                       </Button>
                     </div>
                     <div className="text-[11px] text-muted-foreground mt-2">
-                      Used to generate your MCP config snippet
+                      Used for BMAD CLI runs and file generation
                     </div>
                   </div>
                 </div>
