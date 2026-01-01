@@ -534,9 +534,24 @@ const ScrumCard = ({
   isLocked,
   lockInfo,
   listColor,
+  storyKey,
 }) => {
   const priorityConfig =
     PRIORITY_CONFIG[card.priority] || PRIORITY_CONFIG.medium;
+
+  const handleCopyStoryId = React.useCallback(
+    async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!storyKey) return;
+      const text = `scrum-kanban/scrum_get_story_by_id here is id: ${storyKey}`;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+      }
+    },
+    [storyKey]
+  );
 
   return (
     <Card
@@ -562,6 +577,14 @@ const ScrumCard = ({
                 className="w-1.5 h-1.5 rounded-full shrink-0"
                 style={{ backgroundColor: listColor || "#6b7280" }}
               />
+              {storyKey && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0 tabular-nums shrink-0"
+                >
+                  {storyKey}
+                </Badge>
+              )}
               <span className="font-medium text-sm text-foreground leading-snug line-clamp-2">
                 {card.title}
               </span>
@@ -573,30 +596,45 @@ const ScrumCard = ({
             )}
           </button>
 
-          {isLocked ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="p-1.5 rounded-full bg-amber-500/10">
-                    <Lock className="h-3.5 w-3.5 text-amber-500" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Being edited by {lockInfo?.userId || "another user"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 hover:opacity-100"
-              onClick={onClick}
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {storyKey && (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                onClick={handleCopyStoryId}
+                disabled={!storyKey}
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            {isLocked ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="p-1.5 rounded-full bg-amber-500/10">
+                      <Lock className="h-3.5 w-3.5 text-amber-500" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Being edited by {lockInfo?.userId || "another user"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                onClick={onClick}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {(card.assignee ||
@@ -690,6 +728,7 @@ const ListColumn = ({
   onDropToEnd,
   isCardLocked,
   getCardLock,
+  storyKeyByCardId,
 }) => {
   const [isEditingName, setIsEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState(list.name);
@@ -845,6 +884,7 @@ const ListColumn = ({
                     isLocked={locked}
                     lockInfo={lockInfo}
                     listColor={list.color}
+                    storyKey={storyKeyByCardId?.[card.id]}
                   />
                 </div>
               </React.Fragment>
@@ -3310,6 +3350,37 @@ export default function ScrumBoardView() {
   const epics = getEpics();
   const stats = getStats();
 
+  const storyKeyByCardId = React.useMemo(() => {
+    if (!activeBoard?.lists?.length) return {};
+    const toMs = (iso) => {
+      const ms = Date.parse(String(iso || ""));
+      return Number.isFinite(ms) ? ms : 0;
+    };
+
+    const allCards = [];
+    for (const list of activeBoard.lists) {
+      for (const card of list.cards || []) {
+        allCards.push({
+          cardId: card.id,
+          createdAtMs: toMs(card.createdAt),
+        });
+      }
+    }
+
+    allCards.sort((a, b) =>
+      a.createdAtMs !== b.createdAtMs
+        ? a.createdAtMs - b.createdAtMs
+        : String(a.cardId).localeCompare(String(b.cardId))
+    );
+
+    const map = {};
+    for (let i = 0; i < allCards.length; i += 1) {
+      const entry = allCards[i];
+      map[entry.cardId] = `${activeBoard.name}:${i + 1}`;
+    }
+    return map;
+  }, [activeBoard]);
+
   // Card operations
   const openNewCard = React.useCallback(
     async (listId) => {
@@ -3616,6 +3687,7 @@ export default function ScrumBoardView() {
               }
               isCardLocked={isCardLocked}
               getCardLock={getCardLock}
+              storyKeyByCardId={storyKeyByCardId}
             />
           ))}
 

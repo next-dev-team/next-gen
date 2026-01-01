@@ -1229,6 +1229,77 @@ async function handleUpdateEpic(data) {
   return { state: next };
 }
 
+const normalizeBoardName = (name) => String(name || "").trim().toLowerCase();
+
+const findBoardByName = (state, boardName) => {
+  const target = normalizeBoardName(boardName);
+  if (!target) return null;
+  return state.boards.find((b) => normalizeBoardName(b.name) === target) || null;
+};
+
+const flattenBoardCards = (board) => {
+  const toMs = (iso) => {
+    const ms = Date.parse(String(iso || ""));
+    return Number.isFinite(ms) ? ms : 0;
+  };
+
+  const rows = [];
+  for (const list of board.lists || []) {
+    for (const card of list.cards || []) {
+      rows.push({
+        card,
+        list,
+        createdAtMs: toMs(card.createdAt),
+      });
+    }
+  }
+
+  rows.sort((a, b) =>
+    a.createdAtMs !== b.createdAtMs
+      ? a.createdAtMs - b.createdAtMs
+      : String(a.card.id).localeCompare(String(b.card.id))
+  );
+  return rows;
+};
+
+const resolveStoryByIdentifier = (state, id) => {
+  const raw = String(id || "").trim();
+  if (!raw) throw new Error("id is required");
+
+  const match = raw.match(/^(.+?):(\d+)$/);
+  if (match) {
+    const boardName = match[1];
+    const number = Number.parseInt(match[2], 10);
+    if (!Number.isFinite(number) || number <= 0)
+      throw new Error("Invalid story number");
+
+    const board = findBoardByName(state, boardName);
+    if (!board) throw new Error("Board not found");
+    const rows = flattenBoardCards(board);
+    const row = rows[number - 1];
+    if (!row) throw new Error("Story not found");
+    return {
+      story: row.card,
+      list: row.list,
+      board,
+      storyKey: `${board.name}:${number}`,
+    };
+  }
+
+  for (const board of state.boards || []) {
+    for (const list of board.lists || []) {
+      const card = (list.cards || []).find((c) => c.id === raw);
+      if (!card) continue;
+      const rows = flattenBoardCards(board);
+      const idx = rows.findIndex((r) => r.card.id === raw);
+      const storyKey = idx >= 0 ? `${board.name}:${idx + 1}` : undefined;
+      return { story: card, list, board, storyKey };
+    }
+  }
+
+  throw new Error("Story not found");
+};
+
 // ============ MCP Server (stdio) ============
 const main = async (enableStdio = true, logger = console) => {
   const [{ McpServer }, { StdioServerTransport }, zod] = await Promise.all([
@@ -1552,6 +1623,42 @@ const main = async (enableStdio = true, logger = console) => {
       const stories = list?.cards || [];
 
       return withStructured({ stories, count: stories.length, status });
+    }
+  );
+
+  server.registerTool(
+    "scrum_get_story_by_id",
+    {
+      title: "Get Story by Id",
+      description:
+        "Get a story by id. Supports either a human-friendly id like 'next-dev:12' or a card UUID.",
+      inputSchema: {
+        id: z.string(),
+      },
+      outputSchema: {
+        story: z.any().nullable(),
+        board: z.any().nullable(),
+        list: z.any().nullable(),
+        storyKey: z.string().optional(),
+      },
+    },
+    async ({ id }) => {
+      const state = getState();
+      const resolved = resolveStoryByIdentifier(state, id);
+      return withStructured({
+        story: resolved.story,
+        board: resolved.board
+          ? { id: resolved.board.id, name: resolved.board.name }
+          : null,
+        list: resolved.list
+          ? {
+              id: resolved.list.id,
+              name: resolved.list.name,
+              statusId: resolved.list.statusId || null,
+            }
+          : null,
+        storyKey: resolved.storyKey,
+      });
     }
   );
 
