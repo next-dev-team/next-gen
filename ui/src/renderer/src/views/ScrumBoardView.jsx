@@ -547,8 +547,7 @@ const ScrumCard = ({
       const text = `scrum-kanban/scrum_get_story_by_id here is id: ${storyKey}`;
       try {
         await navigator.clipboard.writeText(text);
-      } catch {
-      }
+      } catch {}
     },
     [storyKey]
   );
@@ -582,7 +581,7 @@ const ScrumCard = ({
                   variant="outline"
                   className="text-[10px] px-1.5 py-0 tabular-nums shrink-0"
                 >
-                  {storyKey}
+                  #{storyKey.split(":").pop()}
                 </Badge>
               )}
               <span className="font-medium text-sm text-foreground leading-snug line-clamp-2">
