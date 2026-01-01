@@ -134,28 +134,239 @@ const SCRUM_OVERVIEW_TAB_STORAGE_KEY = "scrum-overview-tab-v1";
 const SCRUM_RECENT_PROJECTS_STORAGE_KEY = "scrum-recent-projects-v1";
 const SCRUM_MAX_RECENT_PROJECTS = 8;
 
-const BMAD_AGENT_OPTIONS = [
+// BMAD v6 Agents - matching the actual bmm module agents
+const BMAD_V6_AGENTS = [
   {
-    id: "scrum-manager",
-    label: "🤖 Scrum Manager",
-    description: "Full-featured sprint management and story lifecycle",
+    id: "analyst",
+    label: "🔍 Analyst",
+    description: "Brainstorming, research, and product brief creation",
+    phase: "analysis",
   },
   {
-    id: "scrum-quick",
-    label: "⚡ Quick Runner",
-    description: "Fast operations: triage, move stories, quick updates",
+    id: "pm",
+    label: "📋 Product Manager",
+    description: "PRD creation, project planning, and requirement definition",
+    phase: "planning",
   },
   {
-    id: "scrum-analytics",
-    label: "📊 Analytics Agent",
-    description: "Metrics, burndown, velocity, and reporting",
+    id: "ux-designer",
+    label: "🎨 UX Designer",
+    description: "User experience design, wireframes, and user flows",
+    phase: "planning",
   },
   {
-    id: "scrum-team",
-    label: "👥 Team Coordinator",
-    description: "Collaboration, ceremonies, assignments, blockers",
+    id: "architect",
+    label: "🏗️ Architect",
+    description: "Solution architecture, tech specs, and system design",
+    phase: "solutioning",
+  },
+  {
+    id: "sm",
+    label: "📊 Scrum Master",
+    description: "Sprint planning, story management, and team coordination",
+    phase: "implementation",
+  },
+  {
+    id: "dev",
+    label: "💻 Developer",
+    description: "Story implementation, code review, and development",
+    phase: "implementation",
+  },
+  {
+    id: "tech-writer",
+    label: "📝 Tech Writer",
+    description: "Documentation, project context, and technical writing",
+    phase: "implementation",
+  },
+  {
+    id: "tea",
+    label: "🧪 Test Engineer",
+    description: "Test planning, QA, and acceptance criteria validation",
+    phase: "implementation",
+  },
+  {
+    id: "quick-flow-solo-dev",
+    label: "⚡ Quick Flow (Solo)",
+    description: "Streamlined solo developer workflow for small projects",
+    phase: "all",
+  },
+  {
+    id: "bmad-master",
+    label: "🎯 BMAD Master",
+    description: "Master orchestrator for multi-agent coordination",
+    phase: "all",
   },
 ];
+
+// BMAD v6 Phases - proper 4-phase structure
+const BMAD_V6_PHASES = [
+  {
+    id: "phase-1",
+    name: "Analysis",
+    icon: "🔍",
+    description: "Research and product brief creation",
+    required: false,
+    agent: "analyst",
+    workflows: ["research", "create-product-brief"],
+    outputs: ["brainstorm-analysis.md", "product-brief.md"],
+  },
+  {
+    id: "phase-2",
+    name: "Planning",
+    icon: "📋",
+    description: "PRD and UX design (PRD required)",
+    required: true,
+    agent: "pm",
+    workflows: ["prd", "create-ux-design"],
+    outputs: ["PRD.md", "ux-design.md"],
+  },
+  {
+    id: "phase-3",
+    name: "Solutioning",
+    icon: "🏗️",
+    description: "Architecture and story creation",
+    required: false,
+    agent: "architect",
+    workflows: [
+      "create-architecture",
+      "create-epics-and-stories",
+      "check-implementation-readiness",
+    ],
+    outputs: ["solution-architecture.md", "epics-and-stories.md"],
+  },
+  {
+    id: "phase-4",
+    name: "Implementation",
+    icon: "💻",
+    description: "Sprint execution and delivery",
+    required: false,
+    agent: "sm",
+    workflows: ["sprint-planning", "dev-story", "code-review", "retrospective"],
+    outputs: [],
+  },
+];
+
+// BMAD v6 Workflows organized by phase
+const BMAD_V6_WORKFLOWS = [
+  // Phase 1: Analysis
+  {
+    id: "research",
+    name: "Research",
+    phase: "phase-1",
+    agent: "analyst",
+    description: "Market and technical research",
+  },
+  {
+    id: "create-product-brief",
+    name: "Product Brief",
+    phase: "phase-1",
+    agent: "analyst",
+    description: "Create product concept brief",
+  },
+  // Phase 2: Planning
+  {
+    id: "prd",
+    name: "PRD",
+    phase: "phase-2",
+    agent: "pm",
+    description: "Product Requirements Document (required)",
+    required: true,
+  },
+  {
+    id: "create-ux-design",
+    name: "UX Design",
+    phase: "phase-2",
+    agent: "ux-designer",
+    description: "User experience design",
+  },
+  // Phase 3: Solutioning
+  {
+    id: "create-architecture",
+    name: "Architecture",
+    phase: "phase-3",
+    agent: "architect",
+    description: "Solution architecture design",
+  },
+  {
+    id: "create-epics-and-stories",
+    name: "Epics & Stories",
+    phase: "phase-3",
+    agent: "architect",
+    description: "Create epics and user stories",
+  },
+  {
+    id: "check-implementation-readiness",
+    name: "Implementation Readiness",
+    phase: "phase-3",
+    agent: "architect",
+    description: "Verify ready for implementation",
+  },
+  // Phase 4: Implementation
+  {
+    id: "sprint-planning",
+    name: "Sprint Planning",
+    phase: "phase-4",
+    agent: "sm",
+    description: "Plan sprint backlog",
+  },
+  {
+    id: "dev-story",
+    name: "Develop Story",
+    phase: "phase-4",
+    agent: "dev",
+    description: "Implement a user story",
+  },
+  {
+    id: "code-review",
+    name: "Code Review",
+    phase: "phase-4",
+    agent: "dev",
+    description: "Review and approve code changes",
+  },
+  {
+    id: "retrospective",
+    name: "Retrospective",
+    phase: "phase-4",
+    agent: "sm",
+    description: "Sprint retrospective",
+  },
+  // Quick Flow
+  {
+    id: "bmad-quick-flow",
+    name: "Quick Flow",
+    phase: "all",
+    agent: "quick-flow-solo-dev",
+    description: "Streamlined solo dev workflow",
+  },
+  // Utilities
+  {
+    id: "document-project",
+    name: "Document Project",
+    phase: "all",
+    agent: "tech-writer",
+    description: "Generate project documentation",
+  },
+  {
+    id: "generate-project-context",
+    name: "Generate Context",
+    phase: "all",
+    agent: "bmad-master",
+    description: "Generate project context file",
+  },
+];
+
+// BMAD Installation Status types
+const BMAD_INSTALL_STATUS = {
+  NOT_CHECKED: "not-checked",
+  CHECKING: "checking",
+  NOT_INSTALLED: "not-installed",
+  INSTALLED: "installed",
+  PARTIAL: "partial",
+  ERROR: "error",
+};
+
+// Legacy agent options for backward compatibility
+const BMAD_AGENT_OPTIONS = BMAD_V6_AGENTS;
 
 const BMAD_IDE_OPTIONS = [
   { id: "claude-code", label: "Claude Code" },
@@ -505,10 +716,10 @@ const recommendAgent = ({ teamSize, sprintLength, autoSync }) => {
   const sprint = Number(sprintLength);
   const sync = Boolean(autoSync);
 
-  if (Number.isFinite(size) && size >= 8) return "scrum-team";
-  if (Number.isFinite(sprint) && sprint >= 21) return "scrum-manager";
-  if (!sync) return "scrum-quick";
-  return "scrum-manager";
+  if (Number.isFinite(size) && size >= 8) return "bmad-master";
+  if (Number.isFinite(sprint) && sprint >= 21) return "sm";
+  if (!sync) return "quick-flow-solo-dev";
+  return "sm";
 };
 
 const renderMarkdownInline = (text) => {
@@ -1949,6 +2160,25 @@ const AgentAssistDialog = ({
   const [newContextPath, setNewContextPath] = React.useState("");
   const [newContextCategory, setNewContextCategory] = React.useState("custom");
 
+  // BMAD v6 Installation and Phase Management
+  const [bmadInstallStatus, setBmadInstallStatus] = React.useState(
+    BMAD_INSTALL_STATUS.NOT_CHECKED
+  );
+  const [detectedBmadModules, setDetectedBmadModules] = React.useState({
+    core: false,
+    bmm: false,
+    _config: false,
+  });
+  const [currentPhase, setCurrentPhase] = React.useState("phase-1");
+  const [phaseCompletion, setPhaseCompletion] = React.useState({
+    "phase-1": { completed: false, outputs: [] },
+    "phase-2": { completed: false, outputs: [] },
+    "phase-3": { completed: false, outputs: [] },
+    "phase-4": { completed: false, outputs: [] },
+  });
+  const [selectedWorkflow, setSelectedWorkflow] = React.useState("prd");
+  const [installBusy, setInstallBusy] = React.useState(false);
+
   const [mcpRootPath, setMcpRootPath] = React.useState("");
 
   const recommendedAgent = React.useMemo(() => {
@@ -2237,6 +2467,135 @@ const AgentAssistDialog = ({
     detectContextFiles();
   }, [activeTab, detectContextFiles, hasProjectRoot, open]);
 
+  // Check BMAD v6 installation status
+  const checkBmadInstallation = React.useCallback(async () => {
+    if (!window.electronAPI?.checkPathExists) return;
+    const root = String(projectRoot || "").trim();
+    if (!root) {
+      setBmadInstallStatus(BMAD_INSTALL_STATUS.NOT_CHECKED);
+      return;
+    }
+
+    setBmadInstallStatus(BMAD_INSTALL_STATUS.CHECKING);
+    try {
+      // Check for BMAD v6 folder structure
+      const checks = {
+        _bmad: await window.electronAPI.checkPathExists(`${root}/_bmad`),
+        core: await window.electronAPI.checkPathExists(`${root}/_bmad/core`),
+        bmm: await window.electronAPI.checkPathExists(`${root}/_bmad/bmm`),
+        _config: await window.electronAPI.checkPathExists(
+          `${root}/_bmad/_config`
+        ),
+        _bmadOutput: await window.electronAPI.checkPathExists(
+          `${root}/_bmad-output`
+        ),
+      };
+
+      setDetectedBmadModules({
+        core: checks.core,
+        bmm: checks.bmm,
+        _config: checks._config,
+      });
+
+      if (checks._bmad && checks.core && checks.bmm) {
+        setBmadInstallStatus(BMAD_INSTALL_STATUS.INSTALLED);
+      } else if (checks._bmad || checks._bmadOutput) {
+        setBmadInstallStatus(BMAD_INSTALL_STATUS.PARTIAL);
+      } else {
+        setBmadInstallStatus(BMAD_INSTALL_STATUS.NOT_INSTALLED);
+      }
+    } catch (err) {
+      console.error("BMAD check failed:", err);
+      setBmadInstallStatus(BMAD_INSTALL_STATUS.ERROR);
+    }
+  }, [projectRoot]);
+
+  // Check phase completion based on output files
+  const checkPhaseCompletion = React.useCallback(async () => {
+    if (!window.electronAPI?.checkPathExists) return;
+    const root = String(projectRoot || "").trim();
+    if (!root) return;
+
+    const newCompletion = { ...phaseCompletion };
+
+    for (const phase of BMAD_V6_PHASES) {
+      const existingOutputs = [];
+      for (const output of phase.outputs) {
+        const exists = await window.electronAPI.checkPathExists(
+          `${root}/_bmad-output/${output}`
+        );
+        if (exists) existingOutputs.push(output);
+      }
+      newCompletion[phase.id] = {
+        completed:
+          phase.outputs.length > 0 &&
+          existingOutputs.length === phase.outputs.length,
+        outputs: existingOutputs,
+      };
+    }
+
+    // Special case: PRD.md is the key requirement for phase-2
+    const prdExists = await window.electronAPI.checkPathExists(
+      `${root}/_bmad-output/PRD.md`
+    );
+    if (prdExists) {
+      newCompletion["phase-2"] = {
+        ...newCompletion["phase-2"],
+        outputs: [...newCompletion["phase-2"].outputs, "PRD.md"],
+        completed: true,
+      };
+    }
+
+    setPhaseCompletion(newCompletion);
+
+    // Auto-set current phase based on completion
+    if (!prdExists) {
+      setCurrentPhase("phase-1"); // Need to work on analysis/planning
+    } else if (!newCompletion["phase-3"].completed) {
+      setCurrentPhase("phase-3"); // Ready for solutioning
+    } else {
+      setCurrentPhase("phase-4"); // Ready for implementation
+    }
+  }, [phaseCompletion, projectRoot]);
+
+  // Run BMAD installation
+  const installBmad = React.useCallback(async () => {
+    if (!window.electronAPI?.runBmadCli) return;
+    if (!hasProjectRoot) return;
+
+    setInstallBusy(true);
+    try {
+      await window.electronAPI.runBmadCli({
+        cwd: projectRoot,
+        mode: setup.bmadMode || "npx",
+        action: "install",
+        verbose: true,
+        autoAcceptDefaults: true,
+      });
+      // Re-check installation after install
+      await checkBmadInstallation();
+      await checkPhaseCompletion();
+    } catch (err) {
+      console.error("BMAD install failed:", err);
+    } finally {
+      setInstallBusy(false);
+    }
+  }, [
+    checkBmadInstallation,
+    checkPhaseCompletion,
+    hasProjectRoot,
+    projectRoot,
+    setup.bmadMode,
+  ]);
+
+  // Auto-check BMAD installation when dialog opens
+  React.useEffect(() => {
+    if (!open) return;
+    if (!hasProjectRoot) return;
+    checkBmadInstallation();
+    checkPhaseCompletion();
+  }, [checkBmadInstallation, checkPhaseCompletion, hasProjectRoot, open]);
+
   const addContextDoc = React.useCallback(() => {
     const label = String(newContextLabel || "").trim();
     const rel = String(newContextPath || "").trim();
@@ -2354,23 +2713,10 @@ const AgentAssistDialog = ({
   }, [workflowDataPath]);
 
   const wizardWorkflowOptions = React.useMemo(() => {
-    if (wizardPhase === "phase-2") {
-      return [{ value: "prd", label: "prd" }];
-    }
-    if (wizardPhase === "phase-3") {
-      return [
-        { value: "solution-architecture", label: "solution-architecture" },
-        { value: "tech-spec", label: "tech-spec" },
-        { value: "create-story", label: "create-story" },
-        { value: "dev-story", label: "dev-story" },
-      ];
-    }
-    return [
-      { value: "brainstorm-project", label: "brainstorm-project" },
-      { value: "research", label: "research" },
-      { value: "product-brief", label: "product-brief" },
-      { value: "brainstorming", label: "brainstorming" },
-    ];
+    const flows = BMAD_V6_WORKFLOWS.filter(
+      (w) => w.phase === wizardPhase || w.phase === "all"
+    );
+    return flows.map((f) => ({ value: f.id, label: f.name }));
   }, [wizardPhase]);
 
   const resolvedWizardWorkflow = React.useMemo(() => {
@@ -2719,13 +3065,276 @@ const AgentAssistDialog = ({
             <ScrollArea className="h-full">
               <div className="grid gap-4 py-4">
                 <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center justify-between gap-3 mb-4">
                     <div>
-                      <div className="text-sm font-medium">BMAD Method</div>
-                      <div className="text-xs text-muted-foreground">
-                        Install and check status in your project root
+                      <div className="text-sm font-medium flex items-center gap-2">
+                        🎯 BMAD v6 Method
+                        {bmadInstallStatus ===
+                          BMAD_INSTALL_STATUS.INSTALLED && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-green-500/20 text-green-400"
+                          >
+                            Installed
+                          </Badge>
+                        )}
+                        {bmadInstallStatus === BMAD_INSTALL_STATUS.PARTIAL && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-yellow-500/20 text-yellow-400"
+                          >
+                            Partial
+                          </Badge>
+                        )}
+                        {bmadInstallStatus ===
+                          BMAD_INSTALL_STATUS.NOT_INSTALLED && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-red-500/20 text-red-400"
+                          >
+                            Not Installed
+                          </Badge>
+                        )}
+                        {bmadInstallStatus === BMAD_INSTALL_STATUS.CHECKING && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-blue-500/20 text-blue-400"
+                          >
+                            Checking...
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {hasProjectRoot
+                          ? projectRoot
+                          : "Select a project root to begin"}
                       </div>
                     </div>
+                    <div className="flex items-center gap-2">
+                      {bmadInstallStatus !== BMAD_INSTALL_STATUS.INSTALLED && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!hasProjectRoot || installBusy || bmadBusy}
+                          onClick={() => installBmad()}
+                          className="gap-2"
+                        >
+                          {installBusy ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Plus className="h-4 w-4" />
+                          )}
+                          {installBusy ? "Installing..." : "Setup BMAD"}
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!hasProjectRoot || installBusy}
+                        onClick={() => {
+                          checkBmadInstallation();
+                          checkPhaseCompletion();
+                        }}
+                        className="gap-2"
+                      >
+                        <RefreshCw
+                          className={cn(
+                            "h-4 w-4",
+                            bmadInstallStatus ===
+                              BMAD_INSTALL_STATUS.CHECKING && "animate-spin"
+                          )}
+                        />
+                        Sync
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Module Status */}
+                  {hasProjectRoot &&
+                    bmadInstallStatus !== BMAD_INSTALL_STATUS.NOT_CHECKED && (
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        {[
+                          { key: "core", label: "Core", icon: "🎯" },
+                          { key: "bmm", label: "BMM Module", icon: "📋" },
+                          { key: "_config", label: "Config", icon: "⚙️" },
+                        ].map((mod) => (
+                          <div
+                            key={mod.key}
+                            className={cn(
+                              "rounded-lg border p-2 text-center transition-colors",
+                              detectedBmadModules[mod.key]
+                                ? "border-green-500/30 bg-green-500/5"
+                                : "border-border/30 bg-background/30"
+                            )}
+                          >
+                            <div className="text-lg">{mod.icon}</div>
+                            <div className="text-[10px] font-medium">
+                              {mod.label}
+                            </div>
+                            <div
+                              className={cn(
+                                "text-[9px]",
+                                detectedBmadModules[mod.key]
+                                  ? "text-green-400"
+                                  : "text-muted-foreground"
+                              )}
+                            >
+                              {detectedBmadModules[mod.key]
+                                ? "✓ Found"
+                                : "✗ Missing"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                  {/* Phase Progress */}
+                  <div className="mb-4">
+                    <div className="text-xs font-medium mb-2">
+                      BMAD v6 Workflow Phases
+                    </div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {BMAD_V6_PHASES.map((phase, idx) => {
+                        const completion = phaseCompletion[phase.id];
+                        const isActive = currentPhase === phase.id;
+                        return (
+                          <div
+                            key={phase.id}
+                            className={cn(
+                              "rounded-lg border p-2 cursor-pointer transition-all",
+                              "hover:border-primary/50",
+                              isActive && "border-primary bg-primary/10",
+                              completion?.completed &&
+                                "border-green-500/50 bg-green-500/5",
+                              !isActive &&
+                                !completion?.completed &&
+                                "border-border/30 bg-background/30"
+                            )}
+                            onClick={() => setCurrentPhase(phase.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm">{phase.icon}</span>
+                              {completion?.completed && (
+                                <CheckCircle2 className="h-3 w-3 text-green-500" />
+                              )}
+                            </div>
+                            <div className="text-[10px] font-medium mt-1">
+                              {phase.name}
+                            </div>
+                            <div className="text-[9px] text-muted-foreground">
+                              {phase.required ? "Required" : "Optional"}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Current Phase Details */}
+                  {(() => {
+                    const phase = BMAD_V6_PHASES.find(
+                      (p) => p.id === currentPhase
+                    );
+                    if (!phase) return null;
+                    const agent = BMAD_V6_AGENTS.find(
+                      (a) => a.id === phase.agent
+                    );
+                    const workflows = BMAD_V6_WORKFLOWS.filter(
+                      (w) => w.phase === currentPhase || w.phase === "all"
+                    );
+                    return (
+                      <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div>
+                            <div className="text-sm font-medium flex items-center gap-2">
+                              {phase.icon} {phase.name}
+                              {phase.required && (
+                                <Badge
+                                  variant="secondary"
+                                  className="text-[9px]"
+                                >
+                                  Required
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {phase.description}
+                            </div>
+                          </div>
+                          {agent && (
+                            <Badge variant="outline" className="text-[10px]">
+                              {agent.label}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="text-[10px] font-medium mt-3 mb-1">
+                          Available Workflows:
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {workflows.map((wf) => (
+                            <Button
+                              key={wf.id}
+                              type="button"
+                              size="sm"
+                              variant={
+                                selectedWorkflow === wf.id
+                                  ? "default"
+                                  : "outline"
+                              }
+                              className="h-6 text-[10px] px-2"
+                              onClick={() => setSelectedWorkflow(wf.id)}
+                            >
+                              {wf.name}
+                            </Button>
+                          ))}
+                        </div>
+                        {selectedWorkflow &&
+                          (() => {
+                            const wf = BMAD_V6_WORKFLOWS.find(
+                              (w) => w.id === selectedWorkflow
+                            );
+                            if (!wf) return null;
+                            const wfAgent = BMAD_V6_AGENTS.find(
+                              (a) => a.id === wf.agent
+                            );
+                            const command = `@${wf.agent} *${wf.id}`;
+                            return (
+                              <div className="mt-3 p-2 rounded border border-border/30 bg-black/50">
+                                <div className="flex items-center justify-between gap-2 mb-1">
+                                  <div className="text-[10px] text-muted-foreground">
+                                    {wf.description}
+                                  </div>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 text-[10px] gap-1"
+                                    onClick={() =>
+                                      copyText(`wf-${wf.id}`, command)
+                                    }
+                                  >
+                                    <Copy className="h-3 w-3" />
+                                    {copiedKey === `wf-${wf.id}`
+                                      ? "Copied!"
+                                      : "Copy"}
+                                  </Button>
+                                </div>
+                                <code className="text-xs text-green-400 font-mono">
+                                  {command}
+                                </code>
+                              </div>
+                            );
+                          })()}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* CLI Logs */}
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="text-sm font-medium">BMAD CLI Output</div>
                     <div className="flex items-center gap-2">
                       <Select
                         value={String(setup.bmadMode || "npx")}
@@ -2733,7 +3342,7 @@ const AgentAssistDialog = ({
                           onChangeSetup({ ...setup, bmadMode: v })
                         }
                       >
-                        <SelectTrigger className="w-[120px] bg-background/50">
+                        <SelectTrigger className="w-[100px] h-8 bg-background/50 text-xs">
                           <SelectValue placeholder="Mode" />
                         </SelectTrigger>
                         <SelectContent>
@@ -2752,15 +3361,7 @@ const AgentAssistDialog = ({
                       </Button>
                       <Button
                         type="button"
-                        size="sm"
-                        disabled={!hasProjectRoot || bmadBusy}
-                        onClick={() => runBmadAction("install")}
-                      >
-                        Install
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
+                        variant="destructive"
                         size="sm"
                         disabled={!bmadBusy}
                         onClick={() => stopBmad()}
@@ -2771,7 +3372,7 @@ const AgentAssistDialog = ({
                   </div>
 
                   <div className="rounded-lg border border-border/50 bg-black/90 p-3">
-                    <ScrollArea className="h-[140px]">
+                    <ScrollArea className="h-[100px]">
                       <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
                         {bmadLogs.length
                           ? bmadLogs
@@ -2783,7 +3384,7 @@ const AgentAssistDialog = ({
                   </div>
 
                   {bmadBusy && (
-                    <div className="mt-3 flex items-center gap-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <Input
                         value={bmadInput}
                         onChange={(e) => setBmadInput(e.target.value)}
@@ -2793,8 +3394,8 @@ const AgentAssistDialog = ({
                             sendBmadInput();
                           }
                         }}
-                        placeholder="Type a response for the BMAD installer and press Enter"
-                        className="bg-background/50"
+                        placeholder="Type response and press Enter"
+                        className="bg-background/50 text-xs"
                         disabled={!bmadBusy}
                       />
                       <Button
@@ -2809,480 +3410,381 @@ const AgentAssistDialog = ({
                   )}
                 </div>
 
-                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div>
-                      <div className="text-sm font-medium">Workflows</div>
-                      <div className="text-xs text-muted-foreground">
-                        Copy and run inside your BMAD agent chat (not the CLI)
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="gap-2"
-                      disabled={!activeWorkflowCopyText}
-                      onClick={() =>
-                        copyText("workflow-active", activeWorkflowCopyText)
-                      }
-                    >
-                      <Copy className="h-4 w-4" />
-                      {copiedKey === "workflow-active" ? "Copied" : "Copy"}
-                    </Button>
-                  </div>
+                <div className="mt-4">
+                  <Tabs value={workflowsTab} onValueChange={setWorkflowsTab}>
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="wizard">Wizard</TabsTrigger>
+                      <TabsTrigger value="advanced">Advanced</TabsTrigger>
+                      <TabsTrigger value="preview">Preview</TabsTrigger>
+                    </TabsList>
 
-                  <div className="rounded-lg border border-border/50 bg-background/40 p-3">
-                    <div className="grid gap-3">
-                      <div className="grid gap-1">
-                        <div className="text-xs font-medium text-foreground">
-                          Phase 1 (Analysis) - Optional workflows
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          brainstorm-project - Ideation
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          research - Market/tech research
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          product-brief - Concept definition
-                        </div>
-                      </div>
-
-                      <div className="grid gap-1">
-                        <div className="text-xs font-medium text-foreground">
-                          Phase 2 (Planning) - Required
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          prd - Create Product Requirements Document
-                        </div>
-                      </div>
-
-                      <div className="grid gap-1">
-                        <div className="text-xs font-medium text-foreground">
-                          Phase 3 (Development) - Architecture & implementation
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-3">
-                    <div className="text-xs font-medium text-foreground mb-2">
-                      Example Commands
-                    </div>
-                    <div className="rounded-lg border border-border/50 bg-black/90 p-3">
-                      <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
-                        {workflowExamples
-                          .map((ex) => String(ex.command || ""))
-                          .join("\n")}
-                      </pre>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {workflowExamples.map((ex) => (
-                        <Button
-                          key={ex.key}
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="gap-2"
-                          onClick={() => copyText(ex.key, ex.command)}
-                        >
-                          <Copy className="h-4 w-4" />
-                          {copiedKey === ex.key ? "Copied" : ex.label}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    <Tabs value={workflowsTab} onValueChange={setWorkflowsTab}>
-                      <TabsList className="grid w-full grid-cols-3">
-                        <TabsTrigger value="wizard">Wizard</TabsTrigger>
-                        <TabsTrigger value="advanced">Advanced</TabsTrigger>
-                        <TabsTrigger value="preview">Preview</TabsTrigger>
-                      </TabsList>
-
-                      <TabsContent value="wizard" className="mt-4">
-                        <div className="grid gap-3">
-                          <div className="grid sm:grid-cols-3 gap-3">
-                            <div>
-                              <Label className="text-xs text-muted-foreground">
-                                Step 1: Phase
-                              </Label>
-                              <Select
-                                value={String(wizardPhase)}
-                                onValueChange={(v) => setWizardPhase(v)}
-                              >
-                                <SelectTrigger className="w-full bg-background/50">
-                                  <SelectValue placeholder="Phase" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="phase-1">
-                                    Phase 1 (Analysis)
+                    <TabsContent value="wizard" className="mt-4">
+                      <div className="grid gap-3">
+                        <div className="grid sm:grid-cols-3 gap-3">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">
+                              Step 1: Phase
+                            </Label>
+                            <Select
+                              value={String(wizardPhase)}
+                              onValueChange={(v) => setWizardPhase(v)}
+                            >
+                              <SelectTrigger className="w-full bg-background/50">
+                                <SelectValue placeholder="Phase" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {BMAD_V6_PHASES.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name}
                                   </SelectItem>
-                                  <SelectItem value="phase-2">
-                                    Phase 2 (Planning)
-                                  </SelectItem>
-                                  <SelectItem value="phase-3">
-                                    Phase 3 (Development)
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="sm:col-span-2">
-                              <Label className="text-xs text-muted-foreground">
-                                Step 2: Workflow
-                              </Label>
-                              <Select
-                                value={String(resolvedWizardWorkflow)}
-                                onValueChange={(v) => setWizardWorkflow(v)}
-                              >
-                                <SelectTrigger className="w-full bg-background/50">
-                                  <SelectValue placeholder="Workflow" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {wizardWorkflowOptions.map((opt) => (
-                                    <SelectItem
-                                      key={opt.value}
-                                      value={opt.value}
-                                    >
-                                      {opt.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
 
-                          {resolvedWizardWorkflow === "research" && (
-                            <div className="grid gap-3">
-                              <div className="grid sm:grid-cols-3 gap-3">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">
-                                    Research type
-                                  </Label>
-                                  <Select
-                                    value={String(wizardResearchType)}
-                                    onValueChange={(v) =>
-                                      setWizardResearchType(v)
-                                    }
-                                  >
-                                    <SelectTrigger className="w-full bg-background/50">
-                                      <SelectValue placeholder="Type" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="market">
-                                        market
-                                      </SelectItem>
-                                      <SelectItem value="technical">
-                                        technical
-                                      </SelectItem>
-                                      <SelectItem value="deep_prompt">
-                                        deep_prompt
-                                      </SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                              <div className="grid sm:grid-cols-3 gap-3">
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">
-                                    Input 1
-                                  </Label>
-                                  <Input
-                                    value={wizardResearchInputs[0] || ""}
-                                    onChange={(e) => {
-                                      const next = [...wizardResearchInputs];
-                                      next[0] = e.target.value;
-                                      setWizardResearchInputs(next);
-                                    }}
-                                    placeholder="product-brief.md"
-                                    className="bg-background/50"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">
-                                    Input 2
-                                  </Label>
-                                  <Input
-                                    value={wizardResearchInputs[1] || ""}
-                                    onChange={(e) => {
-                                      const next = [...wizardResearchInputs];
-                                      next[1] = e.target.value;
-                                      setWizardResearchInputs(next);
-                                    }}
-                                    placeholder="competitor-list.md"
-                                    className="bg-background/50"
-                                  />
-                                </div>
-                                <div>
-                                  <Label className="text-xs text-muted-foreground">
-                                    Input 3
-                                  </Label>
-                                  <Input
-                                    value={wizardResearchInputs[2] || ""}
-                                    onChange={(e) => {
-                                      const next = [...wizardResearchInputs];
-                                      next[2] = e.target.value;
-                                      setWizardResearchInputs(next);
-                                    }}
-                                    placeholder="requirements.md"
-                                    className="bg-background/50"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          <div className="sm:col-span-2">
+                            <Label className="text-xs text-muted-foreground">
+                              Step 2: Workflow
+                            </Label>
+                            <Select
+                              value={String(resolvedWizardWorkflow)}
+                              onValueChange={(v) => setWizardWorkflow(v)}
+                            >
+                              <SelectTrigger className="w-full bg-background/50">
+                                <SelectValue placeholder="Workflow" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {wizardWorkflowOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
 
-                          {resolvedWizardWorkflow === "product-brief" && (
-                            <div className="grid sm:grid-cols-2 gap-3">
+                        {resolvedWizardWorkflow === "research" && (
+                          <div className="grid gap-3">
+                            <div className="grid sm:grid-cols-3 gap-3">
                               <div>
                                 <Label className="text-xs text-muted-foreground">
-                                  Optional input document
+                                  Research type
+                                </Label>
+                                <Select
+                                  value={String(wizardResearchType)}
+                                  onValueChange={(v) =>
+                                    setWizardResearchType(v)
+                                  }
+                                >
+                                  <SelectTrigger className="w-full bg-background/50">
+                                    <SelectValue placeholder="Type" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="market">
+                                      market
+                                    </SelectItem>
+                                    <SelectItem value="technical">
+                                      technical
+                                    </SelectItem>
+                                    <SelectItem value="deep_prompt">
+                                      deep_prompt
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div className="grid sm:grid-cols-3 gap-3">
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Input 1
                                 </Label>
                                 <Input
-                                  value={wizardProductBriefInput}
-                                  onChange={(e) =>
-                                    setWizardProductBriefInput(e.target.value)
-                                  }
-                                  placeholder="market-research.md"
+                                  value={wizardResearchInputs[0] || ""}
+                                  onChange={(e) => {
+                                    const next = [...wizardResearchInputs];
+                                    next[0] = e.target.value;
+                                    setWizardResearchInputs(next);
+                                  }}
+                                  placeholder="product-brief.md"
+                                  className="bg-background/50"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Input 2
+                                </Label>
+                                <Input
+                                  value={wizardResearchInputs[1] || ""}
+                                  onChange={(e) => {
+                                    const next = [...wizardResearchInputs];
+                                    next[1] = e.target.value;
+                                    setWizardResearchInputs(next);
+                                  }}
+                                  placeholder="competitor-list.md"
+                                  className="bg-background/50"
+                                />
+                              </div>
+                              <div>
+                                <Label className="text-xs text-muted-foreground">
+                                  Input 3
+                                </Label>
+                                <Input
+                                  value={wizardResearchInputs[2] || ""}
+                                  onChange={(e) => {
+                                    const next = [...wizardResearchInputs];
+                                    next[2] = e.target.value;
+                                    setWizardResearchInputs(next);
+                                  }}
+                                  placeholder="requirements.md"
                                   className="bg-background/50"
                                 />
                               </div>
                             </div>
-                          )}
+                          </div>
+                        )}
 
-                          <div className="grid sm:grid-cols-3 gap-3">
-                            <div className="sm:col-span-2">
+                        {resolvedWizardWorkflow === "product-brief" && (
+                          <div className="grid sm:grid-cols-2 gap-3">
+                            <div>
                               <Label className="text-xs text-muted-foreground">
-                                Context file (for `--data` / preview)
+                                Optional input document
                               </Label>
                               <Input
-                                value={wizardContextPath}
+                                value={wizardProductBriefInput}
                                 onChange={(e) =>
-                                  setWizardContextPath(e.target.value)
+                                  setWizardProductBriefInput(e.target.value)
                                 }
-                                placeholder="_bmad-output/prd.md"
+                                placeholder="market-research.md"
                                 className="bg-background/50"
                               />
                             </div>
-                            <div className="flex items-end gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="gap-2"
-                                disabled={!wizardCommand}
-                                onClick={() =>
-                                  copyText("workflow-wizard", wizardCommand)
-                                }
-                              >
-                                <Copy className="h-4 w-4" />
-                                {copiedKey === "workflow-wizard"
-                                  ? "Copied"
-                                  : "Copy"}
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                disabled={
-                                  !hasProjectRoot ||
-                                  !wizardCliArgs.length ||
-                                  workflowRunBusy
-                                }
-                                onClick={() => runWizardWorkflow()}
-                              >
-                                {workflowRunBusy ? "Running" : "Run"}
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={!wizardContextPath}
-                                onClick={() => setWorkflowsTab("preview")}
-                              >
-                                Preview
-                              </Button>
-                            </div>
                           </div>
+                        )}
 
-                          <div className="rounded-lg border border-border/50 bg-black/90 p-3">
-                            <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
-                              {wizardCommand || "Select a workflow"}
-                            </pre>
+                        <div className="grid sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <Label className="text-xs text-muted-foreground">
+                              Context file (for `--data` / preview)
+                            </Label>
+                            <Input
+                              value={wizardContextPath}
+                              onChange={(e) =>
+                                setWizardContextPath(e.target.value)
+                              }
+                              placeholder="_bmad-output/prd.md"
+                              className="bg-background/50"
+                            />
+                          </div>
+                          <div className="flex items-end gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="gap-2"
+                              disabled={!wizardCommand}
+                              onClick={() =>
+                                copyText("workflow-wizard", wizardCommand)
+                              }
+                            >
+                              <Copy className="h-4 w-4" />
+                              {copiedKey === "workflow-wizard"
+                                ? "Copied"
+                                : "Copy"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={
+                                !hasProjectRoot ||
+                                !wizardCliArgs.length ||
+                                workflowRunBusy
+                              }
+                              onClick={() => runWizardWorkflow()}
+                            >
+                              {workflowRunBusy ? "Running" : "Run"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={!wizardContextPath}
+                              onClick={() => setWorkflowsTab("preview")}
+                            >
+                              Preview
+                            </Button>
                           </div>
                         </div>
-                      </TabsContent>
 
-                      <TabsContent value="advanced" className="mt-4">
-                        <div className="grid gap-3">
-                          <div className="grid sm:grid-cols-3 gap-3">
-                            <div className="sm:col-span-2">
+                        <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                          <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                            {wizardCommand || "Select a workflow"}
+                          </pre>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="advanced" className="mt-4">
+                      <div className="grid gap-3">
+                        <div className="grid sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <Label className="text-xs text-muted-foreground">
+                              Workflow
+                            </Label>
+                            <Select
+                              value={String(workflowName)}
+                              onValueChange={(v) => setWorkflowName(v)}
+                            >
+                              <SelectTrigger className="w-full bg-background/50">
+                                <SelectValue placeholder="Workflow" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="status">status</SelectItem>
+                                <SelectItem value="prd">prd</SelectItem>
+                                <SelectItem value="brainstorm-project">
+                                  brainstorm-project
+                                </SelectItem>
+                                <SelectItem value="research">
+                                  research
+                                </SelectItem>
+                                <SelectItem value="product-brief">
+                                  product-brief
+                                </SelectItem>
+                                <SelectItem value="brainstorming">
+                                  brainstorming
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="flex items-end justify-between gap-3">
+                            <div className="grid gap-1">
                               <Label className="text-xs text-muted-foreground">
-                                Workflow
+                                Include --data
                               </Label>
-                              <Select
-                                value={String(workflowName)}
-                                onValueChange={(v) => setWorkflowName(v)}
-                              >
-                                <SelectTrigger className="w-full bg-background/50">
-                                  <SelectValue placeholder="Workflow" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="status">status</SelectItem>
-                                  <SelectItem value="prd">prd</SelectItem>
-                                  <SelectItem value="brainstorm-project">
-                                    brainstorm-project
-                                  </SelectItem>
-                                  <SelectItem value="research">
-                                    research
-                                  </SelectItem>
-                                  <SelectItem value="product-brief">
-                                    product-brief
-                                  </SelectItem>
-                                  <SelectItem value="brainstorming">
-                                    brainstorming
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  checked={includeWorkflowData}
+                                  onCheckedChange={(v) =>
+                                    setIncludeWorkflowData(v)
+                                  }
+                                  disabled={!workflowDataPath}
+                                />
+                                <div className="text-xs text-muted-foreground truncate max-w-[220px]">
+                                  {workflowDataPath || "No PRD path"}
+                                </div>
+                              </div>
                             </div>
+                          </div>
+                        </div>
 
-                            <div className="flex items-end justify-between gap-3">
-                              <div className="grid gap-1">
-                                <Label className="text-xs text-muted-foreground">
-                                  Include --data
-                                </Label>
-                                <div className="flex items-center gap-2">
-                                  <Switch
-                                    checked={includeWorkflowData}
-                                    onCheckedChange={(v) =>
-                                      setIncludeWorkflowData(v)
+                        <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                          <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                            {workflowCommand}
+                          </pre>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="preview" className="mt-4">
+                      <div className="grid gap-3">
+                        <Tabs defaultValue="data">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="data">Data File</TabsTrigger>
+                            <TabsTrigger value="output">Run Output</TabsTrigger>
+                          </TabsList>
+
+                          <TabsContent value="data" className="mt-4">
+                            <div className="grid gap-3">
+                              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
+                                <div className="flex-1">
+                                  <Label className="text-xs text-muted-foreground">
+                                    Preview file (relative to project root)
+                                  </Label>
+                                  <Input
+                                    value={wizardContextPath}
+                                    onChange={(e) =>
+                                      setWizardContextPath(e.target.value)
                                     }
-                                    disabled={!workflowDataPath}
+                                    placeholder="_bmad-output/prd.md"
+                                    className="bg-background/50"
                                   />
-                                  <div className="text-xs text-muted-foreground truncate max-w-[220px]">
-                                    {workflowDataPath || "No PRD path"}
-                                  </div>
                                 </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  className="gap-2"
+                                  disabled={
+                                    !hasProjectRoot ||
+                                    !wizardContextPath ||
+                                    workflowPreviewBusy
+                                  }
+                                  onClick={() => refreshWorkflowPreview()}
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                  {workflowPreviewBusy ? "Loading" : "Refresh"}
+                                </Button>
+                              </div>
+
+                              {workflowPreviewError && (
+                                <div className="text-xs text-red-400">
+                                  {workflowPreviewError}
+                                </div>
+                              )}
+
+                              <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                                <ScrollArea className="h-[180px]">
+                                  <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                                    {workflowPreviewContent
+                                      ? workflowPreviewContent
+                                      : hasProjectRoot
+                                      ? "No preview loaded"
+                                      : "Select a project root first"}
+                                  </pre>
+                                </ScrollArea>
                               </div>
                             </div>
-                          </div>
+                          </TabsContent>
 
-                          <div className="rounded-lg border border-border/50 bg-black/90 p-3">
-                            <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
-                              {workflowCommand}
-                            </pre>
-                          </div>
-                        </div>
-                      </TabsContent>
-
-                      <TabsContent value="preview" className="mt-4">
-                        <div className="grid gap-3">
-                          <Tabs defaultValue="data">
-                            <TabsList className="grid w-full grid-cols-2">
-                              <TabsTrigger value="data">Data File</TabsTrigger>
-                              <TabsTrigger value="output">
-                                Run Output
-                              </TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent value="data" className="mt-4">
-                              <div className="grid gap-3">
-                                <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-                                  <div className="flex-1">
-                                    <Label className="text-xs text-muted-foreground">
-                                      Preview file (relative to project root)
-                                    </Label>
-                                    <Input
-                                      value={wizardContextPath}
-                                      onChange={(e) =>
-                                        setWizardContextPath(e.target.value)
-                                      }
-                                      placeholder="_bmad-output/prd.md"
-                                      className="bg-background/50"
-                                    />
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-2"
-                                    disabled={
-                                      !hasProjectRoot ||
-                                      !wizardContextPath ||
-                                      workflowPreviewBusy
-                                    }
-                                    onClick={() => refreshWorkflowPreview()}
-                                  >
-                                    <RefreshCw className="h-4 w-4" />
-                                    {workflowPreviewBusy
-                                      ? "Loading"
-                                      : "Refresh"}
-                                  </Button>
+                          <TabsContent value="output" className="mt-4">
+                            <div className="grid gap-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-xs text-muted-foreground">
+                                  {workflowRunBusy
+                                    ? "Workflow running"
+                                    : workflowRunLogs.length
+                                    ? "Last workflow run output"
+                                    : "No workflow run yet"}
                                 </div>
-
-                                {workflowPreviewError && (
-                                  <div className="text-xs text-red-400">
-                                    {workflowPreviewError}
-                                  </div>
-                                )}
-
-                                <div className="rounded-lg border border-border/50 bg-black/90 p-3">
-                                  <ScrollArea className="h-[180px]">
-                                    <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
-                                      {workflowPreviewContent
-                                        ? workflowPreviewContent
-                                        : hasProjectRoot
-                                        ? "No preview loaded"
-                                        : "Select a project root first"}
-                                    </pre>
-                                  </ScrollArea>
-                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={!workflowRunLogs.length}
+                                  onClick={() => setWorkflowRunLogs([])}
+                                >
+                                  Clear
+                                </Button>
                               </div>
-                            </TabsContent>
 
-                            <TabsContent value="output" className="mt-4">
-                              <div className="grid gap-3">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="text-xs text-muted-foreground">
-                                    {workflowRunBusy
-                                      ? "Workflow running"
-                                      : workflowRunLogs.length
-                                      ? "Last workflow run output"
-                                      : "No workflow run yet"}
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={!workflowRunLogs.length}
-                                    onClick={() => setWorkflowRunLogs([])}
-                                  >
-                                    Clear
-                                  </Button>
-                                </div>
-
-                                <div className="rounded-lg border border-border/50 bg-black/90 p-3">
-                                  <ScrollArea className="h-[180px]">
-                                    <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
-                                      {workflowRunLogs.length
-                                        ? workflowRunLogs
-                                            .map((l) =>
-                                              String(l?.message || "")
-                                            )
-                                            .join("\n")
-                                        : ""}
-                                    </pre>
-                                  </ScrollArea>
-                                </div>
+                              <div className="rounded-lg border border-border/50 bg-black/90 p-3">
+                                <ScrollArea className="h-[180px]">
+                                  <pre className="text-xs text-gray-100 whitespace-pre-wrap break-words">
+                                    {workflowRunLogs.length
+                                      ? workflowRunLogs
+                                          .map((l) => String(l?.message || ""))
+                                          .join("\n")
+                                      : ""}
+                                  </pre>
+                                </ScrollArea>
                               </div>
-                            </TabsContent>
-                          </Tabs>
-                        </div>
-                      </TabsContent>
-                    </Tabs>
-                  </div>
+                            </div>
+                          </TabsContent>
+                        </Tabs>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
                 </div>
 
                 <div className="rounded-xl border border-border/50 bg-secondary/10 p-4">
