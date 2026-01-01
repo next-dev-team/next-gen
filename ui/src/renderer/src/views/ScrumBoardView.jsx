@@ -130,6 +130,7 @@ const PRIORITY_CONFIG = {
 };
 
 const BMAD_AGENT_SETUP_STORAGE_KEY = "bmad-scrum-agent-setup-v1";
+const SCRUM_OVERVIEW_TAB_STORAGE_KEY = "scrum-overview-tab-v1";
 
 const BMAD_AGENT_OPTIONS = [
   {
@@ -160,6 +161,175 @@ const BMAD_IDE_OPTIONS = [
   { id: "windsurf", label: "Windsurf" },
   { id: "vscode", label: "VS Code" },
 ];
+
+const MCP_KANBAN_TOOL_OPTIONS = [
+  {
+    id: "scrum_get_state",
+    label: "scrum_get_state",
+    description: "Read the full Scrum/Kanban state.",
+  },
+  {
+    id: "scrum_set_state",
+    label: "scrum_set_state",
+    description: "Replace the full state (use carefully).",
+  },
+  {
+    id: "scrum_create_board",
+    label: "scrum_create_board",
+    description: "Create a new board.",
+  },
+  {
+    id: "scrum_delete_board",
+    label: "scrum_delete_board",
+    description: "Delete a board by id.",
+  },
+  {
+    id: "scrum_add_list",
+    label: "scrum_add_list",
+    description: "Add a list/status column to a board.",
+  },
+  {
+    id: "scrum_rename_list",
+    label: "scrum_rename_list",
+    description: "Rename a list/status column.",
+  },
+  {
+    id: "scrum_delete_list",
+    label: "scrum_delete_list",
+    description: "Delete a list/status column.",
+  },
+  {
+    id: "scrum_add_card",
+    label: "scrum_add_card",
+    description: "Create a story in a list.",
+  },
+  {
+    id: "scrum_update_card",
+    label: "scrum_update_card",
+    description: "Update a story fields/metadata.",
+  },
+  {
+    id: "scrum_delete_card",
+    label: "scrum_delete_card",
+    description: "Delete a story.",
+  },
+  {
+    id: "scrum_move_card",
+    label: "scrum_move_card",
+    description: "Move/reorder a story between lists.",
+  },
+  {
+    id: "scrum_acquire_lock",
+    label: "scrum_acquire_lock",
+    description: "Lock a story to prevent edits.",
+  },
+  {
+    id: "scrum_release_lock",
+    label: "scrum_release_lock",
+    description: "Release a story lock.",
+  },
+  {
+    id: "scrum_create_epic",
+    label: "scrum_create_epic",
+    description: "Create an epic.",
+  },
+  {
+    id: "scrum_update_epic",
+    label: "scrum_update_epic",
+    description: "Update an epic.",
+  },
+  {
+    id: "scrum_get_stories_by_status",
+    label: "scrum_get_stories_by_status",
+    description: "List stories in a status.",
+  },
+  {
+    id: "scrum_get_next_story",
+    label: "scrum_get_next_story",
+    description: "Get next story from ready-for-dev.",
+  },
+  {
+    id: "scrum_get_story_by_id",
+    label: "scrum_get_story_by_id",
+    description: "Get a story by key (board:name:number) or UUID.",
+  },
+  {
+    id: "scrum_complete_story",
+    label: "scrum_complete_story",
+    description: "Move a story to done and release lock.",
+  },
+  {
+    id: "bmad_install",
+    label: "bmad_install",
+    description: "Install BMAD in a project directory.",
+  },
+  {
+    id: "bmad_status",
+    label: "bmad_status",
+    description: "Check BMAD installation status.",
+  },
+  {
+    id: "generate_prd",
+    label: "generate_prd",
+    description: "Generate PRD markdown into a file.",
+  },
+];
+
+const getMcpToolUsageText = ({ toolId, activeBoard }) => {
+  const boardId = activeBoard?.id || "<boardId>";
+  const boardName = activeBoard?.name || "<boardName>";
+  const listId = activeBoard?.lists?.[0]?.id || "<listId>";
+  const cardId = activeBoard?.lists?.[0]?.cards?.[0]?.id || "<cardId>";
+
+  switch (toolId) {
+    case "scrum_get_state":
+      return "scrum-kanban/scrum_get_state";
+    case "scrum_set_state":
+      return 'scrum-kanban/scrum_set_state {"state":{...}}';
+    case "scrum_create_board":
+      return 'scrum-kanban/scrum_create_board {"name":"","type":"bmad"}';
+    case "scrum_delete_board":
+      return `scrum-kanban/scrum_delete_board {"boardId":"${boardId}"}`;
+    case "scrum_add_list":
+      return `scrum-kanban/scrum_add_list {"boardId":"${boardId}","name":"Backlog"}`;
+    case "scrum_rename_list":
+      return `scrum-kanban/scrum_rename_list {"boardId":"${boardId}","listId":"${listId}","name":"New name"}`;
+    case "scrum_delete_list":
+      return `scrum-kanban/scrum_delete_list {"boardId":"${boardId}","listId":"${listId}"}`;
+    case "scrum_add_card":
+      return `scrum-kanban/scrum_add_card {"boardId":"${boardId}","listId":"${listId}","title":"My story"}`;
+    case "scrum_update_card":
+      return `scrum-kanban/scrum_update_card {"boardId":"${boardId}","listId":"${listId}","cardId":"${cardId}","patch":{...}}`;
+    case "scrum_delete_card":
+      return `scrum-kanban/scrum_delete_card {"boardId":"${boardId}","listId":"${listId}","cardId":"${cardId}"}`;
+    case "scrum_move_card":
+      return `scrum-kanban/scrum_move_card {"boardId":"${boardId}","cardId":"${cardId}","fromListId":"${listId}","toListId":"<toListId>","toIndex":0}`;
+    case "scrum_acquire_lock":
+      return `scrum-kanban/scrum_acquire_lock {"cardId":"${cardId}"}`;
+    case "scrum_release_lock":
+      return `scrum-kanban/scrum_release_lock {"cardId":"${cardId}"}`;
+    case "scrum_create_epic":
+      return 'scrum-kanban/scrum_create_epic {"name":"Epic name"}';
+    case "scrum_update_epic":
+      return 'scrum-kanban/scrum_update_epic {"epicId":"<epicId>","patch":{...}}';
+    case "scrum_get_stories_by_status":
+      return `scrum-kanban/scrum_get_stories_by_status {"boardId":"${boardId}","status":"backlog"}`;
+    case "scrum_get_next_story":
+      return `scrum-kanban/scrum_get_next_story {"boardId":"${boardId}"}`;
+    case "scrum_get_story_by_id":
+      return `scrum-kanban/scrum_get_story_by_id here is id: ${boardName}:1`;
+    case "scrum_complete_story":
+      return `scrum-kanban/scrum_complete_story {"boardId":"${boardId}","cardId":"${cardId}"}`;
+    case "bmad_install":
+      return 'scrum-kanban/bmad_install {"cwd":"/absolute/path","mode":"npx"}';
+    case "bmad_status":
+      return 'scrum-kanban/bmad_status {"cwd":"/absolute/path","mode":"npx"}';
+    case "generate_prd":
+      return 'scrum-kanban/generate_prd {"cwd":"/absolute/path","content":"..."}';
+    default:
+      return `scrum-kanban/${String(toolId || "<tool>")}`;
+  }
+};
 
 const safeJsonParse = (raw) => {
   try {
@@ -483,6 +653,78 @@ const StatsCard = ({ stats }) => {
             {stats.completedPoints}/{stats.totalPoints} pts
           </div>
         )}
+      </div>
+    </div>
+  );
+};
+
+const McpToolsUsage = ({ activeBoard }) => {
+  const [toolId, setToolId] = React.useState("scrum_get_state");
+
+  const toolMeta = React.useMemo(
+    () => MCP_KANBAN_TOOL_OPTIONS.find((t) => t.id === toolId) || null,
+    [toolId]
+  );
+
+  const usageText = React.useMemo(
+    () => getMcpToolUsageText({ toolId, activeBoard }),
+    [toolId, activeBoard]
+  );
+
+  const handleCopyUsage = React.useCallback(async () => {
+    if (!usageText) return;
+    try {
+      await navigator.clipboard.writeText(usageText);
+    } catch {}
+  }, [usageText]);
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div className="text-sm font-medium">MCP tool usage</div>
+          <div className="text-xs text-muted-foreground">
+            {toolMeta?.description || "Select a tool and copy the call"}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Select value={toolId} onValueChange={setToolId}>
+            <SelectTrigger className="w-[260px] bg-background/50">
+              <SelectValue placeholder="Select tool" />
+            </SelectTrigger>
+            <SelectContent>
+              {MCP_KANBAN_TOOL_OPTIONS.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  <div className="grid">
+                    <div className="text-sm leading-tight">{t.label}</div>
+                    {t.description ? (
+                      <div className="text-xs text-muted-foreground leading-tight">
+                        {t.description}
+                      </div>
+                    ) : null}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="gap-2"
+            onClick={handleCopyUsage}
+            disabled={!usageText}
+          >
+            <Copy className="h-4 w-4" />
+            Copy
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words">
+        {usageText}
       </div>
     </div>
   );
@@ -3253,6 +3495,15 @@ export default function ScrumBoardView() {
   const [agentAssistOpen, setAgentAssistOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
 
+  const [overviewTab, setOverviewTab] = React.useState(() => {
+    try {
+      const v = localStorage.getItem(SCRUM_OVERVIEW_TAB_STORAGE_KEY);
+      return v === "stats" ? "stats" : "mcp";
+    } catch {
+      return "mcp";
+    }
+  });
+
   const [agentSetup, setAgentSetup] = React.useState(() => {
     const defaults = {
       ides: ["cursor"],
@@ -3295,6 +3546,12 @@ export default function ScrumBoardView() {
       JSON.stringify(agentSetup)
     );
   }, [agentSetup]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(SCRUM_OVERVIEW_TAB_STORAGE_KEY, overviewTab);
+    } catch {}
+  }, [overviewTab]);
 
   React.useEffect(() => {
     if (!agentSetup.autoSync || !connected) return;
@@ -3662,8 +3919,26 @@ export default function ScrumBoardView() {
         </div>
       </div>
 
-      {/* Stats */}
-      {activeBoard && <StatsCard stats={stats} />}
+      {activeBoard && (
+        <Tabs
+          value={overviewTab}
+          onValueChange={setOverviewTab}
+          className="w-full"
+        >
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="mcp">MCP Tool</TabsTrigger>
+            <TabsTrigger value="stats">Stats</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="mcp" className="mt-3">
+            <McpToolsUsage activeBoard={activeBoard} />
+          </TabsContent>
+
+          <TabsContent value="stats" className="mt-3">
+            <StatsCard stats={stats} />
+          </TabsContent>
+        </Tabs>
+      )}
 
       {/* Board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
