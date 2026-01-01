@@ -12,3 +12,5 @@ packages/
 my-turborepo
 .DS_Store
 # ui/src/renderer/src/output.css
+_bmad
+_bmad-output

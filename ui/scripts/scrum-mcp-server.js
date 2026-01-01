@@ -191,8 +191,18 @@ const cleanExpiredLocks = () => {
   }
 };
 
-// Clean expired locks every 10 seconds
-setInterval(cleanExpiredLocks, 10000);
+let lockJanitorInterval = null;
+
+const ensureLockJanitor = () => {
+  if (lockJanitorInterval) return;
+  lockJanitorInterval = setInterval(cleanExpiredLocks, 10000);
+};
+
+const clearLockJanitor = () => {
+  if (!lockJanitorInterval) return;
+  clearInterval(lockJanitorInterval);
+  lockJanitorInterval = null;
+};
 
 // ============ Board Operations ============
 const findBoard = (state, boardId) =>
@@ -244,16 +254,62 @@ const withStructured = (output) => ({
   structuredContent: output,
 });
 
-const runCli = async ({ cwd, command, args }) => {
+const runCli = async ({ cwd, command, args, timeoutMs, autoInput }) => {
   const workingDir = String(cwd || "").trim();
   if (!workingDir || !path.isAbsolute(workingDir)) {
     throw new Error("cwd must be an absolute path");
   }
   await fs.promises.access(workingDir);
 
+  const ansiPattern1 = /\\u001b\\[[0-9;]*[a-zA-Z]/g;
+  const ansiPattern2 = /\\u001b\\][^\\u0007]*\\u0007/g;
+  const stripAnsi = (value) =>
+    String(value || "")
+      .replace(ansiPattern1, "")
+      .replace(ansiPattern2, "")
+      .replace(/\r/g, "");
+
   return await new Promise((resolve) => {
     const logs = [];
     const startedAt = nowIso();
+    const timeout =
+      typeof timeoutMs === "number" &&
+      Number.isFinite(timeoutMs) &&
+      timeoutMs > 0
+        ? Math.floor(timeoutMs)
+        : null;
+
+    const auto =
+      autoInput === true
+        ? { enabled: true }
+        : autoInput && typeof autoInput === "object"
+        ? autoInput
+        : { enabled: false };
+
+    const autoEnabled = Boolean(auto.enabled);
+    const autoIdleMs =
+      typeof auto.idleMs === "number" &&
+      Number.isFinite(auto.idleMs) &&
+      auto.idleMs >= 0
+        ? Math.floor(auto.idleMs)
+        : 1500;
+    const autoIntervalMs =
+      typeof auto.intervalMs === "number" &&
+      Number.isFinite(auto.intervalMs) &&
+      auto.intervalMs > 0
+        ? Math.floor(auto.intervalMs)
+        : 750;
+    const autoMaxWrites =
+      typeof auto.maxWrites === "number" &&
+      Number.isFinite(auto.maxWrites) &&
+      auto.maxWrites > 0
+        ? Math.floor(auto.maxWrites)
+        : 40;
+    const autoWrite =
+      typeof auto.write === "string" && auto.write.length > 0
+        ? auto.write
+        : "\n";
+
     const child = spawn(command, args, {
       cwd: workingDir,
       shell: true,
@@ -262,21 +318,147 @@ const runCli = async ({ cwd, command, args }) => {
 
     logs.push(`▶ ${command} ${args.join(" ")}`);
 
+    let lastOutputAt = Date.now();
+    let autoWrites = 0;
+    let finished = false;
+
+    const finish = (result) => {
+      if (finished) return;
+      finished = true;
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (autoTimer) clearInterval(autoTimer);
+      resolve(result);
+    };
+
+    try {
+      if (child.stdin && typeof child.stdin.setDefaultEncoding === "function") {
+        child.stdin.setDefaultEncoding("utf8");
+      }
+    } catch {}
+
+    const writeAutoInput = (text, reason) => {
+      if (!autoEnabled) return;
+      if (finished) return;
+      if (!child?.stdin?.writable) return;
+      if (autoWrites >= autoMaxWrites) return;
+
+      try {
+        child.stdin.write(typeof text === "string" ? text : autoWrite);
+        autoWrites += 1;
+        lastOutputAt = Date.now();
+        logs.push(
+          `▶ auto-input (${autoWrites}/${autoMaxWrites})${
+            reason ? ` ${reason}` : ""
+          }`
+        );
+      } catch {}
+    };
+
+    const maybeAutoInput = () => {
+      if (!autoEnabled) return;
+      if (finished) return;
+      const idleFor = Date.now() - lastOutputAt;
+      if (idleFor < autoIdleMs) return;
+      writeAutoInput(autoWrite, "(idle)");
+    };
+
+    const maybeHandleBmadPrompts = (lines) => {
+      if (!autoEnabled) return;
+      if (finished) return;
+      if (auto.mode !== "bmad-install") return;
+
+      for (const line of lines) {
+        const clean = stripAnsi(line);
+
+        if (/Select tools to configure:/i.test(clean)) {
+          writeAutoInput(" \n\n", "(select-tool)");
+          return;
+        }
+
+        if (/WARNING: No tools were selected/i.test(clean)) {
+          writeAutoInput("\n", "(confirm)");
+          return;
+        }
+
+        if (
+          /Would you like to go back and select at least one tool\?/i.test(
+            clean
+          )
+        ) {
+          writeAutoInput("\n", "(confirm)");
+          return;
+        }
+      }
+    };
+
+    const timeoutTimer =
+      timeout === null
+        ? null
+        : setTimeout(() => {
+            logs.push(`Process timeout after ${timeout}ms`);
+            try {
+              child.kill("SIGTERM");
+            } catch {}
+            setTimeout(() => {
+              try {
+                child.kill("SIGKILL");
+              } catch {}
+            }, 2000);
+
+            finish({
+              success: false,
+              exitCode: -2,
+              logs,
+              startedAt,
+              endedAt: nowIso(),
+            });
+          }, timeout);
+
+    const autoTimer = autoEnabled
+      ? setInterval(maybeAutoInput, autoIntervalMs)
+      : null;
+
     child.stdout.on("data", (data) => {
       const text = String(data || "");
       const lines = text.split("\n").filter((l) => l.trim());
       for (const line of lines) logs.push(line);
+      lastOutputAt = Date.now();
+
+      maybeHandleBmadPrompts(lines);
+
+      if (autoEnabled) {
+        for (const line of lines) {
+          const clean = stripAnsi(line);
+          if (/\?\s+/.test(clean)) {
+            writeAutoInput(autoWrite, "(prompt)");
+            break;
+          }
+        }
+      }
     });
 
     child.stderr.on("data", (data) => {
       const text = String(data || "");
       const lines = text.split("\n").filter((l) => l.trim());
       for (const line of lines) logs.push(line);
+      lastOutputAt = Date.now();
+
+      maybeHandleBmadPrompts(lines);
+
+      if (autoEnabled) {
+        for (const line of lines) {
+          const clean = stripAnsi(line);
+          if (/\?\s+/.test(clean)) {
+            writeAutoInput(autoWrite, "(prompt)");
+            break;
+          }
+        }
+      }
     });
 
     child.on("error", (err) => {
       logs.push(`Process error: ${err?.message || String(err)}`);
-      resolve({
+      finish({
         success: false,
         exitCode: -1,
         logs,
@@ -286,7 +468,7 @@ const runCli = async ({ cwd, command, args }) => {
     });
 
     child.on("close", (code) => {
-      resolve({
+      finish({
         success: code === 0,
         exitCode: typeof code === "number" ? code : -1,
         logs,
@@ -297,10 +479,9 @@ const runCli = async ({ cwd, command, args }) => {
   });
 };
 
-const getBmadCommand = ({ mode, action, modules, full, verbose }) => {
+const getBmadCommand = ({ mode, action, modules, full }) => {
   const selectedMode = String(mode || "npx").trim();
   const selectedAction = String(action || "status").trim();
-  const isVerbose = Boolean(verbose);
 
   if (selectedMode === "bmad") {
     const command = process.platform === "win32" ? "bmad.cmd" : "bmad";
@@ -312,14 +493,46 @@ const getBmadCommand = ({ mode, action, modules, full, verbose }) => {
       if (mods.length > 0) args.push("-m", ...mods);
       if (full) args.push("-f");
     }
-    if (isVerbose) args.push("-v");
     return { command, args };
   }
 
   const command = process.platform === "win32" ? "npx.cmd" : "npx";
   const args = ["-y", "bmad-method@alpha", selectedAction];
-  if (isVerbose) args.push("-v");
   return { command, args };
+};
+
+const getBmadFolderStatusLogs = async ({ cwd }) => {
+  const workingDir = String(cwd || "").trim();
+  if (!workingDir || !path.isAbsolute(workingDir)) {
+    throw new Error("cwd must be an absolute path");
+  }
+  await fs.promises.access(workingDir);
+
+  const folders = ["_bmad", "_config"];
+  const results = await Promise.all(
+    folders.map(async (folder) => {
+      const target = path.join(workingDir, folder);
+      try {
+        const stat = await fs.promises.stat(target);
+        return { folder, exists: stat.isDirectory(), target };
+      } catch {
+        return { folder, exists: false, target };
+      }
+    })
+  );
+
+  const installed = results.every((r) => r.exists);
+  const logs = ["▶ local folder check"];
+  for (const r of results) {
+    logs.push(`${r.folder}: ${r.exists ? "present" : "missing"}`);
+  }
+  if (!installed) {
+    logs.push(
+      "BMAD appears not installed (expected _bmad and _config directories)."
+    );
+  }
+
+  return { installed, logs };
 };
 
 const safeWriteFile = async ({ cwd, relativePath, content, overwrite }) => {
@@ -359,6 +572,7 @@ const safeWriteFile = async ({ cwd, relativePath, content, overwrite }) => {
 };
 
 const mcpHttpSessions = new Map();
+let currentLogger = console;
 let mcpHttpDepsPromise = null;
 
 const getMcpHttpDeps = async () => {
@@ -412,7 +626,15 @@ const handleMcpHttpRequest = async (req, res, parsedBody, logger) => {
         mcpHttpSessions.set(String(id), { transport, server: null });
       },
       onsessionclosed: (id) => {
-        mcpHttpSessions.delete(String(id));
+        const sid = String(id);
+        const existing = mcpHttpSessions.get(sid);
+        mcpHttpSessions.delete(sid);
+        try {
+          if (existing?.transport?.close) existing.transport.close();
+        } catch {}
+        try {
+          if (existing?.server?.close) existing.server.close();
+        } catch {}
       },
     });
 
@@ -458,7 +680,7 @@ const httpServer = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "Content-Type, X-User-Id, X-State-Version, Mcp-Session-Id"
+    "Content-Type, X-User-Id, X-State-Version, Mcp-Session-Id, mcp-session-id"
   );
 
   if (req.method === "OPTIONS") {
@@ -471,7 +693,7 @@ const httpServer = http.createServer((req, res) => {
     pathname === "/mcp" &&
     (req.method === "GET" || req.method === "DELETE")
   ) {
-    handleMcpHttpRequest(req, res, undefined, console).catch((err) => {
+    handleMcpHttpRequest(req, res, undefined, currentLogger).catch((err) => {
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: err?.message || String(err) }));
     });
@@ -532,14 +754,26 @@ const httpServer = http.createServer((req, res) => {
     });
 
     req.on("end", async () => {
+      let data = {};
       try {
-        const data = body ? JSON.parse(body) : {};
+        data = body ? JSON.parse(body) : {};
+      } catch (err) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err?.message || String(err) }));
+        return;
+      }
 
-        if (pathname === "/mcp") {
-          await handleMcpHttpRequest(req, res, data, console);
-          return;
+      if (pathname === "/mcp") {
+        try {
+          await handleMcpHttpRequest(req, res, data, currentLogger);
+        } catch (err) {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err?.message || String(err) }));
         }
+        return;
+      }
 
+      try {
         const userId = req.headers["x-user-id"] || data.userId || "anonymous";
         const clientStateVersion =
           parseInt(req.headers["x-state-version"]) || data.stateVersion;
@@ -1423,6 +1657,8 @@ const main = async (enableStdio = true, logger = console) => {
         modules: z.array(z.string()).optional(),
         full: z.boolean().optional(),
         verbose: z.boolean().optional(),
+        autoAcceptDefaults: z.boolean().optional(),
+        timeoutMs: z.number().optional(),
       },
       outputSchema: {
         success: z.boolean(),
@@ -1432,9 +1668,26 @@ const main = async (enableStdio = true, logger = console) => {
         endedAt: z.string(),
       },
     },
-    async ({ cwd, mode, modules, full, verbose }) => {
+    async ({
+      cwd,
+      mode,
+      modules,
+      full,
+      verbose,
+      autoAcceptDefaults,
+      timeoutMs,
+    }) => {
       const startedAt = nowIso();
       try {
+        const shouldAutoAccept =
+          typeof autoAcceptDefaults === "boolean" ? autoAcceptDefaults : true;
+        const effectiveTimeoutMs =
+          typeof timeoutMs === "number" &&
+          Number.isFinite(timeoutMs) &&
+          timeoutMs > 0
+            ? Math.floor(timeoutMs)
+            : 600000;
+
         const { command, args } = getBmadCommand({
           mode,
           action: "install",
@@ -1442,7 +1695,18 @@ const main = async (enableStdio = true, logger = console) => {
           full,
           verbose,
         });
-        const result = await runCli({ cwd, command, args });
+        const result = await runCli({
+          cwd,
+          command,
+          args,
+          timeoutMs: effectiveTimeoutMs,
+          autoInput: shouldAutoAccept
+            ? {
+                enabled: true,
+                mode: "bmad-install",
+              }
+            : false,
+        });
 
         const missingBmad =
           String(mode || "npx").trim() === "bmad" &&
@@ -1459,7 +1723,17 @@ const main = async (enableStdio = true, logger = console) => {
             full,
             verbose,
           });
-          const second = await runCli({ cwd, ...fallback });
+          const second = await runCli({
+            cwd,
+            ...fallback,
+            timeoutMs: effectiveTimeoutMs,
+            autoInput: shouldAutoAccept
+              ? {
+                  enabled: true,
+                  mode: "bmad-install",
+                }
+              : false,
+          });
           return withStructured({
             ...second,
             logs: [
@@ -1509,7 +1783,7 @@ const main = async (enableStdio = true, logger = console) => {
           action: "status",
           verbose,
         });
-        const result = await runCli({ cwd, command, args });
+        const result = await runCli({ cwd, command, args, timeoutMs: 60000 });
 
         const missingBmad =
           String(mode || "npx").trim() === "bmad" &&
@@ -1524,7 +1798,7 @@ const main = async (enableStdio = true, logger = console) => {
             action: "status",
             verbose,
           });
-          const second = await runCli({ cwd, ...fallback });
+          const second = await runCli({ cwd, ...fallback, timeoutMs: 60000 });
           return withStructured({
             ...second,
             logs: [
@@ -1532,6 +1806,21 @@ const main = async (enableStdio = true, logger = console) => {
               "bmad CLI not found in PATH. Falling back to npx bmad-method@alpha.",
               ...second.logs,
             ],
+          });
+        }
+
+        const unknownStatus = result.logs.some((line) =>
+          /unknown command ['"]status['"]/i.test(String(line))
+        );
+
+        if (unknownStatus) {
+          const folderStatus = await getBmadFolderStatusLogs({ cwd });
+          return withStructured({
+            success: folderStatus.installed,
+            exitCode: folderStatus.installed ? 0 : 1,
+            logs: [...result.logs, ...folderStatus.logs],
+            startedAt: result.startedAt,
+            endedAt: result.endedAt,
           });
         }
 
@@ -1600,6 +1889,8 @@ const start = async (port = SSE_PORT, logCallback = null, enableStdio) => {
   if (isRunning) return;
   isRunning = true;
 
+  ensureLockJanitor();
+
   const logger = {
     log: (msg) => {
       console.log(msg);
@@ -1611,23 +1902,33 @@ const start = async (port = SSE_PORT, logCallback = null, enableStdio) => {
     },
   };
 
+  currentLogger = logger;
+
   const shouldEnableStdio =
     typeof enableStdio === "boolean"
       ? enableStdio
       : process.env.MCP_STDIO === "1"
       ? true
+      : process.env.MCP_STDIO === "0"
+      ? false
       : process.versions && process.versions.electron
       ? false
-      : !(process.stdin && process.stdin.isTTY);
+      : true;
 
   return new Promise((resolve, reject) => {
     const onListen = () => {
+      const address = httpServer.address();
+      const actualPort =
+        address && typeof address === "object" && address.port
+          ? address.port
+          : port;
+
       logger.log(
-        `BMAD-Method Kanban MCP SSE Server running on http://localhost:${port}`
+        `BMAD-Method Kanban MCP SSE Server running on http://localhost:${actualPort}`
       );
-      logger.log(`Connect to SSE: http://localhost:${port}/sse`);
-      logger.log(`Connect to MCP: http://localhost:${port}/mcp`);
-      logger.log(`API docs: http://localhost:${port}/`);
+      logger.log(`Connect to SSE: http://localhost:${actualPort}/sse`);
+      logger.log(`Connect to MCP: http://localhost:${actualPort}/mcp`);
+      logger.log(`API docs: http://localhost:${actualPort}/`);
 
       main(shouldEnableStdio, logger)
         .then(() => resolve(true))
@@ -1647,8 +1948,13 @@ const start = async (port = SSE_PORT, logCallback = null, enableStdio) => {
 
     httpServer.on("error", (err) => {
       if (err.code === "EADDRINUSE") {
-        logger.log(`Port ${port} in use, assuming server is running.`);
-        resolve(true);
+        logger.log(`Port ${port} in use; starting MCP stdio without HTTP.`);
+        main(shouldEnableStdio, logger)
+          .then(() => resolve(true))
+          .catch((mcpErr) => {
+            logger.error(`Failed to start MCP logic: ${mcpErr}`);
+            resolve(true);
+          });
       } else {
         logger.error(`HTTP Server Error: ${err}`);
         reject(err);
@@ -1658,17 +1964,102 @@ const start = async (port = SSE_PORT, logCallback = null, enableStdio) => {
 };
 
 const stop = () => {
+  clearLockJanitor();
+
+  for (const entry of mcpHttpSessions.values()) {
+    try {
+      if (entry?.transport?.close) entry.transport.close();
+    } catch {}
+    try {
+      if (entry?.server?.close) entry.server.close();
+    } catch {}
+  }
+  mcpHttpSessions.clear();
+
+  for (const client of sseClients) {
+    try {
+      client.res.end();
+    } catch {}
+  }
+  sseClients.clear();
+
   if (httpServer.listening) {
     httpServer.close();
   }
   isRunning = false;
+  currentLogger = console;
+};
+
+const parseCliArgs = (argv) => {
+  const out = { _: [] };
+  for (let i = 0; i < argv.length; i += 1) {
+    const raw = String(argv[i] || "");
+    if (!raw.startsWith("--")) {
+      out._.push(raw);
+      continue;
+    }
+    const key = raw.slice(2);
+    const next = argv[i + 1];
+    if (next === undefined || String(next).startsWith("--")) {
+      out[key] = true;
+      continue;
+    }
+    out[key] = String(next);
+    i += 1;
+  }
+  return out;
 };
 
 if (require.main === module) {
-  start().catch((err) => {
-    process.stderr.write(`${err?.message || String(err)}\n`);
-    process.exit(1);
-  });
+  const argv = parseCliArgs(process.argv.slice(2));
+  const subcommand = argv._[0];
+
+  if (subcommand === "bmad-install") {
+    const cwd = path.resolve(String(argv.cwd || process.cwd()));
+    const mode = argv.mode ? String(argv.mode) : "npx";
+    const timeoutMs = argv.timeoutMs ? Number(argv.timeoutMs) : 600000;
+    const full = argv.full ? true : false;
+    const verbose = argv.verbose ? true : false;
+    const autoAcceptDefaults =
+      argv.autoAcceptDefaults === undefined
+        ? true
+        : String(argv.autoAcceptDefaults).toLowerCase() !== "false";
+    const modules = argv.modules
+      ? String(argv.modules)
+          .split(",")
+          .map((m) => m.trim())
+          .filter(Boolean)
+      : undefined;
+
+    (async () => {
+      const { command, args } = getBmadCommand({
+        mode,
+        action: "install",
+        modules,
+        full,
+        verbose,
+      });
+      const result = await runCli({
+        cwd,
+        command,
+        args,
+        timeoutMs: Number.isFinite(timeoutMs) ? timeoutMs : 600000,
+        autoInput: autoAcceptDefaults
+          ? { enabled: true, mode: "bmad-install" }
+          : false,
+      });
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+      process.exit(result.exitCode === 0 ? 0 : 1);
+    })().catch((err) => {
+      process.stderr.write(`${err?.message || String(err)}\n`);
+      process.exit(1);
+    });
+  } else {
+    start().catch((err) => {
+      process.stderr.write(`${err?.message || String(err)}\n`);
+      process.exit(1);
+    });
+  }
 }
 
 module.exports = { start, stop };
