@@ -479,7 +479,7 @@ const runCli = async ({ cwd, command, args, timeoutMs, autoInput }) => {
   });
 };
 
-const getBmadCommand = ({ mode, action, modules, full }) => {
+const getBmadCommand = ({ mode, action, modules, full, args: extraArgs }) => {
   const selectedMode = String(mode || "npx").trim();
   const selectedAction = String(action || "status").trim();
 
@@ -493,11 +493,17 @@ const getBmadCommand = ({ mode, action, modules, full }) => {
       if (mods.length > 0) args.push("-m", ...mods);
       if (full) args.push("-f");
     }
+    if (Array.isArray(extraArgs)) {
+      args.push(...extraArgs);
+    }
     return { command, args };
   }
 
   const command = process.platform === "win32" ? "npx.cmd" : "npx";
   const args = ["-y", "bmad-method@alpha", selectedAction];
+  if (Array.isArray(extraArgs)) {
+    args.push(...extraArgs);
+  }
   return { command, args };
 };
 
@@ -570,6 +576,355 @@ const safeWriteFile = async ({ cwd, relativePath, content, overwrite }) => {
   await fs.promises.writeFile(target, String(content || ""), "utf8");
   return target;
 };
+
+const safeReadFile = async ({ cwd, relativePath }) => {
+  const workingDir = String(cwd || "").trim();
+  const rel = String(relativePath || "").trim();
+  if (!workingDir || !path.isAbsolute(workingDir)) {
+    throw new Error("cwd must be an absolute path");
+  }
+  if (!rel || path.isAbsolute(rel)) {
+    throw new Error("relativePath must be a relative path");
+  }
+
+  const resolvedRoot = path.resolve(workingDir);
+  const target = path.resolve(resolvedRoot, rel);
+  const rootPrefix = resolvedRoot.endsWith(path.sep)
+    ? resolvedRoot
+    : resolvedRoot + path.sep;
+  if (!target.startsWith(rootPrefix)) {
+    throw new Error("Refusing to read outside cwd");
+  }
+
+  const content = await fs.promises.readFile(target, "utf8");
+  return { path: target, content: String(content || "") };
+};
+
+const normalizeText = (value) => String(value || "").trim();
+
+const normalizeTextArray = (value) =>
+  (Array.isArray(value) ? value : [])
+    .map((v) => normalizeText(v))
+    .filter(Boolean);
+
+const renderList = (items) =>
+  normalizeTextArray(items)
+    .map((v) => `- ${v}`)
+    .join("\n");
+
+const renderHeading = (text, level = 2) => {
+  const t = normalizeText(text);
+  if (!t) return "";
+  const l = Math.min(6, Math.max(1, level));
+  return `${"#".repeat(l)} ${t}`;
+};
+
+const joinBlocks = (blocks) =>
+  (Array.isArray(blocks) ? blocks : [])
+    .map((b) => String(b || "").trim())
+    .filter(Boolean)
+    .join("\n\n");
+
+const normalizeMarkdownLineEndings = (text) =>
+  String(text || "").replace(/\r\n/g, "\n");
+
+const normalizeMarkdownToken = (text) =>
+  String(text || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const parseMarkdownHeading = (line) => {
+  const m = String(line || "").match(/^(#{1,6})\s+(.*)$/);
+  if (!m) return null;
+  return { level: m[1].length, text: String(m[2] || "").trim() };
+};
+
+const findHeadingInRange = ({ lines, heading, start, end }) => {
+  const target = normalizeMarkdownToken(heading);
+  const s = Math.max(0, Number.isFinite(start) ? start : 0);
+  const e = Math.min(lines.length, Number.isFinite(end) ? end : lines.length);
+  for (let i = s; i < e; i++) {
+    const h = parseMarkdownHeading(lines[i]);
+    if (!h) continue;
+    if (normalizeMarkdownToken(h.text) === target) {
+      return { index: i, level: h.level };
+    }
+  }
+  return null;
+};
+
+const findSectionRangeByHeadingPath = ({ lines, headingPath }) => {
+  const pathParts = (Array.isArray(headingPath) ? headingPath : [])
+    .map((v) => String(v || "").trim())
+    .filter(Boolean);
+  const effectivePath = pathParts.length ? pathParts : ["Core Features (MVP)"];
+
+  let rangeStart = 0;
+  let rangeEnd = lines.length;
+  let found = null;
+
+  for (const heading of effectivePath) {
+    const match = findHeadingInRange({
+      lines,
+      heading,
+      start: rangeStart,
+      end: rangeEnd,
+    });
+    if (!match) return null;
+
+    const currentLevel = match.level;
+    let sectionEnd = lines.length;
+    for (let i = match.index + 1; i < rangeEnd; i++) {
+      const h = parseMarkdownHeading(lines[i]);
+      if (!h) continue;
+      if (h.level <= currentLevel) {
+        sectionEnd = i;
+        break;
+      }
+    }
+
+    found = { start: match.index, end: sectionEnd, level: currentLevel };
+    rangeStart = match.index + 1;
+    rangeEnd = sectionEnd;
+  }
+
+  return found;
+};
+
+const toBulletLines = (items) => normalizeTextArray(items).map((t) => `- ${t}`);
+
+const normalizeBulletText = (line) =>
+  normalizeMarkdownToken(String(line || "").replace(/^\s*[-*+]\s+/, ""));
+
+const insertBulletsIntoSection = ({ lines, section, bullets }) => {
+  const start = section.start;
+  const end = section.end;
+  const nextBullets = toBulletLines(bullets);
+  if (!nextBullets.length) return { lines, added: 0 };
+
+  const existing = new Set();
+  for (let i = start + 1; i < end; i++) {
+    if (/^\s*[-*+]\s+/.test(lines[i])) {
+      existing.add(normalizeBulletText(lines[i]));
+    }
+  }
+
+  const deduped = [];
+  for (const b of nextBullets) {
+    const key = normalizeBulletText(b);
+    if (!key || existing.has(key)) continue;
+    existing.add(key);
+    deduped.push(b);
+  }
+  if (!deduped.length) return { lines, added: 0 };
+
+  let firstContent = start + 1;
+  while (firstContent < end && !String(lines[firstContent] || "").trim()) {
+    firstContent++;
+  }
+
+  let insertAt = end;
+  const isBulletLine = (line) =>
+    /^\s*(?:[-*+]\s+|[-*+]\s+\[[ xX]\]\s+)/.test(line);
+
+  if (firstContent < end && isBulletLine(lines[firstContent])) {
+    let i = firstContent;
+    while (i < end && isBulletLine(lines[i])) i++;
+    insertAt = i;
+  } else {
+    insertAt = end;
+    const hasTrailingBlank = end > 0 && !String(lines[end - 1] || "").trim();
+    if (!hasTrailingBlank) deduped.unshift("");
+  }
+
+  const next = [
+    ...lines.slice(0, insertAt),
+    ...deduped,
+    ...lines.slice(insertAt),
+  ];
+  return {
+    lines: next,
+    added: deduped.filter((l) => String(l || "").trim()).length,
+  };
+};
+
+const buildBrainstormMarkdown = ({ projectName, idea, goals, constraints }) => {
+  const title = normalizeText(projectName) || "Brainstorm Project";
+  const body = joinBlocks([
+    renderHeading(title, 1),
+    renderHeading("Idea", 2),
+    normalizeText(idea) || "(fill in)",
+    renderHeading("Goals", 2),
+    renderList(goals) || "- (fill in)",
+    renderHeading("Constraints", 2),
+    renderList(constraints) || "- (fill in)",
+    renderHeading("Solution Options", 2),
+    "- Option A: (fill in)\n- Option B: (fill in)\n- Option C: (fill in)",
+    renderHeading("Open Questions", 2),
+    "- (fill in)",
+  ]);
+  return body;
+};
+
+const buildResearchMarkdown = ({ projectName, focus, questions, findings }) => {
+  const title = normalizeText(projectName)
+    ? `${normalizeText(projectName)} Research`
+    : "Research";
+  const body = joinBlocks([
+    renderHeading(title, 1),
+    renderHeading("Focus", 2),
+    normalizeText(focus) ||
+      "(market | tech | competitive | user | domain | mixed)",
+    renderHeading("Questions", 2),
+    renderList(questions) || "- (fill in)",
+    renderHeading("Findings", 2),
+    renderList(findings) || "- (fill in)",
+    renderHeading("Sources", 2),
+    "- (link)",
+    renderHeading("Risks", 2),
+    "- (fill in)",
+  ]);
+  return body;
+};
+
+const buildProductBriefMarkdown = ({
+  projectName,
+  vision,
+  targetUsers,
+  valueProposition,
+  goals,
+  nonGoals,
+  differentiators,
+}) => {
+  const title = normalizeText(projectName)
+    ? `${normalizeText(projectName)} Product Brief`
+    : "Product Brief";
+  const body = joinBlocks([
+    renderHeading(title, 1),
+    renderHeading("Vision", 2),
+    normalizeText(vision) || "(fill in)",
+    renderHeading("Target Users", 2),
+    renderList(targetUsers) || "- (fill in)",
+    renderHeading("Value Proposition", 2),
+    normalizeText(valueProposition) || "(fill in)",
+    renderHeading("Goals", 2),
+    renderList(goals) || "- (fill in)",
+    renderHeading("Non-Goals", 2),
+    renderList(nonGoals) || "- (fill in)",
+    renderHeading("Differentiators", 2),
+    renderList(differentiators) || "- (fill in)",
+  ]);
+  return body;
+};
+
+const buildPrdMarkdown = ({
+  projectName,
+  problemStatement,
+  goals,
+  nonGoals,
+  targetUsers,
+  userJourneys,
+  functionalRequirements,
+  nonFunctionalRequirements,
+  assumptions,
+  risks,
+  successMetrics,
+  milestones,
+  openQuestions,
+  detailLevel,
+}) => {
+  const title = normalizeText(projectName)
+    ? `${normalizeText(projectName)} PRD`
+    : "PRD";
+  const level =
+    detailLevel === "brief" ||
+    detailLevel === "standard" ||
+    detailLevel === "detailed"
+      ? detailLevel
+      : "standard";
+
+  const blocks = [
+    renderHeading(title, 1),
+    renderHeading("Problem Statement", 2),
+    normalizeText(problemStatement) || "(fill in)",
+    renderHeading("Goals", 2),
+    renderList(goals) || "- (fill in)",
+    renderHeading("Non-Goals", 2),
+    renderList(nonGoals) || "- (fill in)",
+    renderHeading("Target Users", 2),
+    renderList(targetUsers) || "- (fill in)",
+    renderHeading("User Journeys", 2),
+    renderList(userJourneys) || "- (fill in)",
+    renderHeading("Functional Requirements", 2),
+    renderList(functionalRequirements) || "- (fill in)",
+    renderHeading("Non-Functional Requirements", 2),
+    renderList(nonFunctionalRequirements) || "- (fill in)",
+  ];
+
+  if (level !== "brief") {
+    blocks.push(
+      renderHeading("Success Metrics", 2),
+      renderList(successMetrics) || "- (fill in)",
+      renderHeading("Assumptions", 2),
+      renderList(assumptions) || "- (fill in)",
+      renderHeading("Risks", 2),
+      renderList(risks) || "- (fill in)",
+      renderHeading("Milestones", 2),
+      renderList(milestones) || "- (fill in)",
+      renderHeading("Open Questions", 2),
+      renderList(openQuestions) || "- (fill in)"
+    );
+  }
+
+  if (level === "detailed") {
+    blocks.push(
+      renderHeading("Out of Scope", 2),
+      "- (fill in)",
+      renderHeading("Dependencies", 2),
+      "- (fill in)",
+      renderHeading("Acceptance Criteria", 2),
+      "- (fill in)"
+    );
+  }
+
+  return joinBlocks(blocks);
+};
+
+const buildArchitectureMarkdown = ({
+  projectName,
+  overview,
+  context,
+  components,
+  dataFlows,
+  integrations,
+  constraints,
+  decisions,
+}) => {
+  const title = normalizeText(projectName)
+    ? `${normalizeText(projectName)} Architecture`
+    : "Architecture";
+  return joinBlocks([
+    renderHeading(title, 1),
+    renderHeading("Overview", 2),
+    normalizeText(overview) || "(fill in)",
+    renderHeading("Context", 2),
+    normalizeText(context) || "(fill in)",
+    renderHeading("Components", 2),
+    renderList(components) || "- (fill in)",
+    renderHeading("Data Flows", 2),
+    renderList(dataFlows) || "- (fill in)",
+    renderHeading("Integrations", 2),
+    renderList(integrations) || "- (fill in)",
+    renderHeading("Constraints", 2),
+    renderList(constraints) || "- (fill in)",
+    renderHeading("Key Decisions (ADRs)", 2),
+    renderList(decisions) || "- (fill in)",
+  ]);
+};
+
+const findStatusListId = (board, statusId) =>
+  (board?.lists || []).find((l) => l.statusId === statusId)?.id || null;
 
 const mcpHttpSessions = new Map();
 let currentLogger = console;
@@ -1229,12 +1584,17 @@ async function handleUpdateEpic(data) {
   return { state: next };
 }
 
-const normalizeBoardName = (name) => String(name || "").trim().toLowerCase();
+const normalizeBoardName = (name) =>
+  String(name || "")
+    .trim()
+    .toLowerCase();
 
 const findBoardByName = (state, boardName) => {
   const target = normalizeBoardName(boardName);
   if (!target) return null;
-  return state.boards.find((b) => normalizeBoardName(b.name) === target) || null;
+  return (
+    state.boards.find((b) => normalizeBoardName(b.name) === target) || null
+  );
 };
 
 const flattenBoardCards = (board) => {
@@ -1945,6 +2305,461 @@ const main = async (enableStdio = true, logger = console) => {
   );
 
   server.registerTool(
+    "bmad_phase_guide",
+    {
+      title: "BMAD Phase Guide",
+      description:
+        "Return BMAD phase guidance: Phase 1 optional, Phase 2 required PRD, Phase 3 solutioning/development workflows",
+      inputSchema: {},
+      outputSchema: {
+        phases: z.array(
+          z.object({
+            id: z.string(),
+            name: z.string(),
+            required: z.boolean(),
+            workflows: z.array(
+              z.object({
+                id: z.string(),
+                name: z.string(),
+                required: z.boolean(),
+              })
+            ),
+          })
+        ),
+      },
+    },
+    async () => {
+      return withStructured({
+        phases: [
+          {
+            id: "phase-1",
+            name: "Phase 1 (Analysis)",
+            required: false,
+            workflows: [
+              {
+                id: "brainstorm-project",
+                name: "Brainstorm Project (Ideation)",
+                required: false,
+              },
+              {
+                id: "research",
+                name: "Research (Market/Tech)",
+                required: false,
+              },
+              {
+                id: "product-brief",
+                name: "Product Brief (Concept Definition)",
+                required: false,
+              },
+            ],
+          },
+          {
+            id: "phase-2",
+            name: "Phase 2 (Planning)",
+            required: true,
+            workflows: [
+              {
+                id: "prd",
+                name: "PRD (Product Requirements Document)",
+                required: true,
+              },
+            ],
+          },
+          {
+            id: "phase-3",
+            name: "Phase 3 (Development / Solutioning)",
+            required: false,
+            workflows: [
+              {
+                id: "create-ux-design",
+                name: "Create UX Design",
+                required: false,
+              },
+              { id: "architecture", name: "Architecture", required: false },
+              {
+                id: "create-epics-and-stories",
+                name: "Create Epics and Stories",
+                required: false,
+              },
+              {
+                id: "implementation-readiness",
+                name: "Implementation Readiness",
+                required: false,
+              },
+            ],
+          },
+        ],
+      });
+    }
+  );
+
+  server.registerTool(
+    "bmad_brainstorm_project",
+    {
+      title: "Brainstorm Project (Phase 1)",
+      description:
+        "Create a brainstorm-project markdown artifact (ideation) in the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        projectName: z.string().optional(),
+        idea: z.string().optional(),
+        goals: z.array(z.string()).optional(),
+        constraints: z.array(z.string()).optional(),
+        relativePath: z.string().optional(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        content: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({
+      cwd,
+      projectName,
+      idea,
+      goals,
+      constraints,
+      relativePath,
+      overwrite,
+    }) => {
+      try {
+        const content = buildBrainstormMarkdown({
+          projectName,
+          idea,
+          goals,
+          constraints,
+        });
+        const rel = String(
+          relativePath || "_bmad-output/phase-1/brainstorm-project.md"
+        ).trim();
+        const target = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content,
+          overwrite: overwrite !== false,
+        });
+        return withStructured({ success: true, path: target, content });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "bmad_research",
+    {
+      title: "Research (Phase 1)",
+      description:
+        "Create a research markdown artifact (market/tech) in the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        projectName: z.string().optional(),
+        focus: z
+          .enum(["market", "tech", "competitive", "user", "domain", "mixed"])
+          .optional(),
+        questions: z.array(z.string()).optional(),
+        findings: z.array(z.string()).optional(),
+        relativePath: z.string().optional(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        content: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({
+      cwd,
+      projectName,
+      focus,
+      questions,
+      findings,
+      relativePath,
+      overwrite,
+    }) => {
+      try {
+        const content = buildResearchMarkdown({
+          projectName,
+          focus,
+          questions,
+          findings,
+        });
+        const rel = String(
+          relativePath || "_bmad-output/phase-1/research.md"
+        ).trim();
+        const target = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content,
+          overwrite: overwrite !== false,
+        });
+        return withStructured({ success: true, path: target, content });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "bmad_product_brief",
+    {
+      title: "Product Brief (Phase 1)",
+      description:
+        "Create a product-brief markdown artifact (concept definition) in the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        projectName: z.string().optional(),
+        vision: z.string().optional(),
+        targetUsers: z.array(z.string()).optional(),
+        valueProposition: z.string().optional(),
+        goals: z.array(z.string()).optional(),
+        nonGoals: z.array(z.string()).optional(),
+        differentiators: z.array(z.string()).optional(),
+        relativePath: z.string().optional(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        content: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({
+      cwd,
+      projectName,
+      vision,
+      targetUsers,
+      valueProposition,
+      goals,
+      nonGoals,
+      differentiators,
+      relativePath,
+      overwrite,
+    }) => {
+      try {
+        const content = buildProductBriefMarkdown({
+          projectName,
+          vision,
+          targetUsers,
+          valueProposition,
+          goals,
+          nonGoals,
+          differentiators,
+        });
+        const rel = String(
+          relativePath || "_bmad-output/phase-1/product-brief.md"
+        ).trim();
+        const target = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content,
+          overwrite: overwrite !== false,
+        });
+        return withStructured({ success: true, path: target, content });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "bmad_prd",
+    {
+      title: "PRD (Phase 2)",
+      description:
+        "Generate a PRD markdown artifact from structured inputs in the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        projectName: z.string().optional(),
+        problemStatement: z.string().optional(),
+        goals: z.array(z.string()).optional(),
+        nonGoals: z.array(z.string()).optional(),
+        targetUsers: z.array(z.string()).optional(),
+        userJourneys: z.array(z.string()).optional(),
+        functionalRequirements: z.array(z.string()).optional(),
+        nonFunctionalRequirements: z.array(z.string()).optional(),
+        assumptions: z.array(z.string()).optional(),
+        risks: z.array(z.string()).optional(),
+        successMetrics: z.array(z.string()).optional(),
+        milestones: z.array(z.string()).optional(),
+        openQuestions: z.array(z.string()).optional(),
+        detailLevel: z.enum(["brief", "standard", "detailed"]).optional(),
+        relativePath: z.string().optional(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        content: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async (params) => {
+      try {
+        const content = buildPrdMarkdown(params);
+        const rel = String(
+          params.relativePath || "_bmad-output/phase-2/prd.md"
+        ).trim();
+        const target = await safeWriteFile({
+          cwd: params.cwd,
+          relativePath: rel,
+          content,
+          overwrite: params.overwrite !== false,
+        });
+        return withStructured({ success: true, path: target, content });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "bmad_architecture",
+    {
+      title: "Architecture (Phase 3)",
+      description:
+        "Create an architecture markdown artifact (solutioning) in the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        projectName: z.string().optional(),
+        overview: z.string().optional(),
+        context: z.string().optional(),
+        components: z.array(z.string()).optional(),
+        dataFlows: z.array(z.string()).optional(),
+        integrations: z.array(z.string()).optional(),
+        constraints: z.array(z.string()).optional(),
+        decisions: z.array(z.string()).optional(),
+        relativePath: z.string().optional(),
+        overwrite: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        content: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({
+      cwd,
+      projectName,
+      overview,
+      context,
+      components,
+      dataFlows,
+      integrations,
+      constraints,
+      decisions,
+      relativePath,
+      overwrite,
+    }) => {
+      try {
+        const content = buildArchitectureMarkdown({
+          projectName,
+          overview,
+          context,
+          components,
+          dataFlows,
+          integrations,
+          constraints,
+          decisions,
+        });
+        const rel = String(
+          relativePath || "_bmad-output/phase-3/architecture.md"
+        ).trim();
+        const target = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content,
+          overwrite: overwrite !== false,
+        });
+        return withStructured({ success: true, path: target, content });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "bmad_create_epics_and_stories",
+    {
+      title: "Create Epics and Stories (Phase 3)",
+      description: "Create an epic and add its stories to a BMAD board backlog",
+      inputSchema: {
+        boardId: z.string(),
+        epicName: z.string(),
+        epicDescription: z.string().optional(),
+        projectKey: z.string().optional(),
+        stories: z
+          .array(
+            z.object({
+              title: z.string(),
+              description: z.string().optional(),
+              priority: z
+                .enum(["low", "medium", "high", "critical"])
+                .optional(),
+            })
+          )
+          .optional(),
+      },
+      outputSchema: {
+        state: z.any(),
+        epicId: z.string(),
+        cardIds: z.array(z.string()),
+      },
+    },
+    async ({ boardId, epicName, epicDescription, projectKey, stories }) => {
+      const state = getState();
+      const board = findBoard(state, boardId);
+      if (!board) throw new Error("Board not found");
+
+      const backlogListId = findStatusListId(board, "backlog");
+      if (!backlogListId) throw new Error("Backlog list not found");
+
+      const createdEpic = await handleCreateEpic({
+        name: epicName,
+        description: epicDescription,
+        projectKey,
+      });
+
+      const epicId = createdEpic.epicId;
+      const cardIds = [];
+
+      for (const s of Array.isArray(stories) ? stories : []) {
+        const result = await handleAddCard({
+          boardId,
+          listId: backlogListId,
+          title: s.title,
+          description: s.description,
+          epicId,
+          priority: s.priority,
+        });
+        if (result?.cardId) cardIds.push(result.cardId);
+      }
+
+      return withStructured({ state: getState(), epicId, cardIds });
+    }
+  );
+
+  server.registerTool(
     "generate_prd",
     {
       title: "Generate PRD",
@@ -1972,6 +2787,163 @@ const main = async (enableStdio = true, logger = console) => {
           overwrite: overwrite !== false,
         });
         return withStructured({ success: true, path: target });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "update_prd",
+    {
+      title: "Update PRD",
+      description:
+        "Create or overwrite a PRD markdown file within the given project directory",
+      inputSchema: {
+        cwd: z.string(),
+        relativePath: z.string().optional(),
+        content: z.string(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({ cwd, relativePath, content }) => {
+      try {
+        const rel = String(relativePath || "_bmad-output/prd.md").trim();
+        const target = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content,
+          overwrite: true,
+        });
+        return withStructured({ success: true, path: target });
+      } catch (err) {
+        return withStructured({
+          success: false,
+          message: err?.message || String(err),
+        });
+      }
+    }
+  );
+
+  server.registerTool(
+    "add_prd_features",
+    {
+      title: "Add PRD Features",
+      description:
+        "Add feature bullet items into an existing PRD section (or create the section if missing)",
+      inputSchema: {
+        cwd: z.string(),
+        relativePath: z.string().optional(),
+        headingPath: z.array(z.string()).optional(),
+        features: z.array(z.string()),
+        createIfMissing: z.boolean().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string().optional(),
+        added: z.number().optional(),
+        content: z.string().optional(),
+        message: z.string().optional(),
+      },
+    },
+    async ({ cwd, relativePath, headingPath, features, createIfMissing }) => {
+      const rel = String(relativePath || "_bmad-output/prd.md").trim();
+      try {
+        let existingContent = "";
+        let targetPath = "";
+        try {
+          const read = await safeReadFile({ cwd, relativePath: rel });
+          existingContent = read.content;
+          targetPath = read.path;
+        } catch (err) {
+          if (!createIfMissing) throw err;
+        }
+
+        const requestedPath = (Array.isArray(headingPath) ? headingPath : [])
+          .map((v) => String(v || "").trim())
+          .filter(Boolean);
+        const effectiveHeadingPath = requestedPath.length
+          ? requestedPath
+          : ["Core Features (MVP)"];
+
+        if (!existingContent) {
+          const base = [
+            "# PRD",
+            "",
+            ...effectiveHeadingPath.map((h, i) => {
+              const level = i === 0 ? 2 : 3;
+              return `${"#".repeat(level)} ${h}`;
+            }),
+            "",
+            ...toBulletLines(features),
+            "",
+          ].join("\n");
+          const created = await safeWriteFile({
+            cwd,
+            relativePath: rel,
+            content: base,
+            overwrite: true,
+          });
+          return withStructured({
+            success: true,
+            path: created,
+            added: toBulletLines(features).length,
+            content: base,
+          });
+        }
+
+        const lines = normalizeMarkdownLineEndings(existingContent).split("\n");
+        let section = findSectionRangeByHeadingPath({
+          lines,
+          headingPath: effectiveHeadingPath,
+        });
+
+        let linesToEdit = lines;
+        if (!section) {
+          const blocks = [
+            "",
+            ...effectiveHeadingPath.map((h, i) => {
+              const level = i === 0 ? 2 : 3;
+              return `${"#".repeat(level)} ${h}`;
+            }),
+            "",
+          ];
+          linesToEdit = [...lines, ...blocks];
+          section = findSectionRangeByHeadingPath({
+            lines: linesToEdit,
+            headingPath: effectiveHeadingPath,
+          });
+        }
+
+        if (!section) {
+          throw new Error("Failed to locate or create target section");
+        }
+
+        const result = insertBulletsIntoSection({
+          lines: linesToEdit,
+          section,
+          bullets: features,
+        });
+        const nextContent = result.lines.join("\n");
+        const wrote = await safeWriteFile({
+          cwd,
+          relativePath: rel,
+          content: nextContent,
+          overwrite: true,
+        });
+        return withStructured({
+          success: true,
+          path: wrote || targetPath,
+          added: result.added,
+          content: nextContent,
+        });
       } catch (err) {
         return withStructured({
           success: false,

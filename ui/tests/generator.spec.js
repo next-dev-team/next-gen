@@ -75,6 +75,13 @@ test.describe("Generator UI", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
+    await window.evaluate(() => {
+      window.location.hash = "#/settings";
+    });
+    await expect(
+      window.getByRole("heading", { name: "Settings" })
+    ).toBeVisible({ timeout: 15000 });
+
     const startOnBootSwitch = window.getByRole("switch").first();
     await expect(startOnBootSwitch).toBeVisible();
 

@@ -275,6 +275,16 @@ const MCP_KANBAN_TOOL_OPTIONS = [
     label: "generate_prd",
     description: "Generate PRD markdown into a file.",
   },
+  {
+    id: "update_prd",
+    label: "update_prd",
+    description: "Overwrite an existing PRD markdown file.",
+  },
+  {
+    id: "add_prd_features",
+    label: "add_prd_features",
+    description: "Add feature bullets into a PRD section.",
+  },
 ];
 
 const getMcpToolUsageText = ({ toolId, activeBoard, projectRoot }) => {
@@ -329,6 +339,10 @@ const getMcpToolUsageText = ({ toolId, activeBoard, projectRoot }) => {
       return `scrum-kanban/bmad_status {"cwd":"${cwd}","mode":"npx"}`;
     case "generate_prd":
       return `scrum-kanban/generate_prd {"cwd":"${cwd}","content":"..."}`;
+    case "update_prd":
+      return `scrum-kanban/update_prd {"cwd":"${cwd}","relativePath":"_bmad-output/prd.md","content":"..."}`;
+    case "add_prd_features":
+      return `scrum-kanban/add_prd_features {"cwd":"${cwd}","relativePath":"_bmad-output/prd.md","headingPath":["Core Features (MVP)"],"features":["..."],"createIfMissing":true}`;
     default:
       return `scrum-kanban/${String(toolId || "<tool>")}`;
   }
@@ -353,6 +367,173 @@ const recommendAgent = ({ teamSize, sprintLength, autoSync }) => {
   if (Number.isFinite(sprint) && sprint >= 21) return "scrum-manager";
   if (!sync) return "scrum-quick";
   return "scrum-manager";
+};
+
+const renderMarkdownInline = (text) => {
+  const raw = String(text || "");
+  const parts = raw.split(/(`[^`]*`)/g).filter((p) => p !== "");
+  return parts.map((part, idx) => {
+    if (part.startsWith("`") && part.endsWith("`") && part.length >= 2) {
+      return (
+        <code
+          key={`${idx}:${part}`}
+          className="rounded bg-white/10 px-1 py-0.5 font-mono text-[12px]"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <React.Fragment key={`${idx}:${part}`}>{part}</React.Fragment>;
+  });
+};
+
+const MarkdownPreview = ({ value }) => {
+  const input = String(value || "").replace(/\r\n/g, "\n");
+  const lines = input.split("\n");
+  const blocks = [];
+
+  let i = 0;
+  let inCode = false;
+  let codeLines = [];
+
+  const flushCode = () => {
+    if (!codeLines.length) return;
+    blocks.push({ type: "code", text: codeLines.join("\n") });
+    codeLines = [];
+  };
+
+  while (i < lines.length) {
+    const line = String(lines[i] || "");
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("```")) {
+      if (inCode) {
+        flushCode();
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      i++;
+      continue;
+    }
+
+    if (inCode) {
+      codeLines.push(line);
+      i++;
+      continue;
+    }
+
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+      blocks.push({
+        type: "heading",
+        level: headingMatch[1].length,
+        text: String(headingMatch[2] || "").trim(),
+      });
+      i++;
+      continue;
+    }
+
+    const bulletMatch = line.match(/^\s*[-*+]\s+(.*)$/);
+    if (bulletMatch) {
+      const items = [];
+      while (i < lines.length) {
+        const l = String(lines[i] || "");
+        const m = l.match(/^\s*[-*+]\s+(.*)$/);
+        if (!m) break;
+        items.push(String(m[1] || "").trim());
+        i++;
+      }
+      blocks.push({ type: "ul", items });
+      continue;
+    }
+
+    if (!trimmed) {
+      blocks.push({ type: "spacer" });
+      i++;
+      continue;
+    }
+
+    const para = [trimmed];
+    i++;
+    while (i < lines.length) {
+      const next = String(lines[i] || "");
+      const nextTrimmed = next.trim();
+      if (!nextTrimmed) break;
+      if (/^(#{1,6})\s+/.test(next) || /^\s*[-*+]\s+/.test(nextTrimmed)) break;
+      if (nextTrimmed.startsWith("```")) break;
+      para.push(nextTrimmed);
+      i++;
+    }
+    blocks.push({ type: "p", text: para.join(" ") });
+  }
+
+  if (inCode) flushCode();
+
+  const headingClass = (level) => {
+    if (level <= 1) return "text-xl font-semibold";
+    if (level === 2) return "text-lg font-semibold";
+    if (level === 3) return "text-base font-semibold";
+    return "text-sm font-semibold";
+  };
+
+  return (
+    <div className="text-sm text-gray-100 whitespace-normal">
+      {blocks.map((b, idx) => {
+        const blockKey = `${idx}:${b.type}:${String(b.text || "")}`;
+        if (b.type === "spacer") return <div key={blockKey} className="h-2" />;
+        if (b.type === "heading")
+          return (
+            <div key={blockKey} className={cn("mt-3", headingClass(b.level))}>
+              {renderMarkdownInline(b.text)}
+            </div>
+          );
+        if (b.type === "code")
+          return (
+            <pre
+              key={blockKey}
+              className="mt-3 rounded-md border border-border/50 bg-black/60 p-3 overflow-x-auto text-xs"
+            >
+              <code className="font-mono">{b.text}</code>
+            </pre>
+          );
+        if (b.type === "ul")
+          return (
+            <ul key={blockKey} className="mt-2 list-disc pl-5 space-y-1">
+              {b.items.map((it, j) => (
+                <li key={`${j}:${it}`}>{renderMarkdownInline(it)}</li>
+              ))}
+            </ul>
+          );
+        if (b.type === "p")
+          return (
+            <p key={blockKey} className="mt-2 leading-6">
+              {renderMarkdownInline(b.text)}
+            </p>
+          );
+        return null;
+      })}
+    </div>
+  );
+};
+
+const normalizeContextDocs = ({ docs, prdPath }) => {
+  const prd = {
+    id: "prd",
+    label: "PRD",
+    path:
+      String(prdPath || "_bmad-output/prd.md").trim() || "_bmad-output/prd.md",
+  };
+  const raw = Array.isArray(docs) ? docs : [];
+  const cleaned = raw
+    .map((d) => ({
+      id: String(d?.id || "").trim(),
+      label: String(d?.label || "").trim() || "Context",
+      path: String(d?.path || "").trim(),
+    }))
+    .filter((d) => d.id && d.id !== "prd");
+
+  return [prd, ...cleaned];
 };
 
 // ============ Card Editor Dialog ============
@@ -1562,6 +1743,15 @@ const AgentAssistDialog = ({
   const [workflowRunLogs, setWorkflowRunLogs] = React.useState([]);
   const workflowRunActiveRef = React.useRef(false);
 
+  const [activeContextId, setActiveContextId] = React.useState("prd");
+  const [contextDrafts, setContextDrafts] = React.useState({});
+  const [contextBusy, setContextBusy] = React.useState(false);
+  const [contextStatus, setContextStatus] = React.useState(null);
+  const loadedContextRef = React.useRef(new Set());
+
+  const [newContextLabel, setNewContextLabel] = React.useState("");
+  const [newContextPath, setNewContextPath] = React.useState("");
+
   const [mcpRootPath, setMcpRootPath] = React.useState("");
 
   const recommendedAgent = React.useMemo(() => {
@@ -1712,6 +1902,140 @@ const AgentAssistDialog = ({
   }, [bmadInput]);
 
   const prdPath = String(setup.prdPath || "_bmad-output/prd.md").trim();
+
+  const contextDocs = React.useMemo(() => {
+    return normalizeContextDocs({ docs: setup.contextDocs, prdPath });
+  }, [prdPath, setup.contextDocs]);
+
+  React.useEffect(() => {
+    String(projectRoot || "");
+    loadedContextRef.current.clear();
+    setContextDrafts({});
+    setContextStatus(null);
+  }, [projectRoot]);
+
+  const setContextDraft = React.useCallback((docId, value) => {
+    const id = String(docId || "").trim();
+    if (!id) return;
+    setContextDrafts((prev) => ({ ...prev, [id]: String(value ?? "") }));
+  }, []);
+
+  const loadContextDoc = React.useCallback(
+    async ({ docId, relativePath, force }) => {
+      if (!window.electronAPI?.readProjectFile) return;
+      const root = String(projectRoot || "").trim();
+      const rel = String(relativePath || "").trim();
+      const id = String(docId || "").trim();
+      if (!root || !rel || !id) return;
+      if (!force && loadedContextRef.current.has(id)) return;
+      setContextBusy(true);
+      try {
+        const result = await window.electronAPI.readProjectFile({
+          projectRoot: root,
+          relativePath: rel,
+        });
+        setContextDraft(id, String(result?.content || ""));
+        loadedContextRef.current.add(id);
+        setContextStatus({ ok: true, docId: id, message: "Loaded" });
+      } catch (err) {
+        setContextStatus({
+          ok: false,
+          docId: id,
+          message: err?.message || "Failed to load",
+        });
+      } finally {
+        setContextBusy(false);
+      }
+    },
+    [projectRoot, setContextDraft]
+  );
+
+  const saveContextDoc = React.useCallback(
+    async ({ docId, relativePath }) => {
+      if (!window.electronAPI?.writeProjectFile) return;
+      const root = String(projectRoot || "").trim();
+      const rel = String(relativePath || "").trim();
+      const id = String(docId || "").trim();
+      if (!root || !rel || !id) return;
+
+      const content =
+        Object.hasOwn(contextDrafts, id) &&
+        typeof contextDrafts[id] === "string"
+          ? contextDrafts[id]
+          : "";
+
+      setContextBusy(true);
+      try {
+        const result = await window.electronAPI.writeProjectFile({
+          projectRoot: root,
+          relativePath: rel,
+          content,
+          overwrite: true,
+        });
+        loadedContextRef.current.add(id);
+        setContextStatus({
+          ok: true,
+          docId: id,
+          message: `Saved: ${String(result?.path || rel)}`,
+        });
+      } catch (err) {
+        setContextStatus({
+          ok: false,
+          docId: id,
+          message: err?.message || "Failed to save",
+        });
+      } finally {
+        setContextBusy(false);
+      }
+    },
+    [contextDrafts, projectRoot]
+  );
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (!hasProjectRoot) return;
+    if (activeTab !== "project") return;
+    contextDocs.forEach((doc) => {
+      if (!doc?.path) return;
+      loadContextDoc({ docId: doc.id, relativePath: doc.path, force: false });
+    });
+  }, [activeTab, contextDocs, hasProjectRoot, loadContextDoc, open]);
+
+  const addContextDoc = React.useCallback(() => {
+    const label = String(newContextLabel || "").trim();
+    const rel = String(newContextPath || "").trim();
+    if (!rel) return;
+    const id = `ctx_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const nextDocs = Array.isArray(setup.contextDocs) ? setup.contextDocs : [];
+    onChangeSetup({
+      ...setup,
+      contextDocs: [...nextDocs, { id, label: label || "Context", path: rel }],
+    });
+    setNewContextLabel("");
+    setNewContextPath("");
+    setActiveContextId(id);
+  }, [newContextLabel, newContextPath, onChangeSetup, setup]);
+
+  const removeContextDoc = React.useCallback(
+    (docId) => {
+      const id = String(docId || "").trim();
+      if (!id) return;
+      const nextDocs = (
+        Array.isArray(setup.contextDocs) ? setup.contextDocs : []
+      ).filter((d) => String(d?.id || "").trim() !== id);
+      onChangeSetup({ ...setup, contextDocs: nextDocs });
+      loadedContextRef.current.delete(id);
+      setContextDrafts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      if (activeContextId === id) setActiveContextId("prd");
+    },
+    [activeContextId, onChangeSetup, setup]
+  );
 
   const workflowDataPath = React.useMemo(() => {
     const root = String(projectRoot || "").replace(/[\\/]+$/, "");
@@ -3274,6 +3598,306 @@ const AgentAssistDialog = ({
                     </div>
                   )}
                 </div>
+
+                <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">Context</div>
+                      <div className="text-xs text-muted-foreground">
+                        Markdown files for PRD-first context
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      disabled={!hasProjectRoot || contextBusy}
+                      onClick={() => {
+                        contextDocs.forEach((doc) => {
+                          if (!doc?.path) return;
+                          loadContextDoc({
+                            docId: doc.id,
+                            relativePath: doc.path,
+                            force: true,
+                          });
+                        });
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                      Reload
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 grid sm:grid-cols-3 gap-2">
+                    <Input
+                      value={newContextLabel}
+                      onChange={(e) => setNewContextLabel(e.target.value)}
+                      placeholder="Label (e.g. Tech Spec)"
+                      className="bg-background/50"
+                      disabled={!hasProjectRoot}
+                    />
+                    <Input
+                      value={newContextPath}
+                      onChange={(e) => setNewContextPath(e.target.value)}
+                      placeholder="Relative path (e.g. docs/tech-spec.md)"
+                      className="bg-background/50"
+                      disabled={!hasProjectRoot}
+                    />
+                    <Button
+                      type="button"
+                      className="gap-2"
+                      disabled={
+                        !hasProjectRoot || !String(newContextPath || "").trim()
+                      }
+                      onClick={() => addContextDoc()}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add
+                    </Button>
+                  </div>
+
+                  <div className="mt-4 md:hidden">
+                    <Tabs
+                      value={activeContextId}
+                      onValueChange={setActiveContextId}
+                    >
+                      <TabsList className="w-full overflow-x-auto justify-start">
+                        {contextDocs.map((doc) => (
+                          <TabsTrigger
+                            key={doc.id}
+                            value={doc.id}
+                            className="shrink-0"
+                          >
+                            {doc.label}
+                          </TabsTrigger>
+                        ))}
+                      </TabsList>
+                      {contextDocs.map((doc) => {
+                        const draft =
+                          Object.hasOwn(contextDrafts, doc.id) &&
+                          typeof contextDrafts[doc.id] === "string"
+                            ? contextDrafts[doc.id]
+                            : "";
+                        const statusForDoc =
+                          contextStatus && contextStatus.docId === doc.id
+                            ? contextStatus
+                            : null;
+                        return (
+                          <TabsContent
+                            key={doc.id}
+                            value={doc.id}
+                            className="mt-4"
+                          >
+                            <Card className="border-border/50 bg-background/40">
+                              <CardHeader className="pb-3">
+                                <CardTitle className="text-sm">
+                                  {doc.label}
+                                </CardTitle>
+                                <div className="flex items-center justify-between gap-2 mt-1">
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {doc.path}
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      disabled={!hasProjectRoot || contextBusy}
+                                      onClick={() =>
+                                        loadContextDoc({
+                                          docId: doc.id,
+                                          relativePath: doc.path,
+                                          force: true,
+                                        })
+                                      }
+                                    >
+                                      <RefreshCw className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      disabled={!hasProjectRoot || contextBusy}
+                                      onClick={() =>
+                                        saveContextDoc({
+                                          docId: doc.id,
+                                          relativePath: doc.path,
+                                        })
+                                      }
+                                    >
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    </Button>
+                                    {doc.id !== "prd" && (
+                                      <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="ghost"
+                                        disabled={
+                                          !hasProjectRoot || contextBusy
+                                        }
+                                        onClick={() => removeContextDoc(doc.id)}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </div>
+                                {statusForDoc && (
+                                  <div
+                                    className={cn(
+                                      "mt-2 text-[11px] rounded-md border px-2 py-1",
+                                      statusForDoc.ok
+                                        ? "border-green-500/30 bg-green-500/10 text-green-200"
+                                        : "border-destructive/30 bg-destructive/10 text-destructive"
+                                    )}
+                                  >
+                                    {statusForDoc.message}
+                                  </div>
+                                )}
+                              </CardHeader>
+                              <CardContent>
+                                <Tabs defaultValue="preview">
+                                  <TabsList className="grid w-full grid-cols-2">
+                                    <TabsTrigger value="preview">
+                                      Preview
+                                    </TabsTrigger>
+                                    <TabsTrigger value="edit">Edit</TabsTrigger>
+                                  </TabsList>
+                                  <TabsContent value="preview" className="mt-3">
+                                    <div className="rounded-md border border-border/50 bg-black/50 p-3">
+                                      <MarkdownPreview value={draft} />
+                                    </div>
+                                  </TabsContent>
+                                  <TabsContent value="edit" className="mt-3">
+                                    <textarea
+                                      className="min-h-[260px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm font-mono"
+                                      value={draft}
+                                      onChange={(e) =>
+                                        setContextDraft(doc.id, e.target.value)
+                                      }
+                                    />
+                                  </TabsContent>
+                                </Tabs>
+                              </CardContent>
+                            </Card>
+                          </TabsContent>
+                        );
+                      })}
+                    </Tabs>
+                  </div>
+
+                  <div className="mt-4 hidden md:block overflow-x-auto">
+                    <div className="flex gap-3 min-w-max">
+                      {contextDocs.map((doc) => {
+                        const draft =
+                          Object.hasOwn(contextDrafts, doc.id) &&
+                          typeof contextDrafts[doc.id] === "string"
+                            ? contextDrafts[doc.id]
+                            : "";
+                        const statusForDoc =
+                          contextStatus && contextStatus.docId === doc.id
+                            ? contextStatus
+                            : null;
+                        return (
+                          <Card
+                            key={doc.id}
+                            className="w-[380px] border-border/50 bg-background/40"
+                          >
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm">
+                                {doc.label}
+                              </CardTitle>
+                              <div className="flex items-center justify-between gap-2 mt-1">
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {doc.path}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={!hasProjectRoot || contextBusy}
+                                    onClick={() =>
+                                      loadContextDoc({
+                                        docId: doc.id,
+                                        relativePath: doc.path,
+                                        force: true,
+                                      })
+                                    }
+                                  >
+                                    <RefreshCw className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={!hasProjectRoot || contextBusy}
+                                    onClick={() =>
+                                      saveContextDoc({
+                                        docId: doc.id,
+                                        relativePath: doc.path,
+                                      })
+                                    }
+                                  >
+                                    <CheckCircle2 className="h-4 w-4" />
+                                  </Button>
+                                  {doc.id !== "prd" && (
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      disabled={!hasProjectRoot || contextBusy}
+                                      onClick={() => removeContextDoc(doc.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              {statusForDoc && (
+                                <div
+                                  className={cn(
+                                    "mt-2 text-[11px] rounded-md border px-2 py-1",
+                                    statusForDoc.ok
+                                      ? "border-green-500/30 bg-green-500/10 text-green-200"
+                                      : "border-destructive/30 bg-destructive/10 text-destructive"
+                                  )}
+                                >
+                                  {statusForDoc.message}
+                                </div>
+                              )}
+                            </CardHeader>
+                            <CardContent>
+                              <Tabs defaultValue="preview">
+                                <TabsList className="grid w-full grid-cols-2">
+                                  <TabsTrigger value="preview">
+                                    Preview
+                                  </TabsTrigger>
+                                  <TabsTrigger value="edit">Edit</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="preview" className="mt-3">
+                                  <div className="rounded-md border border-border/50 bg-black/50 p-3 h-[360px] overflow-auto">
+                                    <MarkdownPreview value={draft} />
+                                  </div>
+                                </TabsContent>
+                                <TabsContent value="edit" className="mt-3">
+                                  <textarea
+                                    className="h-[360px] w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm font-mono"
+                                    value={draft}
+                                    onChange={(e) =>
+                                      setContextDraft(doc.id, e.target.value)
+                                    }
+                                  />
+                                </TabsContent>
+                              </Tabs>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </div>
             </ScrollArea>
           </TabsContent>
@@ -3494,6 +4118,7 @@ export default function ScrumBoardView() {
       projectUsers: "",
       projectSuccessMetrics: "",
       projectConstraints: "",
+      contextDocs: [],
     };
 
     let raw = null;
