@@ -131,6 +131,8 @@ const PRIORITY_CONFIG = {
 
 const BMAD_AGENT_SETUP_STORAGE_KEY = "bmad-scrum-agent-setup-v1";
 const SCRUM_OVERVIEW_TAB_STORAGE_KEY = "scrum-overview-tab-v1";
+const SCRUM_RECENT_PROJECTS_STORAGE_KEY = "scrum-recent-projects-v1";
+const SCRUM_MAX_RECENT_PROJECTS = 8;
 
 const BMAD_AGENT_OPTIONS = [
   {
@@ -275,11 +277,12 @@ const MCP_KANBAN_TOOL_OPTIONS = [
   },
 ];
 
-const getMcpToolUsageText = ({ toolId, activeBoard }) => {
+const getMcpToolUsageText = ({ toolId, activeBoard, projectRoot }) => {
   const boardId = activeBoard?.id || "<boardId>";
   const boardName = activeBoard?.name || "<boardName>";
   const listId = activeBoard?.lists?.[0]?.id || "<listId>";
   const cardId = activeBoard?.lists?.[0]?.cards?.[0]?.id || "<cardId>";
+  const cwd = String(projectRoot || "").trim() || "/absolute/path";
 
   switch (toolId) {
     case "scrum_get_state":
@@ -321,11 +324,11 @@ const getMcpToolUsageText = ({ toolId, activeBoard }) => {
     case "scrum_complete_story":
       return `scrum-kanban/scrum_complete_story {"boardId":"${boardId}","cardId":"${cardId}"}`;
     case "bmad_install":
-      return 'scrum-kanban/bmad_install {"cwd":"/absolute/path","mode":"npx"}';
+      return `scrum-kanban/bmad_install {"cwd":"${cwd}","mode":"npx"}`;
     case "bmad_status":
-      return 'scrum-kanban/bmad_status {"cwd":"/absolute/path","mode":"npx"}';
+      return `scrum-kanban/bmad_status {"cwd":"${cwd}","mode":"npx"}`;
     case "generate_prd":
-      return 'scrum-kanban/generate_prd {"cwd":"/absolute/path","content":"..."}';
+      return `scrum-kanban/generate_prd {"cwd":"${cwd}","content":"..."}`;
     default:
       return `scrum-kanban/${String(toolId || "<tool>")}`;
   }
@@ -658,7 +661,7 @@ const StatsCard = ({ stats }) => {
   );
 };
 
-const McpToolsUsage = ({ activeBoard }) => {
+const McpToolsUsage = ({ activeBoard, projectRoot }) => {
   const [toolId, setToolId] = React.useState("scrum_get_state");
 
   const toolMeta = React.useMemo(
@@ -667,8 +670,8 @@ const McpToolsUsage = ({ activeBoard }) => {
   );
 
   const usageText = React.useMemo(
-    () => getMcpToolUsageText({ toolId, activeBoard }),
-    [toolId, activeBoard]
+    () => getMcpToolUsageText({ toolId, activeBoard, projectRoot }),
+    [toolId, activeBoard, projectRoot]
   );
 
   const handleCopyUsage = React.useCallback(async () => {
@@ -727,44 +730,6 @@ const McpToolsUsage = ({ activeBoard }) => {
         {usageText}
       </div>
     </div>
-  );
-};
-
-// ============ Connection Status ============
-const ConnectionStatus = ({ connected, onReconnect }) => {
-  return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn(
-              "gap-2 text-xs",
-              connected ? "text-green-500" : "text-amber-500"
-            )}
-            onClick={onReconnect}
-          >
-            {connected ? (
-              <>
-                <Wifi className="h-4 w-4" />
-                <span className="hidden sm:inline">Live</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-4 w-4" />
-                <span className="hidden sm:inline">Offline</span>
-              </>
-            )}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          {connected
-            ? "Connected to MCP Server - Real-time updates enabled"
-            : "Using local storage - Click to reconnect"}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
   );
 };
 
@@ -3494,6 +3459,9 @@ export default function ScrumBoardView() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [agentAssistOpen, setAgentAssistOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
+  const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
+  const [projectPickerValue, setProjectPickerValue] = React.useState("");
+  const projectPickerFileRef = React.useRef(null);
 
   const [overviewTab, setOverviewTab] = React.useState(() => {
     try {
@@ -3528,9 +3496,14 @@ export default function ScrumBoardView() {
       projectConstraints: "",
     };
 
-    const raw = safeJsonParse(
-      localStorage.getItem(BMAD_AGENT_SETUP_STORAGE_KEY) || ""
-    );
+    let raw = null;
+    try {
+      raw = safeJsonParse(
+        localStorage.getItem(BMAD_AGENT_SETUP_STORAGE_KEY) || ""
+      );
+    } catch {
+      raw = null;
+    }
     if (!raw || typeof raw !== "object") return defaults;
 
     return {
@@ -3541,11 +3514,76 @@ export default function ScrumBoardView() {
   });
 
   React.useEffect(() => {
-    localStorage.setItem(
-      BMAD_AGENT_SETUP_STORAGE_KEY,
-      JSON.stringify(agentSetup)
-    );
+    try {
+      localStorage.setItem(
+        BMAD_AGENT_SETUP_STORAGE_KEY,
+        JSON.stringify(agentSetup)
+      );
+    } catch {}
   }, [agentSetup]);
+
+  const [recentProjects, setRecentProjects] = React.useState(() => {
+    let raw = null;
+    try {
+      raw = safeJsonParse(
+        localStorage.getItem(SCRUM_RECENT_PROJECTS_STORAGE_KEY) || ""
+      );
+    } catch {
+      raw = null;
+    }
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((v) => String(v || "").trim())
+      .filter(Boolean)
+      .slice(0, SCRUM_MAX_RECENT_PROJECTS);
+  });
+
+  React.useEffect(() => {
+    const root = String(agentSetup.projectRoot || "").trim();
+    if (!root) return;
+    setRecentProjects((prev) => {
+      const next = [root, ...prev.filter((p) => p !== root)].slice(
+        0,
+        SCRUM_MAX_RECENT_PROJECTS
+      );
+      try {
+        localStorage.setItem(
+          SCRUM_RECENT_PROJECTS_STORAGE_KEY,
+          JSON.stringify(next)
+        );
+      } catch {}
+      return next;
+    });
+  }, [agentSetup.projectRoot]);
+
+  const getProjectLabel = React.useCallback((p) => {
+    const cleaned = String(p || "").replace(/[\\/]+$/, "");
+    const parts = cleaned.split(/[\\/]+/).filter(Boolean);
+    return parts[parts.length - 1] || cleaned;
+  }, []);
+
+  const handleBrowseProjectRoot = React.useCallback(async () => {
+    if (window.electronAPI?.selectFolder) {
+      const selected = await window.electronAPI.selectFolder({
+        title: "Select project root",
+        defaultPath: agentSetup.projectRoot || undefined,
+      });
+      if (selected) {
+        setAgentSetup((s) => ({ ...s, projectRoot: selected }));
+      }
+      return;
+    }
+
+    setProjectPickerValue(String(agentSetup.projectRoot || ""));
+    setProjectPickerOpen(true);
+  }, [agentSetup.projectRoot]);
+
+  const projectOptions = React.useMemo(() => {
+    const root = String(agentSetup.projectRoot || "").trim();
+    if (root && !recentProjects.includes(root))
+      return [root, ...recentProjects];
+    return recentProjects;
+  }, [agentSetup.projectRoot, recentProjects]);
 
   React.useEffect(() => {
     try {
@@ -3859,7 +3897,32 @@ export default function ScrumBoardView() {
             <Settings className="h-5 w-5 text-muted-foreground" />
           </Button>
 
-          <ConnectionStatus connected={connected} onReconnect={connect} />
+          <Select
+            value={String(agentSetup.projectRoot || "").trim() || ""}
+            onValueChange={(next) => {
+              if (next === "__browse__") {
+                handleBrowseProjectRoot();
+                return;
+              }
+              setAgentSetup((s) => ({ ...s, projectRoot: next }));
+            }}
+          >
+            <SelectTrigger className="w-[220px] bg-background/50">
+              <SelectValue placeholder="Select project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__browse__">
+                {window.electronAPI?.selectFolder
+                  ? "Browse..."
+                  : "Add project..."}
+              </SelectItem>
+              {projectOptions.map((root) => (
+                <SelectItem key={root} value={root}>
+                  {`${getProjectLabel(root)} — ${root}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Select value={activeBoardId || ""} onValueChange={setActiveBoard}>
             <SelectTrigger className="w-[200px] bg-background/50">
@@ -3931,7 +3994,10 @@ export default function ScrumBoardView() {
           </TabsList>
 
           <TabsContent value="mcp" className="mt-3">
-            <McpToolsUsage activeBoard={activeBoard} />
+            <McpToolsUsage
+              activeBoard={activeBoard}
+              projectRoot={agentSetup.projectRoot}
+            />
           </TabsContent>
 
           <TabsContent value="stats" className="mt-3">
@@ -4008,6 +4074,97 @@ export default function ScrumBoardView() {
         onOpenStory={openAgentStory}
         onStartStory={startAgentStory}
       />
+
+      <Dialog
+        open={projectPickerOpen}
+        onOpenChange={(open) => setProjectPickerOpen(open)}
+      >
+        <DialogContent className="sm:max-w-[520px] bg-background/95 backdrop-blur-lg">
+          <DialogHeader>
+            <DialogTitle>Project</DialogTitle>
+            <DialogDescription>
+              Enter a project identifier to persist in your browser.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <Label
+                className={cn(
+                  "text-xs",
+                  window.electronAPI?.selectFolder ? "" : "cursor-pointer"
+                )}
+                onClick={() => {
+                  if (window.electronAPI?.selectFolder) return;
+                  if (projectPickerFileRef.current) {
+                    projectPickerFileRef.current.click();
+                  }
+                }}
+              >
+                Project root
+              </Label>
+              {!window.electronAPI?.selectFolder && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (projectPickerFileRef.current) {
+                      projectPickerFileRef.current.click();
+                    }
+                  }}
+                >
+                  Browse
+                </Button>
+              )}
+            </div>
+
+            {!window.electronAPI?.selectFolder && (
+              <input
+                ref={projectPickerFileRef}
+                type="file"
+                webkitdirectory=""
+                directory=""
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  const first = files[0];
+                  const rel = String(first?.webkitRelativePath || "");
+                  const root = rel.split("/").filter(Boolean)[0] || "";
+                  if (root) setProjectPickerValue(root);
+                  e.target.value = "";
+                }}
+              />
+            )}
+
+            <Input
+              value={projectPickerValue}
+              onChange={(e) => setProjectPickerValue(e.target.value)}
+              placeholder="/Users/you/path/to/project"
+              className="bg-background/50"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setProjectPickerOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                const next = String(projectPickerValue || "").trim();
+                setAgentSetup((s) => ({ ...s, projectRoot: next }));
+                setProjectPickerOpen(false);
+              }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={confirmState.open}

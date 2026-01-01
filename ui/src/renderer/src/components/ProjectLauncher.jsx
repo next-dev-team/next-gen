@@ -2,6 +2,7 @@ import {
   AppstoreOutlined,
   ClockCircleOutlined,
   CodeOutlined,
+  CopyOutlined,
   DeleteOutlined,
   FolderOpenOutlined,
   FolderOutlined,
@@ -28,6 +29,7 @@ import {
 } from "antd";
 import React, { useCallback, useEffect, useState } from "react";
 import { generators } from "../generators-config";
+import { copyToClipboard } from "../utils/codeGenerator";
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
@@ -168,14 +170,19 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
               Check that Visual Studio Code is installed and the{" "}
               <code>code</code> command is available in your terminal.
               <br />
-              <a
-                onClick={(e) => {
-                  e.preventDefault();
-                  openExternal("https://code.visualstudio.com/");
+              <Button
+                type="link"
+                size="small"
+                style={{
+                  padding: 0,
+                  height: "auto",
+                  color: "#6366f1",
+                  fontSize: "inherit",
                 }}
+                onClick={() => openExternal("https://code.visualstudio.com/")}
               >
                 Download VS Code
-              </a>{" "}
+              </Button>{" "}
               and enable the terminal integration from the Command Palette with
               “Shell Command: Install 'code' command in PATH”.
               {err?.message && (
@@ -288,9 +295,18 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
     });
   };
 
+  const handleCopyPath = async (path) => {
+    const success = await copyToClipboard(path);
+    if (success) {
+      message.success("Project path copied to clipboard");
+    } else {
+      message.error("Failed to copy path");
+    }
+  };
+
   // IDE dropdown items
-  const getIDEMenuItems = (project) =>
-    IDE_OPTIONS.map((ide) => ({
+  const getIDEMenuItems = (project) => [
+    ...IDE_OPTIONS.map((ide) => ({
       key: ide.key,
       label: (
         <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -299,7 +315,19 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
         </span>
       ),
       onClick: () => handleOpenInIDE(project, ide.key),
-    }));
+    })),
+    { type: "divider" },
+    {
+      key: "copy-path",
+      label: (
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <CopyOutlined />
+          <span>Copy Project Path</span>
+        </span>
+      ),
+      onClick: () => handleCopyPath(project.path),
+    },
+  ];
 
   return (
     <div className="project-launcher">
@@ -502,16 +530,42 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                     >
                       {project.name}
                     </Text>
-                    <Text
+                    <div
                       style={{
-                        color: "#64748b",
-                        fontSize: 12,
-                        display: "block",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 4,
                       }}
-                      ellipsis={{ tooltip: project.path }}
                     >
-                      {project.path}
-                    </Text>
+                      <Text
+                        style={{
+                          color: "#64748b",
+                          fontSize: 12,
+                          flex: 1,
+                        }}
+                        ellipsis={{ tooltip: project.path }}
+                      >
+                        {project.path}
+                      </Text>
+                      <Tooltip title="Copy path">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CopyOutlined style={{ fontSize: 10 }} />}
+                          onClick={() => handleCopyPath(project.path)}
+                          style={{
+                            color: "#64748b",
+                            width: 20,
+                            height: 20,
+                            minWidth: 20,
+                            padding: 0,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        />
+                      </Tooltip>
+                    </div>
                     {getGeneratorDescription(project) && (
                       <Text
                         style={{
