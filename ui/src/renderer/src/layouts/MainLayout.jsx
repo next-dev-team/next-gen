@@ -2,14 +2,12 @@ import {
   AppstoreOutlined,
   GithubOutlined,
   LayoutOutlined,
-  MoonOutlined,
   RocketOutlined,
   SettingOutlined,
-  SunOutlined,
   TableOutlined,
 } from "@ant-design/icons";
-import { Button, Layout, Segmented, Switch, Tooltip, Typography } from "antd";
-import React, { useEffect, useState } from "react";
+import { Button, Layout, Segmented, Tooltip, Typography } from "antd";
+import React from "react";
 import { Outlet, useLocation, useNavigate } from "react-router-dom";
 
 const { Header, Content, Footer } = Layout;
@@ -18,26 +16,12 @@ const { Title, Text } = Typography;
 export default function MainLayout({ isDarkMode, setIsDarkMode }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const [startOnBoot, setStartOnBoot] = useState(false);
 
   // Derive active tab from pathname
   const activeTab =
     location.pathname === "/"
       ? "generator"
       : location.pathname.substring(1).split("/")[0];
-
-  useEffect(() => {
-    if (window.electronAPI) {
-      window.electronAPI.getStartOnBoot().then(setStartOnBoot);
-    }
-  }, []);
-
-  const handleStartOnBootChange = (checked) => {
-    setStartOnBoot(checked);
-    if (window.electronAPI) {
-      window.electronAPI.setStartOnBoot(checked);
-    }
-  };
 
   const handleTabChange = (value) => {
     navigate(`/${value}`);
@@ -70,7 +54,7 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
+            gap: 12,
             flex: 1,
             WebkitAppRegion: "no-drag",
           }}
@@ -196,89 +180,11 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
             display: "flex",
             justifyContent: "flex-end",
             alignItems: "center",
-            gap: 16,
+            gap: 12,
             flex: 1,
             WebkitAppRegion: "no-drag",
           }}
         >
-          <Tooltip title="Launch app when system starts">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 12px",
-                background: startOnBoot
-                  ? "rgba(99, 102, 241, 0.2)"
-                  : "var(--color-bg-elevated)",
-                borderRadius: 8,
-                border: startOnBoot
-                  ? "1px solid #6366f1"
-                  : "1px solid var(--color-border)",
-                transition: "all 0.2s",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => handleStartOnBootChange(!startOnBoot)}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  cursor: "pointer",
-                  background: "transparent",
-                  border: "none",
-                  padding: 0,
-                  font: "inherit",
-                }}
-              >
-                <SettingOutlined
-                  style={{
-                    color: startOnBoot
-                      ? "#6366f1"
-                      : "var(--color-text-secondary)",
-                    fontSize: 14,
-                  }}
-                />
-                <Text
-                  style={{
-                    color: startOnBoot
-                      ? "var(--color-text-primary)"
-                      : "var(--color-text-secondary)",
-                    fontSize: 13,
-                  }}
-                >
-                  Auto-start
-                </Text>
-              </button>
-              <Switch
-                size="small"
-                checked={startOnBoot}
-                onChange={handleStartOnBootChange}
-              />
-            </div>
-          </Tooltip>
-
-          <div
-            style={{
-              width: 1,
-              height: 24,
-              background: "var(--color-border)",
-              margin: "0 8px",
-            }}
-          />
-
-          <Tooltip
-            title={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            <Button
-              type="text"
-              icon={isDarkMode ? <SunOutlined /> : <MoonOutlined />}
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              style={{ color: "var(--color-text-secondary)", fontSize: 18 }}
-            />
-          </Tooltip>
-
           <Tooltip title="View on GitHub">
             <Button
               type="text"
@@ -293,6 +199,15 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
               }}
             />
           </Tooltip>
+
+          <Tooltip title="Settings">
+            <Button
+              type="text"
+              icon={<SettingOutlined />}
+              style={{ color: "var(--color-text-secondary)", fontSize: 18 }}
+              onClick={() => navigate("/settings")}
+            />
+          </Tooltip>
         </div>
       </Header>
 
@@ -301,7 +216,7 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
         className="flex flex-col flex-1 overflow-hidden"
         style={{ padding: "0 48px 24px" }}
       >
-        <Outlet />
+        <Outlet context={{ isDarkMode, setIsDarkMode }} />
       </Content>
     </Layout>
   );
