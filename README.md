@@ -2,7 +2,8 @@
 
 the next generation of template
 
-![Screenshot](./assets/screenshot.png)
+![Screenshot](./assets/generator.png)
+![Kanban](./assets/kanban.png)
 
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
