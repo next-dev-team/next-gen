@@ -1362,10 +1362,12 @@ const ScrumCard = ({
   card,
   onClick,
   onDragStart,
+  onDragEnd,
   isLocked,
   lockInfo,
   listColor,
   storyKey,
+  isDragging,
 }) => {
   const [copied, setCopied] = React.useState(false);
   const priorityConfig =
@@ -1392,11 +1394,14 @@ const ScrumCard = ({
     <Card
       draggable={!isLocked}
       onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       className={cn(
-        "cursor-grab active:cursor-grabbing transition-all duration-200 group",
+        "cursor-grab active:cursor-grabbing transition-all duration-300 ease-in-out group",
         "hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30",
         "bg-card/50 backdrop-blur-sm border-border/50",
-        isLocked && "opacity-60 cursor-not-allowed ring-2 ring-amber-500/50"
+        isLocked && "opacity-60 cursor-not-allowed ring-2 ring-amber-500/50",
+        isDragging &&
+          "opacity-20 scale-95 border-primary/40 grayscale shadow-none"
       )}
     >
       <CardContent className="p-3">
@@ -1539,9 +1544,10 @@ const DropZone = ({ isActive, onDrop }) => {
       role="presentation"
       aria-hidden="true"
       className={cn(
-        "h-2 rounded transition-all duration-200",
-        isActive ? "hover:bg-primary/20 hover:h-4" : "opacity-40",
-        over && "bg-primary/40 h-6 border-2 border-dashed border-primary/50"
+        "h-4 rounded transition-all duration-300 ease-in-out relative",
+        isActive ? "hover:bg-primary/10 hover:h-12" : "opacity-0 h-1",
+        over &&
+          "bg-primary/20 h-16 border-2 border-dashed border-primary/40 shadow-inner"
       )}
       onDragOver={(e) => {
         e.preventDefault();
@@ -1553,7 +1559,13 @@ const DropZone = ({ isActive, onDrop }) => {
         setOver(false);
         onDrop(e);
       }}
-    />
+    >
+      {over && (
+        <div className="absolute inset-0 flex items-center justify-center text-primary/40 text-[10px] font-medium uppercase tracking-wider">
+          Drop here
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -1571,6 +1583,7 @@ const ListColumn = ({
   onRename,
   onDelete,
   onDragStartCard,
+  onDragEndCard,
   onDropToIndex,
   onDropToEnd,
   isCardLocked,
@@ -1595,7 +1608,7 @@ const ListColumn = ({
       role="presentation"
       className={cn(
         "relative w-[320px] rounded-xl border bg-background/50 backdrop-blur-sm flex flex-col h-full min-h-0",
-        "border-border/50 hover:border-border transition-colors",
+        "border-border/50 hover:border-border transition-all duration-300",
         isListDropTarget && "ring-2 ring-primary/30"
       )}
       onDragOver={onDragOverList}
@@ -1746,29 +1759,40 @@ const ListColumn = ({
           {list.cards.map((card, index) => {
             const locked = isCardLocked(card.id);
             const lockInfo = getCardLock(card.id);
+            const isDragging = isCardDrag && dragState?.cardId === card.id;
 
             return (
               <React.Fragment key={card.id}>
                 <DropZone
-                  isActive={isCardDrag && !isDragFromHere}
+                  isActive={
+                    isCardDrag &&
+                    (!isDragFromHere ||
+                      (index !== dragState?.index &&
+                        index !== dragState?.index + 1))
+                  }
                   onDrop={(e) => onDropToIndex(e, index)}
                 />
                 <div className="group">
                   <ScrumCard
                     card={card}
                     onClick={() => onEditCard(card)}
-                    onDragStart={(e) => onDragStartCard(e, card.id)}
+                    onDragStart={(e) => onDragStartCard(e, card.id, index)}
+                    onDragEnd={onDragEndCard}
                     isLocked={locked}
                     lockInfo={lockInfo}
                     listColor={list.color}
                     storyKey={storyKeyByCardId?.[card.id]}
+                    isDragging={isDragging}
                   />
                 </div>
               </React.Fragment>
             );
           })}
           <DropZone
-            isActive={isCardDrag && !isDragFromHere}
+            isActive={
+              isCardDrag &&
+              (!isDragFromHere || dragState?.index !== list.cards.length - 1)
+            }
             onDrop={(e) => onDropToIndex(e, list.cards.length)}
           />
 
@@ -5410,16 +5434,21 @@ export default function ScrumBoardView() {
     }
   };
 
-  const onDragStartCard = (e, listId, cardId) => {
+  const onDragStartCard = (e, listId, cardId, index) => {
     if (isCardLocked(cardId)) {
       e.preventDefault();
       return;
     }
 
-    const payload = { type: "scrum-card", listId, cardId };
+    const payload = { type: "scrum-card", listId, cardId, index };
     e.dataTransfer.setData("application/json", JSON.stringify(payload));
     e.dataTransfer.effectAllowed = "move";
-    setDragState({ type: "card", listId, cardId });
+    setDragState({ type: "card", listId, cardId, index });
+    setListDrop(null);
+  };
+
+  const onDragEndCard = () => {
+    setDragState(null);
     setListDrop(null);
   };
 
@@ -5682,9 +5711,10 @@ export default function ScrumBoardView() {
               onEditCard={(card) => openEditCard(list.id, card)}
               onRename={(name) => renameList(list.id, name)}
               onDelete={() => deleteList(list.id)}
-              onDragStartCard={(e, cardId) =>
-                onDragStartCard(e, list.id, cardId)
+              onDragStartCard={(e, cardId, index) =>
+                onDragStartCard(e, list.id, cardId, index)
               }
+              onDragEndCard={onDragEndCard}
               onDropToIndex={(e, index) => onDropCardToList(e, list.id, index)}
               onDropToEnd={(e) =>
                 onDropCardToList(e, list.id, list.cards.length)

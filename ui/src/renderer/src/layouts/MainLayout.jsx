@@ -1,5 +1,6 @@
 import {
   AppstoreOutlined,
+  BugOutlined,
   GithubOutlined,
   LayoutOutlined,
   RocketOutlined,
@@ -166,6 +167,22 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
                   </div>
                 ),
                 value: "scrum-board",
+              },
+              {
+                label: (
+                  <div
+                    style={{
+                      padding: "2px 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <BugOutlined />
+                    <span>Dev Tool</span>
+                  </div>
+                ),
+                value: "dev-tool",
               },
             ]}
             style={{
