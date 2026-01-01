@@ -9,7 +9,7 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "postinstall": "electron-builder install-app-deps",
+    "postinstall": "node -e \"if(process.platform==='win32'){const fs=require('fs'); const path=require('path'); const pathEntries=(process.env.PATH||'').split(';').filter(Boolean); const names=['pnpm.cmd','pnpm.exe','pnpm.bat']; let resolved=null; for(const dir of pathEntries){ for(const name of names){ const candidate=path.join(dir,name); if(fs.existsSync(candidate)){ resolved=candidate; break; } } if(resolved) break; } if(resolved){process.env.npm_execpath=resolved;}} const {installAppDeps}=require('electron-builder/out/cli/install-app-deps'); installAppDeps({platform:process.platform,arch:process.arch}).catch((e)=>{console.error(e); process.exit(1);});\"",
     "build:win": "npm run build && electron-builder --win",
     "test": "playwright test",
     "mcp:scrum": "node scripts/scrum-mcp-server.js",
