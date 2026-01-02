@@ -540,7 +540,8 @@ export default function BrowserToolView() {
   const isWeb = typeof __WEB__ !== "undefined" && Boolean(__WEB__);
   const hasElectronView = !isWeb && Boolean(window.electronAPI?.browserView);
   const isRouteActive =
-    location.pathname === "/browser" || location.pathname.startsWith("/browser/");
+    location.pathname === "/browser" ||
+    location.pathname.startsWith("/browser/");
 
   useEffect(() => {
     if (activeTab?.kind !== "browser") {
@@ -607,7 +608,13 @@ export default function BrowserToolView() {
     };
 
     run().catch(() => {});
-  }, [activeTab?.kind, hasElectronView, isRouteActive, resolvedActiveTabId, updateBounds]);
+  }, [
+    activeTab?.kind,
+    hasElectronView,
+    isRouteActive,
+    resolvedActiveTabId,
+    updateBounds,
+  ]);
 
   const openInNewTab = useCallback(
     async (url) => {
@@ -658,7 +665,14 @@ export default function BrowserToolView() {
     } else if (!urlParam) {
       lastProcessedUrlRef.current = null;
     }
-  }, [isRouteActive, searchParams, tabStateById, setActiveTab, openInNewTab, navigate]);
+  }, [
+    isRouteActive,
+    searchParams,
+    tabStateById,
+    setActiveTab,
+    openInNewTab,
+    navigate,
+  ]);
 
   const activeIsBrowser = activeTab?.kind === "browser";
   const canGoBack = Boolean(activeTabState.canGoBack);
