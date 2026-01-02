@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   BugOutlined,
+  GlobalOutlined,
   GithubOutlined,
   LayoutOutlined,
   RocketOutlined,
@@ -151,6 +152,22 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
                   </div>
                 ),
                 value: "ui",
+              },
+              {
+                label: (
+                  <div
+                    style={{
+                      padding: "2px 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <GlobalOutlined />
+                    <span>Browser</span>
+                  </div>
+                ),
+                value: "browser",
               },
               {
                 label: (

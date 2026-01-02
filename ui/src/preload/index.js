@@ -78,6 +78,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("bmad-cli-log", handler);
   },
 
+  browserView: {
+    create: (tabId, url) => ipcRenderer.invoke("browserview-create", { tabId, url }),
+    show: (tabId) => ipcRenderer.invoke("browserview-show", { tabId }),
+    hideAll: () => ipcRenderer.invoke("browserview-hide-all"),
+    destroy: (tabId) => ipcRenderer.invoke("browserview-destroy", { tabId }),
+    setBounds: (tabId, bounds) =>
+      ipcRenderer.invoke("browserview-set-bounds", { tabId, bounds }),
+    loadURL: (tabId, url) =>
+      ipcRenderer.invoke("browserview-load-url", { tabId, url }),
+    goBack: (tabId) => ipcRenderer.invoke("browserview-go-back", { tabId }),
+    goForward: (tabId) => ipcRenderer.invoke("browserview-go-forward", { tabId }),
+    reload: (tabId) => ipcRenderer.invoke("browserview-reload", { tabId }),
+    onState: (callback) => {
+      const handler = (event, payload) => callback(payload);
+      ipcRenderer.on("browserview-state", handler);
+      return () => ipcRenderer.removeListener("browserview-state", handler);
+    },
+  },
+
   writeProjectFile: (payload) => ipcRenderer.invoke("write-project-file", payload),
   readProjectFile: (payload) => ipcRenderer.invoke("read-project-file", payload),
 

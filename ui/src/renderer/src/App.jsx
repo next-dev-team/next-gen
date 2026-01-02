@@ -9,6 +9,7 @@ import { Toaster } from "./components/ui/sonner";
 const GeneratorView = lazy(() => import("./views/GeneratorView"));
 const ProjectsView = lazy(() => import("./views/ProjectsView"));
 const UIView = lazy(() => import("./views/UIView"));
+const BrowserToolView = lazy(() => import("./views/BrowserToolView"));
 const ScrumBoardView = lazy(() => import("./views/ScrumBoardView"));
 const DevToolView = lazy(() => import("./views/DevToolView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
@@ -122,6 +123,7 @@ function App() {
               <Route path="generator" element={<GeneratorView />} />
               <Route path="projects" element={<ProjectsView />} />
               <Route path="ui" element={<UIView />} />
+              <Route path="browser" element={<BrowserToolView />} />
               <Route path="scrum-board" element={<ScrumBoardView />} />
               <Route path="dev-tool" element={<DevToolView />} />
               <Route path="settings" element={<SettingsView />} />

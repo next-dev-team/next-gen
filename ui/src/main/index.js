@@ -1,6 +1,7 @@
 const {
   app,
   BrowserWindow,
+  BrowserView,
   globalShortcut,
   ipcMain,
   shell,
@@ -27,6 +28,10 @@ async function getStore() {
 let mainWindow = null;
 let devToolsWindow = null;
 let serverRunning = false;
+
+const browserViews = new Map();
+let activeBrowserTabId = null;
+const browserBoundsCache = new Map();
 
 // Log buffering
 const mcpLogBuffer = [];
@@ -162,6 +167,150 @@ function sendLog(type, message) {
     mainWindow.webContents.send("generator-log", { type, message });
   }
 }
+
+function notifyBrowserState(tabId) {
+  const view = browserViews.get(tabId);
+  if (!view || !mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("browserview-state", {
+    tabId,
+    url: view.webContents.getURL(),
+    canGoBack: view.webContents.canGoBack(),
+    canGoForward: view.webContents.canGoForward(),
+  });
+}
+
+function ensureBrowserView(tabId) {
+  const existing = browserViews.get(tabId);
+  if (existing && !existing.webContents.isDestroyed()) return existing;
+
+  const view = new BrowserView({
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+    },
+  });
+
+  view.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+  view.webContents.on("did-navigate", () => notifyBrowserState(tabId));
+  view.webContents.on("did-navigate-in-page", () => notifyBrowserState(tabId));
+  view.webContents.on("did-start-navigation", () => notifyBrowserState(tabId));
+  view.webContents.on("did-finish-load", () => notifyBrowserState(tabId));
+
+  browserViews.set(tabId, view);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (typeof mainWindow.addBrowserView === "function") {
+      mainWindow.addBrowserView(view);
+    } else {
+      mainWindow.setBrowserView(view);
+    }
+  }
+
+  return view;
+}
+
+function hideBrowserView(tabId) {
+  const view = browserViews.get(tabId);
+  if (!view || view.webContents.isDestroyed()) return;
+  view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+}
+
+function showBrowserView(tabId) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  activeBrowserTabId = tabId;
+  for (const [id] of browserViews.entries()) {
+    if (id !== tabId) hideBrowserView(id);
+  }
+
+  const view = ensureBrowserView(tabId);
+  const bounds = browserBoundsCache.get(tabId);
+  if (bounds) view.setBounds(bounds);
+  notifyBrowserState(tabId);
+}
+
+function destroyBrowserView(tabId) {
+  const view = browserViews.get(tabId);
+  if (!view) return;
+  browserViews.delete(tabId);
+  browserBoundsCache.delete(tabId);
+  if (activeBrowserTabId === tabId) activeBrowserTabId = null;
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    if (typeof mainWindow.removeBrowserView === "function") {
+      try {
+        mainWindow.removeBrowserView(view);
+      } catch {}
+    }
+  }
+
+  try {
+    view.webContents.destroy();
+  } catch {}
+}
+
+ipcMain.handle("browserview-create", async (event, { tabId, url }) => {
+  const view = ensureBrowserView(tabId);
+  if (url) {
+    await view.webContents.loadURL(url);
+  }
+  return true;
+});
+
+ipcMain.handle("browserview-show", async (event, { tabId }) => {
+  showBrowserView(tabId);
+  return true;
+});
+
+ipcMain.handle("browserview-hide-all", async () => {
+  activeBrowserTabId = null;
+  for (const [id] of browserViews.entries()) hideBrowserView(id);
+  return true;
+});
+
+ipcMain.handle("browserview-destroy", async (event, { tabId }) => {
+  destroyBrowserView(tabId);
+  return true;
+});
+
+ipcMain.handle("browserview-set-bounds", async (event, { tabId, bounds }) => {
+  if (!bounds) return false;
+  browserBoundsCache.set(tabId, bounds);
+  if (activeBrowserTabId !== tabId) return true;
+  const view = ensureBrowserView(tabId);
+  view.setBounds(bounds);
+  return true;
+});
+
+ipcMain.handle("browserview-load-url", async (event, { tabId, url }) => {
+  const view = ensureBrowserView(tabId);
+  await view.webContents.loadURL(url);
+  return true;
+});
+
+ipcMain.handle("browserview-go-back", async (event, { tabId }) => {
+  const view = browserViews.get(tabId);
+  if (!view || view.webContents.isDestroyed()) return false;
+  if (view.webContents.canGoBack()) view.webContents.goBack();
+  return true;
+});
+
+ipcMain.handle("browserview-go-forward", async (event, { tabId }) => {
+  const view = browserViews.get(tabId);
+  if (!view || view.webContents.isDestroyed()) return false;
+  if (view.webContents.canGoForward()) view.webContents.goForward();
+  return true;
+});
+
+ipcMain.handle("browserview-reload", async (event, { tabId }) => {
+  const view = browserViews.get(tabId);
+  if (!view || view.webContents.isDestroyed()) return false;
+  view.webContents.reload();
+  return true;
+});
 
 ipcMain.handle("get-start-on-boot", async () => {
   const currentStore = await getStore();
