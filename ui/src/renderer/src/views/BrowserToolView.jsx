@@ -1,10 +1,12 @@
 import React, {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -46,13 +48,33 @@ function normalizeUrl(input) {
   const raw = String(input || "").trim();
   if (!raw) return "";
 
-  if (/^https?:\/\//i.test(raw)) return raw;
-  if (/^file:\/\//i.test(raw)) return raw;
+  // If it already has a protocol, try to normalize it using URL object
+  if (/^https?:\/\//i.test(raw) || /^file:\/\//i.test(raw)) {
+    try {
+      return new URL(raw).toString();
+    } catch (e) {
+      return raw;
+    }
+  }
+
   if (/^about:/i.test(raw)) return raw;
-  if (/^localhost(:\d+)?(\/|$)/i.test(raw)) return `http://${raw}`;
+  if (/^localhost(:\d+)?(\/|$)/i.test(raw)) {
+    try {
+      return new URL(`http://${raw}`).toString();
+    } catch (e) {
+      return `http://${raw}`;
+    }
+  }
+
   if (raw.includes(" "))
     return `https://www.google.com/search?q=${encodeURIComponent(raw)}`;
-  return `https://${raw}`;
+
+  // Default to https
+  try {
+    return new URL(`https://${raw}`).toString();
+  } catch (e) {
+    return `https://${raw}`;
+  }
 }
 
 function Dashboard({ onOpenUrl }) {
@@ -385,6 +407,8 @@ const ReactQueryPanel = React.lazy(async () => {
 });
 
 export default function BrowserToolView() {
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tabs = useBrowserTabsStore((s) => s.tabs);
   const activeTabId = useBrowserTabsStore((s) => s.activeTabId);
   const tabStateById = useBrowserTabsStore((s) => s.tabStateById);
@@ -399,6 +423,7 @@ export default function BrowserToolView() {
   const [address, setAddress] = useState("");
   const contentRef = useRef(null);
   const iframeRef = useRef(null);
+  const lastProcessedUrlRef = useRef(null);
 
   const resolvedActiveTabId = tabs.some((t) => t.id === activeTabId)
     ? activeTabId
@@ -469,24 +494,51 @@ export default function BrowserToolView() {
     run().catch(() => {});
   }, [activeTab?.kind, hasElectronView, resolvedActiveTabId, updateBounds]);
 
-  const openInNewTab = async (url) => {
-    const normalized = normalizeUrl(url);
-    if (!normalized) return;
+  const openInNewTab = useCallback(
+    async (url) => {
+      const normalized = normalizeUrl(url);
+      if (!normalized) return;
 
-    const id = openUrlTab(normalized);
-    if (!id) return;
+      const id = openUrlTab(normalized);
+      if (!id) return;
 
-    if (hasElectronView) {
-      try {
-        await window.electronAPI.browserView.create(id, normalized);
-        await window.electronAPI.browserView.show(id);
-      } catch (err) {
-        toast.error("Failed to open tab", {
-          description: String(err?.message || err),
-        });
+      if (hasElectronView) {
+        try {
+          await window.electronAPI.browserView.create(id, normalized);
+          await window.electronAPI.browserView.show(id);
+        } catch (err) {
+          toast.error("Failed to open tab", {
+            description: String(err?.message || err),
+          });
+        }
       }
+    },
+    [hasElectronView, openUrlTab]
+  );
+
+  useEffect(() => {
+    const urlParam = searchParams.get("url");
+    if (urlParam && urlParam !== lastProcessedUrlRef.current) {
+      lastProcessedUrlRef.current = urlParam;
+
+      const normalized = normalizeUrl(urlParam);
+      // Robust check: compare normalized versions of all open tab URLs
+      const existingTabId = Object.keys(tabStateById).find((id) => {
+        const tabUrl = tabStateById[id]?.url;
+        return tabUrl && normalizeUrl(tabUrl) === normalized;
+      });
+
+      if (existingTabId) {
+        setActiveTab(existingTabId);
+      } else {
+        openInNewTab(normalized);
+      }
+      // Clear the query parameter from the URL without adding to history
+      navigate("/browser", { replace: true });
+    } else if (!urlParam) {
+      lastProcessedUrlRef.current = null;
     }
-  };
+  }, [searchParams, tabStateById, setActiveTab, openInNewTab, navigate]);
 
   const activeIsBrowser = activeTab?.kind === "browser";
   const canGoBack = Boolean(activeTabState.canGoBack);
@@ -525,10 +577,10 @@ export default function BrowserToolView() {
               <div
                 key={t.id}
                 className={cn(
-                  "group flex items-center rounded-md border",
+                  "group flex items-center rounded-md border transition-all duration-200 ease-in-out",
                   isActive
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-background hover:bg-accent"
+                    ? "bg-accent text-accent-foreground shadow-sm ring-1 ring-ring/20"
+                    : "bg-background/50 hover:bg-accent/50 border-transparent hover:border-border"
                 )}
               >
                 <button
@@ -550,12 +602,15 @@ export default function BrowserToolView() {
                   title={t.title}
                   className="flex items-center gap-2 px-3 py-1 text-sm"
                 >
-                  <span className="max-w-[220px] truncate">{t.title}</span>
+                  <span className="max-w-[220px] truncate font-medium">
+                    {t.title}
+                  </span>
                 </button>
                 {t.closable ? (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       closeTab(t.id);
                       if (hasElectronView) {
                         window.electronAPI.browserView
@@ -563,26 +618,27 @@ export default function BrowserToolView() {
                           .catch(() => {});
                       }
                     }}
-                    className="mr-1 flex h-6 w-6 items-center justify-center rounded hover:bg-background/60"
+                    className="mr-1 flex h-6 w-6 items-center justify-center rounded hover:bg-background/80"
                     aria-label={`Close ${t.title} tab`}
                   >
-                    <X className="h-3.5 w-3.5 opacity-70 group-hover:opacity-100" />
+                    <X className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100" />
                   </button>
                 ) : null}
               </div>
             );
           })}
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => {
+              openInNewTab("https://www.google.com");
+            }}
+            aria-label="New tab"
+            className="h-8 w-8 shrink-0 rounded-full hover:bg-accent/80"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => {
-            openInNewTab("https://www.google.com");
-          }}
-          aria-label="New tab"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
         <Button
           size="icon"
           variant="ghost"
