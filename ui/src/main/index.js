@@ -19,7 +19,9 @@ const resolveMcpServerPath = () => {
     path.join(path.dirname(app.getAppPath()), "scripts", "scrum-mcp-server.js"),
   ];
 
-  const devCandidates = [path.join(__dirname, "../../scripts/scrum-mcp-server.js")];
+  const devCandidates = [
+    path.join(__dirname, "../../scripts/scrum-mcp-server.js"),
+  ];
 
   const candidates = app.isPackaged
     ? [...packagedCandidates, ...devCandidates]
