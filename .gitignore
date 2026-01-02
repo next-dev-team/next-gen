@@ -14,3 +14,5 @@ my-turborepo
 # ui/src/renderer/src/output.css
 _bmad
 .claude
+dist-web/
+ui/dist-web/

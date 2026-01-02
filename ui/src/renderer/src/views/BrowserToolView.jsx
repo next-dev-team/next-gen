@@ -405,7 +405,8 @@ export default function BrowserToolView() {
     : tabs[0]?.id;
   const activeTab = tabs.find((t) => t.id === resolvedActiveTabId) || tabs[0];
   const activeTabState = tabStateById[resolvedActiveTabId] || {};
-  const hasElectronView = Boolean(window.electronAPI?.browserView);
+  const isWeb = typeof __WEB__ !== "undefined" && Boolean(__WEB__);
+  const hasElectronView = !isWeb && Boolean(window.electronAPI?.browserView);
 
   useEffect(() => {
     if (activeTab?.kind !== "browser") {
@@ -676,7 +677,7 @@ export default function BrowserToolView() {
 
           {activeTab?.kind === "browser" ? (
             <div ref={contentRef} className="absolute inset-0">
-              {!window.electronAPI?.browserView ? (
+              {!hasElectronView ? (
                 <iframe
                   ref={iframeRef}
                   title="Web preview"

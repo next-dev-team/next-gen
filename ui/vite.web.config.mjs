@@ -6,6 +6,9 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   root: "src/renderer",
+  define: {
+    __WEB__: true,
+  },
   resolve: {
     alias: {
       "@": resolve("./src/renderer/src"),
@@ -21,4 +24,3 @@ export default defineConfig({
     emptyOutDir: true,
   },
 });
-
