@@ -18,6 +18,7 @@ import {
   Plus,
   RotateCw,
   Search,
+  Star,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -77,8 +78,25 @@ function normalizeUrl(input) {
   }
 }
 
+function formatUrlLabel(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    const path = u.pathname && u.pathname !== "/" ? u.pathname : "";
+    return `${u.hostname}${path}`;
+  } catch {
+    return raw;
+  }
+}
+
 function Dashboard({ onOpenUrl }) {
   const [query, setQuery] = useState("");
+
+  const bookmarks = useBrowserTabsStore((s) => s.bookmarks);
+  const history = useBrowserTabsStore((s) => s.history);
+  const removeBookmark = useBrowserTabsStore((s) => s.removeBookmark);
+  const clearHistory = useBrowserTabsStore((s) => s.clearHistory);
 
   const items = useMemo(
     () => [
@@ -193,6 +211,91 @@ function Dashboard({ onOpenUrl }) {
                 </Button>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Bookmarks</CardTitle>
+            <CardDescription>Your saved pages.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {bookmarks.length ? (
+              <div className="flex flex-col gap-2">
+                {bookmarks.map((b) => (
+                  <div key={b.url} className="flex items-center gap-2">
+                    <Button
+                      onClick={() => onOpenUrl(b.url)}
+                      variant="outline"
+                      className="h-auto flex-1 justify-start gap-2 px-3 py-2"
+                      title={b.url}
+                    >
+                      <span className="truncate font-medium">
+                        {b.title || formatUrlLabel(b.url)}
+                      </span>
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => removeBookmark(b.url)}
+                      aria-label="Remove bookmark"
+                      className="h-9 w-9"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                No bookmarks yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">Recent History</CardTitle>
+              {history.length ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearHistory}
+                  className="h-8"
+                >
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+            <CardDescription>Last 10 opened pages.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {history.length ? (
+              <div className="flex flex-col gap-2">
+                {history.map((h) => (
+                  <Button
+                    key={`${h.url}-${h.at}`}
+                    onClick={() => onOpenUrl(h.url)}
+                    variant="outline"
+                    className="h-auto justify-start gap-2 px-3 py-2"
+                    title={h.url}
+                  >
+                    <span className="truncate font-medium">
+                      {h.title || formatUrlLabel(h.url)}
+                    </span>
+                    <span className="ml-auto truncate text-xs text-muted-foreground">
+                      {formatUrlLabel(h.url)}
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                No history yet.
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -417,6 +520,9 @@ export default function BrowserToolView() {
   const closeTab = useBrowserTabsStore((s) => s.closeTab);
   const openUrlTab = useBrowserTabsStore((s) => s.openUrlTab);
   const updateTabState = useBrowserTabsStore((s) => s.updateTabState);
+  const addHistoryEntry = useBrowserTabsStore((s) => s.addHistoryEntry);
+  const toggleBookmark = useBrowserTabsStore((s) => s.toggleBookmark);
+  const bookmarks = useBrowserTabsStore((s) => s.bookmarks);
 
   const devPanel = useBrowserTabsStore((s) => s.devPanel);
   const setDevPanelOpen = useBrowserTabsStore((s) => s.setDevPanelOpen);
@@ -477,11 +583,12 @@ export default function BrowserToolView() {
         canGoBack: payload.canGoBack,
         canGoForward: payload.canGoForward,
       });
+      if (payload.url) addHistoryEntry(payload.url, payload.url);
     });
     return () => {
       if (typeof off === "function") off();
     };
-  }, [hasElectronView, updateTabState]);
+  }, [addHistoryEntry, hasElectronView, updateTabState]);
 
   useEffect(() => {
     if (!hasElectronView) return;
@@ -507,6 +614,7 @@ export default function BrowserToolView() {
       const normalized = normalizeUrl(url);
       if (!normalized) return;
 
+      addHistoryEntry(normalized, normalized);
       const id = openUrlTab(normalized);
       if (!id) return;
 
@@ -521,7 +629,7 @@ export default function BrowserToolView() {
         }
       }
     },
-    [hasElectronView, openUrlTab]
+    [addHistoryEntry, hasElectronView, openUrlTab]
   );
 
   useEffect(() => {
@@ -564,6 +672,7 @@ export default function BrowserToolView() {
     const url = normalizeUrl(address);
     if (!url) return;
     updateTabState(resolvedActiveTabId, { url });
+    addHistoryEntry(url, url);
 
     if (hasElectronView) {
       await window.electronAPI.browserView.loadURL(resolvedActiveTabId, url);
@@ -574,6 +683,16 @@ export default function BrowserToolView() {
       iframeRef.current.src = url;
     }
   };
+
+  const activeUrlForBookmark = useMemo(() => {
+    if (!activeIsBrowser) return "";
+    return normalizeUrl(activeTabState.url || address);
+  }, [activeIsBrowser, activeTabState.url, address]);
+
+  const isActiveBookmarked = useMemo(() => {
+    if (!activeUrlForBookmark) return false;
+    return bookmarks.some((b) => normalizeUrl(b?.url) === activeUrlForBookmark);
+  }, [activeUrlForBookmark, bookmarks]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg border bg-background">
@@ -731,6 +850,23 @@ export default function BrowserToolView() {
             onClick={() => go()}
           >
             Go
+          </Button>
+          <Button
+            size="icon"
+            variant={isActiveBookmarked ? "secondary" : "outline"}
+            disabled={!activeIsBrowser || !activeUrlForBookmark}
+            onClick={() => {
+              if (!activeUrlForBookmark) return;
+              toggleBookmark(activeUrlForBookmark, activeUrlForBookmark);
+            }}
+            aria-label={isActiveBookmarked ? "Remove bookmark" : "Add bookmark"}
+          >
+            <Star
+              className={cn(
+                "h-4 w-4",
+                isActiveBookmarked ? "fill-current" : ""
+              )}
+            />
           </Button>
         </div>
       </div>

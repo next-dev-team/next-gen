@@ -8,6 +8,24 @@ const createId = () =>
 
 const DASHBOARD_TAB_ID = "dashboard";
 
+const normalizeStoredUrl = (input) => {
+  const raw = String(input || "").trim();
+  if (!raw) return "";
+  if (/^about:/i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw) || /^file:\/\//i.test(raw)) {
+    try {
+      return new URL(raw).toString();
+    } catch {
+      return raw;
+    }
+  }
+  try {
+    return new URL(`https://${raw}`).toString();
+  } catch {
+    return raw;
+  }
+};
+
 const initialTabs = [
   {
     id: DASHBOARD_TAB_ID,
@@ -32,6 +50,9 @@ export const useBrowserTabsStore = create(
         },
 
         networkLogs: [],
+
+        bookmarks: [],
+        history: [],
 
         openUrlTab: (url, title) => {
           const trimmed = String(url || "").trim();
@@ -59,6 +80,63 @@ export const useBrowserTabsStore = create(
           }));
 
           return id;
+        },
+
+        addHistoryEntry: (url, title) => {
+          const normalized = normalizeStoredUrl(url);
+          if (!normalized) return;
+          const at = new Date().toISOString();
+
+          set((state) => {
+            const history = Array.isArray(state.history) ? state.history : [];
+            const next = [
+              { url: normalized, title: title || normalized, at },
+              ...history.filter((h) => normalizeStoredUrl(h?.url) !== normalized),
+            ].slice(0, 10);
+            return { history: next };
+          });
+        },
+
+        clearHistory: () => set({ history: [] }),
+
+        toggleBookmark: (url, title) => {
+          const normalized = normalizeStoredUrl(url);
+          if (!normalized) return;
+          const createdAt = new Date().toISOString();
+
+          set((state) => {
+            const bookmarks = Array.isArray(state.bookmarks)
+              ? state.bookmarks
+              : [];
+            const exists = bookmarks.some(
+              (b) => normalizeStoredUrl(b?.url) === normalized
+            );
+
+            if (exists) {
+              return {
+                bookmarks: bookmarks.filter(
+                  (b) => normalizeStoredUrl(b?.url) !== normalized
+                ),
+              };
+            }
+
+            return {
+              bookmarks: [
+                { url: normalized, title: title || normalized, createdAt },
+                ...bookmarks,
+              ],
+            };
+          });
+        },
+
+        removeBookmark: (url) => {
+          const normalized = normalizeStoredUrl(url);
+          if (!normalized) return;
+          set((state) => ({
+            bookmarks: (Array.isArray(state.bookmarks) ? state.bookmarks : []).filter(
+              (b) => normalizeStoredUrl(b?.url) !== normalized
+            ),
+          }));
         },
 
         setActiveTab: (tabId) => {
@@ -149,6 +227,8 @@ export const useBrowserTabsStore = create(
           activeTabId: state.activeTabId,
           tabStateById: state.tabStateById,
           devPanel: state.devPanel,
+          bookmarks: state.bookmarks,
+          history: state.history,
         }),
         onRehydrateStorage: () => (state, error) => {
           if (error || !state) return;
