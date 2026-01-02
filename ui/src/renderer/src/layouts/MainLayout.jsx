@@ -10,10 +10,54 @@ import {
 } from "@ant-design/icons";
 import { Button, Layout, Segmented, Tooltip, Typography } from "antd";
 import React from "react";
-import { Outlet, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useOutlet } from "react-router-dom";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
+
+function KeepAliveOutlet({ outletContext, keepAliveKeys }) {
+  const location = useLocation();
+  const outlet = useOutlet(outletContext);
+  const cacheRef = React.useRef(new Map());
+  const [, forceRender] = React.useState(0);
+
+  const currentKey =
+    location.pathname === "/"
+      ? "generator"
+      : location.pathname.substring(1).split("/")[0];
+  const shouldKeepAlive = keepAliveKeys.includes(currentKey);
+
+  React.useEffect(() => {
+    if (!shouldKeepAlive) return;
+    if (!outlet) return;
+    if (cacheRef.current.has(currentKey)) return;
+
+    cacheRef.current.set(currentKey, outlet);
+    forceRender((v) => v + 1);
+  }, [currentKey, outlet, shouldKeepAlive]);
+
+  const entries = Array.from(cacheRef.current.entries());
+  const hasCurrent = cacheRef.current.has(currentKey);
+  const renderEntries =
+    shouldKeepAlive && outlet && !hasCurrent
+      ? [...entries, [currentKey, outlet]]
+      : entries;
+
+  return (
+    <div className="relative flex-1 min-h-0 w-full">
+      {renderEntries.map(([key, element]) => (
+        <div
+          key={key}
+          className="absolute inset-0 w-full h-full"
+          style={{ display: key === currentKey ? "block" : "none" }}
+        >
+          {element}
+        </div>
+      ))}
+      {!shouldKeepAlive ? <div className="w-full h-full">{outlet}</div> : null}
+    </div>
+  );
+}
 
 export default function MainLayout({ isDarkMode, setIsDarkMode }) {
   const navigate = useNavigate();
@@ -251,7 +295,10 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
         className="flex flex-col flex-1 overflow-hidden"
         style={{ padding: "0 48px 24px" }}
       >
-        <Outlet context={{ isDarkMode, setIsDarkMode }} />
+        <KeepAliveOutlet
+          outletContext={{ isDarkMode, setIsDarkMode }}
+          keepAliveKeys={["browser"]}
+        />
       </Content>
     </Layout>
   );

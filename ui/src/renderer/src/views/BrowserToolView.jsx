@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -407,6 +407,7 @@ const ReactQueryPanel = React.lazy(async () => {
 });
 
 export default function BrowserToolView() {
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const tabs = useBrowserTabsStore((s) => s.tabs);
@@ -432,6 +433,8 @@ export default function BrowserToolView() {
   const activeTabState = tabStateById[resolvedActiveTabId] || {};
   const isWeb = typeof __WEB__ !== "undefined" && Boolean(__WEB__);
   const hasElectronView = !isWeb && Boolean(window.electronAPI?.browserView);
+  const isRouteActive =
+    location.pathname === "/browser" || location.pathname.startsWith("/browser/");
 
   useEffect(() => {
     if (activeTab?.kind !== "browser") {
@@ -444,6 +447,7 @@ export default function BrowserToolView() {
   const updateBounds = useMemo(() => {
     return async () => {
       if (!hasElectronView) return;
+      if (!isRouteActive) return;
       if (!contentRef.current) return;
       if (activeTab?.kind !== "browser") return;
       const rect = contentRef.current.getBoundingClientRect();
@@ -454,7 +458,7 @@ export default function BrowserToolView() {
         height: Math.round(rect.height),
       });
     };
-  }, [activeTab?.kind, hasElectronView, resolvedActiveTabId]);
+  }, [activeTab?.kind, hasElectronView, isRouteActive, resolvedActiveTabId]);
 
   useResizeObserver(contentRef, updateBounds);
 
@@ -483,6 +487,10 @@ export default function BrowserToolView() {
     if (!hasElectronView) return;
 
     const run = async () => {
+      if (!isRouteActive) {
+        await window.electronAPI.browserView.hideAll();
+        return;
+      }
       if (activeTab?.kind === "browser") {
         await window.electronAPI.browserView.show(resolvedActiveTabId);
         await updateBounds();
@@ -492,7 +500,7 @@ export default function BrowserToolView() {
     };
 
     run().catch(() => {});
-  }, [activeTab?.kind, hasElectronView, resolvedActiveTabId, updateBounds]);
+  }, [activeTab?.kind, hasElectronView, isRouteActive, resolvedActiveTabId, updateBounds]);
 
   const openInNewTab = useCallback(
     async (url) => {
@@ -517,6 +525,10 @@ export default function BrowserToolView() {
   );
 
   useEffect(() => {
+    if (!isRouteActive) {
+      lastProcessedUrlRef.current = null;
+      return;
+    }
     const urlParam = searchParams.get("url");
     if (urlParam && urlParam !== lastProcessedUrlRef.current) {
       lastProcessedUrlRef.current = urlParam;
@@ -538,7 +550,7 @@ export default function BrowserToolView() {
     } else if (!urlParam) {
       lastProcessedUrlRef.current = null;
     }
-  }, [searchParams, tabStateById, setActiveTab, openInNewTab, navigate]);
+  }, [isRouteActive, searchParams, tabStateById, setActiveTab, openInNewTab, navigate]);
 
   const activeIsBrowser = activeTab?.kind === "browser";
   const canGoBack = Boolean(activeTabState.canGoBack);

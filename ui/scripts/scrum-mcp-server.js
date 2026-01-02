@@ -966,7 +966,17 @@ const writeMcpHttpError = (res, status, message) => {
   );
 };
 
+const ensureMcpAcceptHeaders = (req) => {
+  const accept = String(req.headers?.accept || "");
+  const hasJson = /application\/json/i.test(accept);
+  const hasSse = /text\/event-stream/i.test(accept);
+  if (!hasJson || !hasSse) {
+    req.headers.accept = "application/json, text/event-stream";
+  }
+};
+
 const handleMcpHttpRequest = async (req, res, parsedBody, logger) => {
+  ensureMcpAcceptHeaders(req);
   const { StreamableHTTPServerTransport, isInitializeRequest } =
     await getMcpHttpDeps();
 
@@ -986,6 +996,7 @@ const handleMcpHttpRequest = async (req, res, parsedBody, logger) => {
   if (req.method === "POST" && !sessionId && isInitializeRequest(parsedBody)) {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => createId(),
+      enableJsonResponse: true,
       onsessioninitialized: (id) => {
         mcpHttpSessions.set(String(id), { transport, server: null });
       },
