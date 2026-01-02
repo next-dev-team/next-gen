@@ -278,12 +278,14 @@ export default function GeneratorView() {
                 {step.title}
               </span>
             ),
-            description: (
+            content: (
               <span
                 style={{
                   color:
-                    index <= currentStep
-                      ? "var(--color-text-secondary)"
+                    index === currentStep
+                      ? "#6366f1"
+                      : index < currentStep
+                      ? "#22c55e"
                       : "var(--color-text-disabled)",
                 }}
               >
@@ -369,8 +371,7 @@ export default function GeneratorView() {
               onClick={nextStep}
               disabled={currentStep === 0 && !selectedGenerator}
               style={{
-                background:
-                  "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
                 border: "none",
                 boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
               }}

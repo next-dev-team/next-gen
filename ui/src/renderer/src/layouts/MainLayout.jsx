@@ -153,22 +153,7 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
                 ),
                 value: "ui",
               },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "2px 4px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <GlobalOutlined />
-                    <span>Browser</span>
-                  </div>
-                ),
-                value: "browser",
-              },
+
               {
                 label: (
                   <div
@@ -195,12 +180,28 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
                       gap: 8,
                     }}
                   >
-                    <BugOutlined />
-                    <span>Dev Tool</span>
+                    <GlobalOutlined />
+                    <span>Browser</span>
                   </div>
                 ),
-                value: "dev-tool",
+                value: "browser",
               },
+              // {
+              //   label: (
+              //     <div
+              //       style={{
+              //         padding: "2px 4px",
+              //         display: "flex",
+              //         alignItems: "center",
+              //         gap: 8,
+              //       }}
+              //     >
+              //       <BugOutlined />
+              //       <span>Dev Tool</span>
+              //     </div>
+              //   ),
+              //   value: "dev-tool",
+              // },
             ]}
             style={{
               padding: 2,
