@@ -9,10 +9,32 @@ const {
 } = require("electron");
 const path = require("path");
 const { spawn, fork } = require("child_process");
+const fs = require("fs");
 const Conf = require("conf");
 
 const scrumStore = new Conf({ projectName: "next-gen-scrum" });
-const mcpServer = require("../../scripts/scrum-mcp-server.js");
+const resolveMcpServerPath = () => {
+  const packagedCandidates = [
+    path.join(process.resourcesPath, "scripts", "scrum-mcp-server.js"),
+    path.join(path.dirname(app.getAppPath()), "scripts", "scrum-mcp-server.js"),
+  ];
+
+  const devCandidates = [path.join(__dirname, "../../scripts/scrum-mcp-server.js")];
+
+  const candidates = app.isPackaged
+    ? [...packagedCandidates, ...devCandidates]
+    : [...devCandidates, ...packagedCandidates];
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch {}
+  }
+
+  return candidates[0];
+};
+
+const mcpServer = require(resolveMcpServerPath());
 
 let store;
 

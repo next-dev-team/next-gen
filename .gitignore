@@ -16,3 +16,4 @@ _bmad
 .claude
 dist-web/
 ui/dist-web/
+dist*
