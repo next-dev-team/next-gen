@@ -1,5 +1,5 @@
 import { ConfigProvider, Spin, theme } from "antd";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import { shadcnTokenKeys, usePuckStore } from "./stores/puckStore";
@@ -34,7 +34,20 @@ function App() {
   const baseFontSize = usePuckStore((s) => s.designSystem.baseFontSize);
   const setDesignMode = usePuckStore((s) => s.setDesignMode);
 
-  const isDarkMode = designMode === "dark";
+  const [systemDarkMode, setSystemDarkMode] = useState(
+    window.matchMedia?.("(prefers-color-scheme: dark)")?.matches || false
+  );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e) => setSystemDarkMode(e.matches);
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, []);
+
+  const isDarkMode =
+    designMode === "system" ? systemDarkMode : designMode === "dark";
+
   const setIsDarkMode = (next) => {
     setDesignMode(next ? "dark" : "light");
   };
@@ -44,19 +57,16 @@ function App() {
     if (hasPersistedStore) return;
 
     const saved = localStorage.getItem("theme");
-    if (saved === "dark" || saved === "light") {
+    if (saved === "dark" || saved === "light" || saved === "system") {
       setDesignMode(saved);
       return;
     }
 
-    const prefersDark = window.matchMedia?.(
-      "(prefers-color-scheme: dark)"
-    )?.matches;
-    setDesignMode(prefersDark ? "dark" : "light");
+    setDesignMode("system");
   }, [setDesignMode]);
 
   useEffect(() => {
-    const mode = designMode === "dark" ? "dark" : "light";
+    const mode = isDarkMode ? "dark" : "light";
     const root = window.document.documentElement;
     const active = tokens?.[mode] || tokens?.light;
     if (!active) return;
@@ -72,18 +82,17 @@ function App() {
 
     root.style.fontFamily = fontFamily || "Inter, sans-serif";
     root.style.fontSize = baseFontSize || "16px";
-  }, [baseFontSize, designMode, fontFamily, tokens]);
+  }, [baseFontSize, isDarkMode, fontFamily, tokens]);
 
   useEffect(() => {
     const root = window.document.documentElement;
-    if (designMode === "dark") {
+    if (isDarkMode) {
       root.classList.add("dark");
-      localStorage.setItem("theme", "dark");
     } else {
       root.classList.remove("dark");
-      localStorage.setItem("theme", "light");
     }
-  }, [designMode]);
+    localStorage.setItem("theme", designMode);
+  }, [designMode, isDarkMode]);
 
   return (
     <ConfigProvider
@@ -116,6 +125,8 @@ function App() {
                 <MainLayout
                   isDarkMode={isDarkMode}
                   setIsDarkMode={setIsDarkMode}
+                  designMode={designMode}
+                  setDesignMode={setDesignMode}
                 />
               }
             >

@@ -75,7 +75,7 @@ export const usePuckStore = create(
       auditLog: [],
       templates: [],
       designSystem: {
-        mode: "light",
+        mode: "system",
         fontFamily: "Inter, sans-serif",
         baseFontSize: "16px",
         tokens: defaultShadcnTokens,

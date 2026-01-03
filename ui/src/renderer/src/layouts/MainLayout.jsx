@@ -59,7 +59,12 @@ function KeepAliveOutlet({ outletContext, keepAliveKeys }) {
   );
 }
 
-export default function MainLayout({ isDarkMode, setIsDarkMode }) {
+export default function MainLayout({
+  isDarkMode,
+  setIsDarkMode,
+  designMode,
+  setDesignMode,
+}) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -296,7 +301,12 @@ export default function MainLayout({ isDarkMode, setIsDarkMode }) {
         style={{ padding: "0 48px 24px" }}
       >
         <KeepAliveOutlet
-          outletContext={{ isDarkMode, setIsDarkMode }}
+          outletContext={{
+            isDarkMode,
+            setIsDarkMode,
+            designMode,
+            setDesignMode,
+          }}
           keepAliveKeys={["browser"]}
         />
       </Content>
