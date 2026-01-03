@@ -6132,9 +6132,10 @@ export default function ScrumBoardView() {
   const [overviewTab, setOverviewTab] = React.useState(() => {
     try {
       const v = localStorage.getItem(SCRUM_OVERVIEW_TAB_STORAGE_KEY);
-      return v === "stats" ? "stats" : "mcp";
+      if (v === "mcp" || v === "sprints" || v === "stats") return v;
+      return "sprints";
     } catch {
-      return "mcp";
+      return "sprints";
     }
   });
 
@@ -6912,6 +6913,96 @@ export default function ScrumBoardView() {
       )}
 
       {activeBoard && (
+        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+          <div className="flex items-center justify-between text-sm font-medium">
+            <div className="flex items-center gap-2">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              Filters
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="scrum-filter-assignee">Assignee</Label>
+              <Select
+                value={assigneeFilter}
+                onValueChange={(value) =>
+                  setAssigneeFilter(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="scrum-filter-assignee"
+                  className="bg-background/50"
+                >
+                  <SelectValue placeholder="Select Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All</SelectItem>
+                  {assigneeOptions.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="scrum-filter-epic">Epic</Label>
+              <Select
+                value={epicFilter}
+                onValueChange={(value) =>
+                  setEpicFilter(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="scrum-filter-epic"
+                  className="bg-background/50"
+                >
+                  <SelectValue placeholder="Select Epic" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All</SelectItem>
+                  <SelectItem value="__none__">No Epic</SelectItem>
+                  {epicOptions.map((epic) => (
+                    <SelectItem key={epic.id} value={epic.id}>
+                      {epic.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="scrum-filter-sprint">Sprint</Label>
+              <Select
+                value={sprintFilter}
+                onValueChange={(value) =>
+                  setSprintFilter(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="scrum-filter-sprint"
+                  className="bg-background/50"
+                >
+                  <SelectValue placeholder="Select Sprint" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All</SelectItem>
+                  <SelectItem value="__none__">No Sprint</SelectItem>
+                  {sprintOptions.map((sprint) => (
+                    <SelectItem key={sprint.id} value={sprint.id}>
+                      {sprint.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeBoard && (
         <Tabs
           value={overviewTab}
           onValueChange={setOverviewTab}
@@ -6931,101 +7022,11 @@ export default function ScrumBoardView() {
           </TabsContent>
 
           <TabsContent value="sprints" className="mt-3">
-            <div className="grid grid-cols-1 md:grid-cols-[30%_1fr] gap-4 items-start">
-              <SprintTrackingView
-                board={activeBoard}
-                sprints={sprints}
-                sprintNameById={sprintNameById}
-              />
-
-              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <div className="flex items-center gap-2">
-                    <Filter className="h-4 w-4 text-muted-foreground" />
-                    Filters
-                  </div>
-                </div>
-
-                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  <div className="grid gap-2">
-                    <Label htmlFor="scrum-filter-assignee">Assignee</Label>
-                    <Select
-                      value={assigneeFilter}
-                      onValueChange={(value) =>
-                        setAssigneeFilter(value === "__all__" ? "" : value)
-                      }
-                    >
-                      <SelectTrigger
-                        id="scrum-filter-assignee"
-                        className="bg-background/50"
-                      >
-                        <SelectValue placeholder="Select Assignee" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__">All</SelectItem>
-                        {assigneeOptions.map((name) => (
-                          <SelectItem key={name} value={name}>
-                            {name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="scrum-filter-epic">Epic</Label>
-                    <Select
-                      value={epicFilter}
-                      onValueChange={(value) =>
-                        setEpicFilter(value === "__all__" ? "" : value)
-                      }
-                    >
-                      <SelectTrigger
-                        id="scrum-filter-epic"
-                        className="bg-background/50"
-                      >
-                        <SelectValue placeholder="Select Epic" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__">All</SelectItem>
-                        <SelectItem value="__none__">No Epic</SelectItem>
-                        {epicOptions.map((epic) => (
-                          <SelectItem key={epic.id} value={epic.id}>
-                            {epic.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="scrum-filter-sprint">Sprint</Label>
-                    <Select
-                      value={sprintFilter}
-                      onValueChange={(value) =>
-                        setSprintFilter(value === "__all__" ? "" : value)
-                      }
-                    >
-                      <SelectTrigger
-                        id="scrum-filter-sprint"
-                        className="bg-background/50"
-                      >
-                        <SelectValue placeholder="Select Sprint" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__all__">All</SelectItem>
-                        <SelectItem value="__none__">No Sprint</SelectItem>
-                        {sprintOptions.map((sprint) => (
-                          <SelectItem key={sprint.id} value={sprint.id}>
-                            {sprint.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <SprintTrackingView
+              board={activeBoard}
+              sprints={sprints}
+              sprintNameById={sprintNameById}
+            />
           </TabsContent>
 
           <TabsContent value="stats" className="mt-3">
@@ -7124,6 +7125,15 @@ export default function ScrumBoardView() {
         epics={epics}
         onCreateEpic={createEpic}
         onUpdateEpic={updateEpic}
+      />
+
+      <SprintManagerDialog
+        open={sprintManagerOpen}
+        onOpenChange={setSprintManagerOpen}
+        sprints={sprints}
+        onCreateSprint={createSprint}
+        onUpdateSprint={updateSprint}
+        onDeleteSprint={deleteSprint}
       />
 
       <Dialog
