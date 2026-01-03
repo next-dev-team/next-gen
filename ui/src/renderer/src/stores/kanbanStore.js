@@ -211,6 +211,11 @@ export const useKanbanStore = create((set, get) => ({
       const { reconnectAttempts, maxReconnectAttempts } = get();
       set({ connected: false });
 
+      try {
+        es.close();
+      } catch {}
+      set({ eventSource: null });
+
       if (reconnectAttempts < maxReconnectAttempts) {
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
         setTimeout(() => {
@@ -324,15 +329,35 @@ export const useKanbanStore = create((set, get) => ({
     }
   },
 
+  applyServerState: (nextState) => {
+    if (!nextState) return;
+
+    const boards = Array.isArray(nextState.boards) ? nextState.boards : [];
+    const nextActiveBoardId = boards.some(
+      (b) => b.id === nextState.activeBoardId
+    )
+      ? nextState.activeBoardId
+      : boards[0]?.id || null;
+
+    localStorage.setItem("kanban-state", JSON.stringify(nextState));
+    set({
+      state: nextState,
+      activeBoardId: nextActiveBoardId,
+      lockedCards: nextState?.locks || {},
+    });
+  },
+
   // Board operations
   setActiveBoard: (boardId) => {
     set({ activeBoardId: boardId });
 
     const { state, apiCall, connected } = get();
     if (connected && state) {
-      apiCall("/state", { state: { ...state, activeBoardId: boardId } }).catch(
-        console.error
-      );
+      apiCall("/state", { state: { ...state, activeBoardId: boardId } })
+        .then((result) => {
+          if (result?.state) get().applyServerState(result.state);
+        })
+        .catch(console.error);
     }
   },
 
@@ -342,7 +367,7 @@ export const useKanbanStore = create((set, get) => ({
     if (connected) {
       try {
         const result = await apiCall("/board/create", { name, type });
-        set({ activeBoardId: result.boardId });
+        if (result?.state) get().applyServerState(result.state);
         return result.boardId;
       } catch (err) {
         set({ error: err.message });
@@ -389,7 +414,8 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/board/delete", { boardId });
+        const result = await apiCall("/board/delete", { boardId });
+        if (result?.state) get().applyServerState(result.state);
       } catch (err) {
         set({ error: err.message });
       }
@@ -418,7 +444,8 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/list/delete", { boardId, listId });
+        const result = await apiCall("/list/delete", { boardId, listId });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -454,7 +481,12 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/list/rename", { boardId, listId, name: nextName });
+        const result = await apiCall("/list/rename", {
+          boardId,
+          listId,
+          name: nextName,
+        });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -498,12 +530,13 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/list/add", {
+        const result = await apiCall("/list/add", {
           boardId,
           name: listName,
           statusId,
           color,
         });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -584,7 +617,8 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/state", { state: newState });
+        const result = await apiCall("/state", { state: newState });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -643,8 +677,7 @@ export const useKanbanStore = create((set, get) => ({
           listId,
           ...cardData,
         });
-        // If server returns a different ID, we should ideally update it,
-        // but for now let's just use the result if possible.
+        if (result?.state) get().applyServerState(result.state);
         return result.cardId || newId;
       } catch (err) {
         set({ error: err.message });
@@ -704,7 +737,13 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/card/update", { boardId, listId, cardId, patch });
+        const result = await apiCall("/card/update", {
+          boardId,
+          listId,
+          cardId,
+          patch,
+        });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -744,7 +783,12 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/card/delete", { boardId, listId, cardId });
+        const result = await apiCall("/card/delete", {
+          boardId,
+          listId,
+          cardId,
+        });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -838,13 +882,14 @@ export const useKanbanStore = create((set, get) => ({
 
     if (connected) {
       try {
-        await apiCall("/card/move", {
+        const result = await apiCall("/card/move", {
           boardId,
           cardId,
           fromListId,
           toListId,
           toIndex,
         });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -924,15 +969,18 @@ export const useKanbanStore = create((set, get) => ({
 
   // Epic operations
   createEpic: async (name, description, projectKey) => {
-    const { apiCall, connected } = get();
+    const { apiCall, connected, state } = get();
+    const epicName = String(name || "").trim();
+    if (!epicName) return null;
 
     if (connected) {
       try {
         const result = await apiCall("/epic/create", {
-          name,
+          name: epicName,
           description,
           projectKey,
         });
+        if (result?.state) get().applyServerState(result.state);
         return result.epicId;
       } catch (err) {
         set({ error: err.message });
@@ -940,15 +988,35 @@ export const useKanbanStore = create((set, get) => ({
       }
     }
 
-    return null;
+    const nextEpic = {
+      id: createId(),
+      name: epicName,
+      description: String(description || "").trim(),
+      projectKey: projectKey || null,
+      status: "backlog",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const nextState = {
+      ...(state || get().createDefaultState()),
+      epics: [...((state?.epics || []) ?? []), nextEpic],
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(nextState));
+    set({ state: nextState });
+    return nextEpic.id;
   },
 
   updateEpic: async (epicId, patch) => {
-    const { apiCall, connected } = get();
+    const { apiCall, connected, state } = get();
+    if (!epicId) return false;
+    if (!patch || typeof patch !== "object") return false;
 
     if (connected) {
       try {
-        await apiCall("/epic/update", { epicId, patch });
+        const result = await apiCall("/epic/update", { epicId, patch });
+        if (result?.state) get().applyServerState(result.state);
         return true;
       } catch (err) {
         set({ error: err.message });
@@ -956,7 +1024,22 @@ export const useKanbanStore = create((set, get) => ({
       }
     }
 
-    return false;
+    if (!state) return false;
+    const exists = (state.epics || []).some((e) => e.id === epicId);
+    if (!exists) return false;
+
+    const nextState = {
+      ...state,
+      epics: (state.epics || []).map((e) =>
+        e.id === epicId
+          ? { ...e, ...patch, updatedAt: new Date().toISOString() }
+          : e
+      ),
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(nextState));
+    set({ state: nextState });
+    return true;
   },
 
   // UI actions
