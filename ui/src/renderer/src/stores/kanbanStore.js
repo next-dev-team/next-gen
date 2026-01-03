@@ -597,7 +597,44 @@ export const useKanbanStore = create((set, get) => ({
 
   // Card operations
   addCard: async (boardId, listId, cardData) => {
-    const { apiCall, connected } = get();
+    const { apiCall, connected, state } = get();
+    const newId = createId();
+    const newCard = {
+      id: newId,
+      title: cardData.title || "New Story",
+      description: cardData.description || "",
+      points: cardData.points,
+      assignee: cardData.assignee || "",
+      priority: cardData.priority || "medium",
+      epicId: cardData.epicId || null,
+      labels: cardData.labels || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Local update
+    if (state?.boards) {
+      const newState = {
+        ...state,
+        boards: state.boards.map((b) => {
+          if (b.id !== boardId) return b;
+          return {
+            ...b,
+            updatedAt: new Date().toISOString(),
+            lists: b.lists.map((l) => {
+              if (l.id !== listId) return l;
+              return {
+                ...l,
+                updatedAt: new Date().toISOString(),
+                cards: [...l.cards, newCard],
+              };
+            }),
+          };
+        }),
+      };
+      set({ state: newState });
+      localStorage.setItem("kanban-state", JSON.stringify(newState));
+    }
 
     if (connected) {
       try {
@@ -606,19 +643,20 @@ export const useKanbanStore = create((set, get) => ({
           listId,
           ...cardData,
         });
-        return result.cardId;
+        // If server returns a different ID, we should ideally update it,
+        // but for now let's just use the result if possible.
+        return result.cardId || newId;
       } catch (err) {
         set({ error: err.message });
         return null;
       }
     }
 
-    // Local fallback handled by optimistic update
-    return null;
+    return newId;
   },
 
   updateCard: async (boardId, listId, cardId, patch) => {
-    const { apiCall, connected, userId, lockedCards } = get();
+    const { apiCall, connected, userId, lockedCards, state } = get();
 
     // Check if card is locked by another user
     const lock = lockedCards[cardId];
@@ -633,6 +671,37 @@ export const useKanbanStore = create((set, get) => ({
       }
     }
 
+    // Local update
+    if (state?.boards) {
+      const newState = {
+        ...state,
+        boards: state.boards.map((b) => {
+          if (b.id !== boardId) return b;
+          return {
+            ...b,
+            updatedAt: new Date().toISOString(),
+            lists: b.lists.map((l) => {
+              if (l.id !== listId) return l;
+              return {
+                ...l,
+                updatedAt: new Date().toISOString(),
+                cards: l.cards.map((c) => {
+                  if (c.id !== cardId) return c;
+                  return {
+                    ...c,
+                    ...patch,
+                    updatedAt: new Date().toISOString(),
+                  };
+                }),
+              };
+            }),
+          };
+        }),
+      };
+      set({ state: newState });
+      localStorage.setItem("kanban-state", JSON.stringify(newState));
+    }
+
     if (connected) {
       try {
         await apiCall("/card/update", { boardId, listId, cardId, patch });
@@ -643,11 +712,35 @@ export const useKanbanStore = create((set, get) => ({
       }
     }
 
-    return false;
+    return true;
   },
 
   deleteCard: async (boardId, listId, cardId) => {
-    const { apiCall, connected } = get();
+    const { apiCall, connected, state } = get();
+
+    // Local update
+    if (state?.boards) {
+      const newState = {
+        ...state,
+        boards: state.boards.map((b) => {
+          if (b.id !== boardId) return b;
+          return {
+            ...b,
+            updatedAt: new Date().toISOString(),
+            lists: b.lists.map((l) => {
+              if (l.id !== listId) return l;
+              return {
+                ...l,
+                updatedAt: new Date().toISOString(),
+                cards: l.cards.filter((c) => c.id !== cardId),
+              };
+            }),
+          };
+        }),
+      };
+      set({ state: newState });
+      localStorage.setItem("kanban-state", JSON.stringify(newState));
+    }
 
     if (connected) {
       try {
@@ -659,11 +752,11 @@ export const useKanbanStore = create((set, get) => ({
       }
     }
 
-    return false;
+    return true;
   },
 
   moveCard: async (boardId, cardId, fromListId, toListId, toIndex) => {
-    const { apiCall, connected, userId, lockedCards } = get();
+    const { apiCall, connected, userId, lockedCards, state } = get();
 
     // Check if card is locked by another user
     const lock = lockedCards[cardId];
@@ -675,6 +768,71 @@ export const useKanbanStore = create((set, get) => ({
           error: `Card "${cardId}" is locked by another user. Please wait.`,
         });
         return false;
+      }
+    }
+
+    // Local state update (optimistic)
+    if (state?.boards) {
+      const board = state.boards.find((b) => b.id === boardId);
+      if (board) {
+        const fromList = board.lists.find((l) => l.id === fromListId);
+        const toList = board.lists.find((l) => l.id === toListId);
+
+        if (fromList && toList) {
+          const cardIndex = fromList.cards.findIndex((c) => c.id === cardId);
+          if (cardIndex !== -1) {
+            const card = fromList.cards[cardIndex];
+
+            const nextLists = board.lists.map((list) => {
+              if (list.id === fromListId && list.id === toListId) {
+                // Moving within same list
+                const nextCards = [...list.cards];
+                nextCards.splice(cardIndex, 1);
+                let finalToIndex = toIndex;
+                if (cardIndex < toIndex) finalToIndex -= 1;
+                nextCards.splice(finalToIndex, 0, card);
+                return {
+                  ...list,
+                  cards: nextCards,
+                  updatedAt: new Date().toISOString(),
+                };
+              } else if (list.id === fromListId) {
+                // Remove from source list
+                return {
+                  ...list,
+                  cards: list.cards.filter((c) => c.id !== cardId),
+                  updatedAt: new Date().toISOString(),
+                };
+              } else if (list.id === toListId) {
+                // Add to target list
+                const nextCards = [...list.cards];
+                nextCards.splice(toIndex, 0, card);
+                return {
+                  ...list,
+                  cards: nextCards,
+                  updatedAt: new Date().toISOString(),
+                };
+              }
+              return list;
+            });
+
+            const nextBoard = {
+              ...board,
+              lists: nextLists,
+              updatedAt: new Date().toISOString(),
+            };
+
+            const newState = {
+              ...state,
+              boards: state.boards.map((b) =>
+                b.id === boardId ? nextBoard : b
+              ),
+            };
+
+            set({ state: newState });
+            localStorage.setItem("kanban-state", JSON.stringify(newState));
+          }
+        }
       }
     }
 
@@ -694,7 +852,7 @@ export const useKanbanStore = create((set, get) => ({
       }
     }
 
-    return false;
+    return true;
   },
 
   // Lock operations
@@ -831,30 +989,53 @@ export const useKanbanStore = create((set, get) => ({
 
     const stats = {
       total: 0,
+      completed: 0,
       byStatus: {},
       totalPoints: 0,
       completedPoints: 0,
     };
 
     for (const list of board.lists) {
-      const count = list.cards.length;
+      const count = list.cards?.length || 0;
       stats.total += count;
-      stats.byStatus[list.statusId || list.name] = count;
 
-      for (const card of list.cards) {
-        if (typeof card.points === "number") {
-          stats.totalPoints += card.points;
-          if (list.statusId === "done") {
-            stats.completedPoints += card.points;
+      // Normalize status for byStatus mapping
+      const statusKey = (list.statusId || list.name || "")
+        .toLowerCase()
+        .replace(/\s+/g, "-");
+      stats.byStatus[statusKey] = (stats.byStatus[statusKey] || 0) + count;
+
+      const isDone =
+        list.statusId === "done" || list.name?.toLowerCase() === "done";
+      if (isDone) {
+        stats.completed += count;
+      }
+
+      for (const card of list.cards || []) {
+        const pts =
+          typeof card.points === "number"
+            ? card.points
+            : parseFloat(card.points);
+        if (!isNaN(pts)) {
+          stats.totalPoints += pts;
+          if (isDone) {
+            stats.completedPoints += pts;
           }
         }
       }
     }
 
-    stats.completionPercent =
-      stats.totalPoints > 0
-        ? Math.round((stats.completedPoints / stats.totalPoints) * 100)
-        : 0;
+    if (stats.totalPoints > 0) {
+      stats.completionPercent = Math.round(
+        (stats.completedPoints / stats.totalPoints) * 100
+      );
+    } else if (stats.total > 0) {
+      stats.completionPercent = Math.round(
+        (stats.completed / stats.total) * 100
+      );
+    } else {
+      stats.completionPercent = 0;
+    }
 
     return stats;
   },
@@ -862,7 +1043,8 @@ export const useKanbanStore = create((set, get) => ({
   syncNow: async () => {
     try {
       const { serverBaseUrl } = get();
-      const baseUrl = normalizeBaseUrl(serverBaseUrl) || DEFAULT_SERVER_BASE_URL;
+      const baseUrl =
+        normalizeBaseUrl(serverBaseUrl) || DEFAULT_SERVER_BASE_URL;
       const response = await fetch(`${baseUrl}/api/state`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -897,8 +1079,7 @@ export const useKanbanStore = create((set, get) => ({
   },
 
   setServerBaseUrl: (nextUrl) => {
-    const normalized =
-      normalizeBaseUrl(nextUrl) || DEFAULT_SERVER_BASE_URL;
+    const normalized = normalizeBaseUrl(nextUrl) || DEFAULT_SERVER_BASE_URL;
     localStorage.setItem(SERVER_BASE_URL_KEY, normalized);
     set({ serverBaseUrl: normalized });
     if (get().connected) {
