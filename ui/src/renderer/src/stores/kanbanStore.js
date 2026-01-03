@@ -249,6 +249,7 @@ export const useKanbanStore = create((set, get) => ({
       const state = raw ? JSON.parse(raw) : null;
 
       if (state?.boards?.length) {
+        if (!Array.isArray(state.sprints)) state.sprints = [];
         set({
           state,
           activeBoardId: state.activeBoardId || state.boards[0]?.id || null,
@@ -295,6 +296,7 @@ export const useKanbanStore = create((set, get) => ({
         },
       ],
       epics: [],
+      sprints: [],
       locks: {},
     };
   },
@@ -641,6 +643,7 @@ export const useKanbanStore = create((set, get) => ({
       assignee: cardData.assignee || "",
       priority: cardData.priority || "medium",
       epicId: cardData.epicId || null,
+      sprintId: cardData.sprintId || null,
       labels: cardData.labels || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -825,7 +828,30 @@ export const useKanbanStore = create((set, get) => ({
         if (fromList && toList) {
           const cardIndex = fromList.cards.findIndex((c) => c.id === cardId);
           if (cardIndex !== -1) {
+            const isDoneList = (list) => {
+              if (!list) return false;
+              if (String(list.statusId || "") === "done") return true;
+              return (
+                String(list.name || "")
+                  .trim()
+                  .toLowerCase() === "done"
+              );
+            };
+
             const card = fromList.cards[cardIndex];
+            const movingFromDone = isDoneList(fromList);
+            const movingToDone = isDoneList(toList);
+            const completedAt = movingToDone
+              ? card.completedAt || new Date().toISOString()
+              : movingFromDone
+              ? null
+              : card.completedAt;
+
+            const nextCard = {
+              ...card,
+              status: toList.statusId || card.status,
+              completedAt,
+            };
 
             const nextLists = board.lists.map((list) => {
               if (list.id === fromListId && list.id === toListId) {
@@ -834,7 +860,7 @@ export const useKanbanStore = create((set, get) => ({
                 nextCards.splice(cardIndex, 1);
                 let finalToIndex = toIndex;
                 if (cardIndex < toIndex) finalToIndex -= 1;
-                nextCards.splice(finalToIndex, 0, card);
+                nextCards.splice(finalToIndex, 0, nextCard);
                 return {
                   ...list,
                   cards: nextCards,
@@ -850,7 +876,7 @@ export const useKanbanStore = create((set, get) => ({
               } else if (list.id === toListId) {
                 // Add to target list
                 const nextCards = [...list.cards];
-                nextCards.splice(toIndex, 0, card);
+                nextCards.splice(toIndex, 0, nextCard);
                 return {
                   ...list,
                   cards: nextCards,
@@ -1042,6 +1068,137 @@ export const useKanbanStore = create((set, get) => ({
     return true;
   },
 
+  // Sprint operations
+  createSprint: async ({
+    name,
+    startDate,
+    endDate,
+    goal,
+    capacityPoints,
+    status,
+  } = {}) => {
+    const { apiCall, connected, state } = get();
+    const sprintName = String(name || "").trim();
+    if (!sprintName) return null;
+
+    if (connected) {
+      try {
+        const result = await apiCall("/sprint/create", {
+          name: sprintName,
+          startDate,
+          endDate,
+          goal,
+          capacityPoints,
+          status,
+        });
+        if (result?.state) get().applyServerState(result.state);
+        return result.sprintId;
+      } catch (err) {
+        set({ error: err.message });
+        return null;
+      }
+    }
+
+    const nextSprint = {
+      id: createId(),
+      name: sprintName,
+      goal: String(goal || "").trim(),
+      startDate: String(startDate || "").trim() || null,
+      endDate: String(endDate || "").trim() || null,
+      capacityPoints:
+        typeof capacityPoints === "number" ? capacityPoints : null,
+      status: ["planned", "active", "completed"].includes(status)
+        ? status
+        : "planned",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const base = state || get().createDefaultState();
+    const nextState = {
+      ...base,
+      sprints: [...(base.sprints || []), nextSprint],
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(nextState));
+    set({ state: nextState });
+    return nextSprint.id;
+  },
+
+  updateSprint: async (sprintId, patch) => {
+    const { apiCall, connected, state } = get();
+    if (!sprintId) return false;
+    if (!patch || typeof patch !== "object") return false;
+
+    if (connected) {
+      try {
+        const result = await apiCall("/sprint/update", { sprintId, patch });
+        if (result?.state) get().applyServerState(result.state);
+        return true;
+      } catch (err) {
+        set({ error: err.message });
+        return false;
+      }
+    }
+
+    if (!state) return false;
+    const exists = (state.sprints || []).some((s) => s.id === sprintId);
+    if (!exists) return false;
+
+    const nextState = {
+      ...state,
+      sprints: (state.sprints || []).map((s) =>
+        s.id === sprintId
+          ? { ...s, ...patch, updatedAt: new Date().toISOString() }
+          : s
+      ),
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(nextState));
+    set({ state: nextState });
+    return true;
+  },
+
+  deleteSprint: async (sprintId) => {
+    const { apiCall, connected, state } = get();
+    if (!sprintId) return false;
+
+    if (connected) {
+      try {
+        const result = await apiCall("/sprint/delete", { sprintId });
+        if (result?.state) get().applyServerState(result.state);
+        return true;
+      } catch (err) {
+        set({ error: err.message });
+        return false;
+      }
+    }
+
+    if (!state) return false;
+    const nextBoards = (state.boards || []).map((b) => ({
+      ...b,
+      lists: (b.lists || []).map((l) => ({
+        ...l,
+        cards: (l.cards || []).map((c) =>
+          c.sprintId === sprintId ? { ...c, sprintId: null } : c
+        ),
+      })),
+    }));
+
+    const nextState = {
+      ...state,
+      boards: nextBoards,
+      epics: (state.epics || []).map((e) =>
+        e.sprintId === sprintId ? { ...e, sprintId: null } : e
+      ),
+      sprints: (state.sprints || []).filter((s) => s.id !== sprintId),
+    };
+
+    localStorage.setItem("kanban-state", JSON.stringify(nextState));
+    set({ state: nextState });
+    return true;
+  },
+
   // UI actions
   setSelectedCard: (cardId) => set({ selectedCardId: cardId }),
   setCardBeingEdited: (card) => set({ cardBeingEdited: card }),
@@ -1056,6 +1213,11 @@ export const useKanbanStore = create((set, get) => ({
   getEpics: () => {
     const { state } = get();
     return state?.epics || [];
+  },
+
+  getSprints: () => {
+    const { state } = get();
+    return state?.sprints || [];
   },
 
   getCardsByStatus: (status) => {

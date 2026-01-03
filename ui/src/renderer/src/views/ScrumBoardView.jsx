@@ -954,6 +954,7 @@ const CardEditorDialog = ({
   onSave,
   onDelete,
   epics = [],
+  sprints = [],
   isLocked = false,
   lockInfo = null,
 }) => {
@@ -970,6 +971,7 @@ const CardEditorDialog = ({
   );
   const [priority, setPriority] = React.useState(initial?.priority || "medium");
   const [epicId, setEpicId] = React.useState(initial?.epicId || "");
+  const [sprintId, setSprintId] = React.useState(initial?.sprintId || "");
 
   React.useEffect(() => {
     setTitle(initial?.title || "");
@@ -981,6 +983,7 @@ const CardEditorDialog = ({
     setLabels(Array.isArray(initial?.labels) ? initial.labels.join(", ") : "");
     setPriority(initial?.priority || "medium");
     setEpicId(initial?.epicId || "");
+    setSprintId(initial?.sprintId || "");
   }, [initial]);
 
   const canSave = title.trim().length > 0 && !isLocked;
@@ -1131,6 +1134,34 @@ const CardEditorDialog = ({
             )}
           </div>
 
+          {sprints.length > 0 && (
+            <div className="grid gap-2">
+              <Label className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+                Sprint
+              </Label>
+              <Select
+                value={sprintId}
+                onValueChange={(value) =>
+                  setSprintId(value === "__none__" ? "" : value)
+                }
+                disabled={isLocked}
+              >
+                <SelectTrigger className="bg-background/50">
+                  <SelectValue placeholder="No sprint" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">No sprint</SelectItem>
+                  {sprints.map((sprint) => (
+                    <SelectItem key={sprint.id} value={sprint.id}>
+                      {sprint.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
           <div className="grid gap-2">
             <Label className="flex items-center gap-2">
               <Tag className="h-4 w-4 text-muted-foreground" />
@@ -1186,6 +1217,7 @@ const CardEditorDialog = ({
                 labels: nextLabels,
                 priority,
                 epicId: epicId || null,
+                sprintId: sprintId || null,
               });
             }}
             className="bg-primary hover:bg-primary/90"
@@ -1203,6 +1235,7 @@ const EpicManagerDialog = ({
   open,
   onOpenChange,
   epics,
+  sprints = [],
   onCreateEpic,
   onUpdateEpic,
 }) => {
@@ -1216,6 +1249,7 @@ const EpicManagerDialog = ({
   const [description, setDescription] = React.useState("");
   const [projectKey, setProjectKey] = React.useState("");
   const [status, setStatus] = React.useState("backlog");
+  const [sprintId, setSprintId] = React.useState("");
   const [busy, setBusy] = React.useState(false);
 
   React.useEffect(() => {
@@ -1225,6 +1259,7 @@ const EpicManagerDialog = ({
       setDescription("");
       setProjectKey("");
       setStatus("backlog");
+      setSprintId("");
       return;
     }
 
@@ -1232,6 +1267,7 @@ const EpicManagerDialog = ({
     setDescription(String(selectedEpic.description || ""));
     setProjectKey(String(selectedEpic.projectKey || ""));
     setStatus(String(selectedEpic.status || "backlog"));
+    setSprintId(String(selectedEpic.sprintId || ""));
   }, [open, selectedEpic]);
 
   const canCreate = name.trim().length > 0 && !busy;
@@ -1247,6 +1283,9 @@ const EpicManagerDialog = ({
         projectKey.trim() || null
       );
       if (epicId) {
+        if (sprintId) {
+          await onUpdateEpic(epicId, { sprintId });
+        }
         setSelectedEpicId(epicId);
       }
     } finally {
@@ -1263,6 +1302,7 @@ const EpicManagerDialog = ({
         description: description.trim(),
         projectKey: projectKey.trim() || null,
         status,
+        sprintId: sprintId || null,
       });
     } finally {
       setBusy(false);
@@ -1313,6 +1353,15 @@ const EpicManagerDialog = ({
                     <button
                       key={epic.id}
                       type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        const payload = { type: "scrum-epic", epicId: epic.id };
+                        e.dataTransfer.setData(
+                          "application/json",
+                          JSON.stringify(payload)
+                        );
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
                       onClick={() => setSelectedEpicId(epic.id)}
                       className={cn(
                         "w-full text-left rounded-md px-3 py-2 transition-colors",
@@ -1409,6 +1458,31 @@ const EpicManagerDialog = ({
                   </Select>
                 </div>
               ) : null}
+
+              {sprints.length > 0 ? (
+                <div className="grid gap-2">
+                  <Label>Sprint</Label>
+                  <Select
+                    value={sprintId}
+                    onValueChange={(value) =>
+                      setSprintId(value === "__none__" ? "" : value)
+                    }
+                    disabled={busy}
+                  >
+                    <SelectTrigger className="bg-background/50">
+                      <SelectValue placeholder="No sprint" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">No sprint</SelectItem>
+                      {sprints.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-4 flex items-center justify-end gap-2">
@@ -1443,6 +1517,670 @@ const EpicManagerDialog = ({
         </div>
       </DialogContent>
     </Dialog>
+  );
+};
+
+const SPRINT_STATUSES = [
+  { id: "planned", name: "Planned" },
+  { id: "active", name: "Active" },
+  { id: "completed", name: "Completed" },
+];
+
+const SprintManagerDialog = ({
+  open,
+  onOpenChange,
+  sprints,
+  onCreateSprint,
+  onUpdateSprint,
+  onDeleteSprint,
+}) => {
+  const [selectedSprintId, setSelectedSprintId] = React.useState("");
+  const selectedSprint = React.useMemo(
+    () => (sprints || []).find((s) => s.id === selectedSprintId) || null,
+    [sprints, selectedSprintId]
+  );
+
+  const [name, setName] = React.useState("");
+  const [goal, setGoal] = React.useState("");
+  const [startDate, setStartDate] = React.useState("");
+  const [endDate, setEndDate] = React.useState("");
+  const [capacityPoints, setCapacityPoints] = React.useState("");
+  const [status, setStatus] = React.useState("planned");
+  const [busy, setBusy] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) return;
+    if (!selectedSprint) {
+      setName("");
+      setGoal("");
+      setStartDate("");
+      setEndDate("");
+      setCapacityPoints("");
+      setStatus("planned");
+      return;
+    }
+
+    setName(String(selectedSprint.name || ""));
+    setGoal(String(selectedSprint.goal || ""));
+    setStartDate(String(selectedSprint.startDate || ""));
+    setEndDate(String(selectedSprint.endDate || ""));
+    setCapacityPoints(
+      typeof selectedSprint.capacityPoints === "number"
+        ? String(selectedSprint.capacityPoints)
+        : ""
+    );
+    setStatus(String(selectedSprint.status || "planned"));
+  }, [open, selectedSprint]);
+
+  const canCreate = name.trim().length > 0 && !busy;
+  const canUpdate =
+    Boolean(selectedSprintId) && name.trim().length > 0 && !busy;
+
+  const handleCreate = async () => {
+    if (!canCreate) return;
+    setBusy(true);
+    try {
+      const nextCapacity =
+        capacityPoints.trim() === "" ? null : Number(capacityPoints);
+      const sprintId = await onCreateSprint({
+        name: name.trim(),
+        goal: goal.trim(),
+        startDate: startDate.trim() || null,
+        endDate: endDate.trim() || null,
+        capacityPoints: Number.isFinite(nextCapacity) ? nextCapacity : null,
+        status,
+      });
+      if (sprintId) setSelectedSprintId(sprintId);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!canUpdate) return;
+    setBusy(true);
+    try {
+      const nextCapacity =
+        capacityPoints.trim() === "" ? null : Number(capacityPoints);
+      await onUpdateSprint(selectedSprintId, {
+        name: name.trim(),
+        goal: goal.trim(),
+        startDate: startDate.trim() || null,
+        endDate: endDate.trim() || null,
+        capacityPoints: Number.isFinite(nextCapacity) ? nextCapacity : null,
+        status,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedSprintId || busy) return;
+    setBusy(true);
+    try {
+      await onDeleteSprint(selectedSprintId);
+      setSelectedSprintId("");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setSelectedSprintId("");
+        onOpenChange(next);
+      }}
+    >
+      <DialogContent className="sm:max-w-[900px] bg-background/95 backdrop-blur-lg border-border/50">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" />
+            Sprints
+          </DialogTitle>
+          <DialogDescription>
+            Create and manage sprints. Stories and epics can be assigned via
+            drag-and-drop.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 sm:grid-cols-[320px_1fr]">
+          <div className="rounded-lg border border-border/50 bg-background/60">
+            <div className="flex items-center justify-between gap-2 p-3 border-b border-border/50">
+              <div className="text-sm font-medium">All sprints</div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setSelectedSprintId("")}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                New
+              </Button>
+            </div>
+            <ScrollArea className="h-[360px]">
+              <div className="p-2 space-y-1">
+                {(sprints || []).length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">
+                    No sprints yet.
+                  </div>
+                ) : (
+                  (sprints || [])
+                    .slice()
+                    .sort((a, b) =>
+                      String(a.name || "").localeCompare(String(b.name || ""))
+                    )
+                    .map((sprint) => (
+                      <button
+                        key={sprint.id}
+                        type="button"
+                        onClick={() => setSelectedSprintId(sprint.id)}
+                        className={cn(
+                          "w-full text-left rounded-md px-3 py-2 transition-colors",
+                          "hover:bg-muted/40",
+                          selectedSprintId === sprint.id &&
+                            "bg-primary/10 ring-1 ring-primary/20"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-sm font-medium truncate">
+                            {sprint.name}
+                          </div>
+                          <Badge variant="outline" className="text-[10px]">
+                            {String(sprint.status || "planned")}
+                          </Badge>
+                        </div>
+                        {sprint.goal ? (
+                          <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                            {sprint.goal}
+                          </div>
+                        ) : null}
+                      </button>
+                    ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+
+          <div className="rounded-lg border border-border/50 bg-background/60 p-4">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <div className="text-sm font-medium">
+                {selectedSprintId ? "Edit sprint" : "Create sprint"}
+              </div>
+              {selectedSprintId ? (
+                <Badge variant="secondary" className="gap-1">
+                  <Pencil className="h-3 w-3" />
+                  {selectedSprintId.slice(0, 8)}
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="grid gap-3">
+              <div className="grid gap-2">
+                <Label>Name</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Sprint name"
+                  className="bg-background/50"
+                  disabled={busy}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Goal</Label>
+                <textarea
+                  className="flex min-h-[96px] w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                  value={goal}
+                  onChange={(e) => setGoal(e.target.value)}
+                  placeholder="Optional sprint goal"
+                  disabled={busy}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label>Start</Label>
+                  <Input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-background/50"
+                    disabled={busy}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>End</Label>
+                  <Input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-background/50"
+                    disabled={busy}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="grid gap-2">
+                  <Label>Capacity points</Label>
+                  <Input
+                    inputMode="numeric"
+                    value={capacityPoints}
+                    onChange={(e) => setCapacityPoints(e.target.value)}
+                    placeholder="Optional"
+                    className="bg-background/50"
+                    disabled={busy}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={status}
+                    onValueChange={setStatus}
+                    disabled={busy}
+                  >
+                    <SelectTrigger className="bg-background/50">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SPRINT_STATUSES.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              {selectedSprintId ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  className="mr-auto"
+                  onClick={handleDelete}
+                  disabled={busy}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Close
+              </Button>
+              {selectedSprintId ? (
+                <Button
+                  type="button"
+                  onClick={handleUpdate}
+                  disabled={!canUpdate}
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  Save
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={handleCreate}
+                  disabled={!canCreate}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+const SprintTrackingView = ({ board, sprints, sprintNameById }) => {
+  const [selectedSprintId, setSelectedSprintId] = React.useState("");
+
+  React.useEffect(() => {
+    if (selectedSprintId) return;
+    const firstActive = (sprints || []).find((s) => s.status === "active")?.id;
+    if (firstActive) {
+      setSelectedSprintId(firstActive);
+      return;
+    }
+    const first = (sprints || [])[0]?.id;
+    if (first) setSelectedSprintId(first);
+  }, [selectedSprintId, sprints]);
+
+  const selectedSprint = React.useMemo(
+    () => (sprints || []).find((s) => s.id === selectedSprintId) || null,
+    [sprints, selectedSprintId]
+  );
+
+  const isDoneList = React.useCallback((list) => {
+    if (!list) return false;
+    if (String(list.statusId || "") === "done") return true;
+    return (
+      String(list.name || "")
+        .trim()
+        .toLowerCase() === "done"
+    );
+  }, []);
+
+  const sprintCards = React.useMemo(() => {
+    if (!selectedSprintId) return [];
+    const rows = [];
+    for (const list of board?.lists || []) {
+      for (const card of list.cards || []) {
+        if (card.sprintId !== selectedSprintId) continue;
+        rows.push({
+          card,
+          list,
+          done: isDoneList(list),
+        });
+      }
+    }
+    return rows;
+  }, [board, isDoneList, selectedSprintId]);
+
+  const pointsSummary = React.useMemo(() => {
+    let total = 0;
+    let done = 0;
+    let totalStories = 0;
+    let doneStories = 0;
+
+    for (const row of sprintCards) {
+      totalStories += 1;
+      const pts =
+        typeof row.card.points === "number"
+          ? row.card.points
+          : Number.parseFloat(String(row.card.points || ""));
+      if (Number.isFinite(pts)) total += pts;
+      if (row.done) {
+        doneStories += 1;
+        if (Number.isFinite(pts)) done += pts;
+      }
+    }
+
+    return {
+      totalStories,
+      doneStories,
+      totalPoints: total,
+      donePoints: done,
+      remainingPoints: Math.max(0, total - done),
+      completionPercent:
+        total > 0
+          ? Math.round((done / total) * 100)
+          : totalStories > 0
+          ? Math.round((doneStories / totalStories) * 100)
+          : 0,
+    };
+  }, [sprintCards]);
+
+  const burndown = React.useMemo(() => {
+    const start = Date.parse(String(selectedSprint?.startDate || ""));
+    const end = Date.parse(String(selectedSprint?.endDate || ""));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start)
+      return null;
+
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const days = Math.max(1, Math.round((end - start) / msPerDay) + 1);
+
+    const completed = sprintCards
+      .map((row) => {
+        const pts =
+          typeof row.card.points === "number"
+            ? row.card.points
+            : Number.parseFloat(String(row.card.points || ""));
+        const completedAtMs = Date.parse(String(row.card.completedAt || ""));
+        return {
+          pts: Number.isFinite(pts) ? pts : 0,
+          completedAtMs: Number.isFinite(completedAtMs) ? completedAtMs : null,
+        };
+      })
+      .filter((row) => row.pts > 0);
+
+    const total = pointsSummary.totalPoints;
+    const points = [];
+    for (let i = 0; i < days; i += 1) {
+      const dayEnd = start + i * msPerDay + (msPerDay - 1);
+      const burned = completed
+        .filter((c) => c.completedAtMs && c.completedAtMs <= dayEnd)
+        .reduce((sum, c) => sum + c.pts, 0);
+      points.push({
+        day: i,
+        remaining: Math.max(0, total - burned),
+      });
+    }
+
+    const ideal = [];
+    for (let i = 0; i < days; i += 1) {
+      ideal.push({
+        day: i,
+        remaining: Math.max(0, total - (total * i) / (days - 1 || 1)),
+      });
+    }
+
+    return { points, ideal };
+  }, [pointsSummary.totalPoints, selectedSprint, sprintCards]);
+
+  const velocity = React.useMemo(() => {
+    const doneSprints = (sprints || []).filter((s) => s.status === "completed");
+    const perSprint = doneSprints
+      .map((s) => {
+        let donePoints = 0;
+        for (const list of board?.lists || []) {
+          const doneList = isDoneList(list);
+          for (const card of list.cards || []) {
+            if (card.sprintId !== s.id) continue;
+            if (!doneList) continue;
+            const pts =
+              typeof card.points === "number"
+                ? card.points
+                : Number.parseFloat(String(card.points || ""));
+            if (Number.isFinite(pts)) donePoints += pts;
+          }
+        }
+        return {
+          sprintId: s.id,
+          name: String(s.name || s.id),
+          donePoints,
+        };
+      })
+      .filter((row) => row.donePoints > 0);
+
+    const avg =
+      perSprint.length > 0
+        ? Math.round(
+            perSprint.reduce((sum, row) => sum + row.donePoints, 0) /
+              perSprint.length
+          )
+        : 0;
+
+    return { perSprint, avg };
+  }, [board, isDoneList, sprints]);
+
+  const chartPath = React.useMemo(() => {
+    if (!burndown || burndown.points.length < 2) return null;
+    const width = 520;
+    const height = 160;
+    const padding = 16;
+    const max = Math.max(
+      1,
+      ...burndown.points.map((p) => p.remaining),
+      ...burndown.ideal.map((p) => p.remaining)
+    );
+    const xFor = (day) =>
+      padding + (day / (burndown.points.length - 1)) * (width - padding * 2);
+    const yFor = (remaining) =>
+      height - padding - (remaining / max) * (height - padding * 2);
+
+    const toPath = (series) =>
+      series
+        .map(
+          (p, idx) =>
+            `${idx === 0 ? "M" : "L"}${xFor(p.day).toFixed(1)},${yFor(
+              p.remaining
+            ).toFixed(1)}`
+        )
+        .join(" ");
+
+    return {
+      width,
+      height,
+      actual: toPath(burndown.points),
+      ideal: toPath(burndown.ideal),
+    };
+  }, [burndown]);
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="text-sm font-medium">Sprint tracking</div>
+          <div className="flex-1" />
+          <Select
+            value={selectedSprintId || ""}
+            onValueChange={(v) => setSelectedSprintId(v)}
+          >
+            <SelectTrigger className="w-[260px] bg-background/50">
+              <SelectValue placeholder="Select sprint" />
+            </SelectTrigger>
+            <SelectContent>
+              {(sprints || []).map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {!selectedSprint ? (
+          <div className="text-sm text-muted-foreground">No sprints yet.</div>
+        ) : (
+          <div className="grid gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <LayoutGrid className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs text-muted-foreground">Stories</span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">
+                  {pointsSummary.totalStories}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-xs text-muted-foreground">Done</span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">
+                  {pointsSummary.doneStories}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className="h-4 w-4 text-amber-500" />
+                  <span className="text-xs text-muted-foreground">
+                    Remaining
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">
+                  {pointsSummary.remainingPoints}
+                </div>
+              </div>
+
+              <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="h-4 w-4 text-purple-500" />
+                  <span className="text-xs text-muted-foreground">
+                    Progress
+                  </span>
+                </div>
+                <div className="text-2xl font-bold text-foreground">
+                  {pointsSummary.completionPercent}%
+                </div>
+                {pointsSummary.totalPoints > 0 ? (
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {pointsSummary.donePoints}/{pointsSummary.totalPoints} pts
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {burndown && chartPath ? (
+              <div className="rounded-xl border border-border/50 bg-background/50 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="text-sm font-medium">Burndown</div>
+                  <div className="text-xs text-muted-foreground">
+                    {selectedSprint.startDate || ""}
+                    {selectedSprint.endDate
+                      ? ` → ${selectedSprint.endDate}`
+                      : ""}
+                  </div>
+                </div>
+                <svg
+                  width={chartPath.width}
+                  height={chartPath.height}
+                  viewBox={`0 0 ${chartPath.width} ${chartPath.height}`}
+                  className="w-full h-auto"
+                >
+                  <path
+                    d={chartPath.ideal}
+                    fill="none"
+                    stroke="rgba(148,163,184,0.8)"
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                  />
+                  <path
+                    d={chartPath.actual}
+                    fill="none"
+                    stroke="rgba(59,130,246,0.9)"
+                    strokeWidth="2.5"
+                  />
+                </svg>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">
+                Add start/end dates to see a burndown chart.
+              </div>
+            )}
+
+            {velocity.perSprint.length > 0 ? (
+              <div className="rounded-xl border border-border/50 bg-background/50 p-3">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="text-sm font-medium">Velocity</div>
+                  <div className="text-xs text-muted-foreground">
+                    Avg {velocity.avg} pts/sprint
+                  </div>
+                </div>
+                <div className="grid gap-1">
+                  {velocity.perSprint.slice(0, 6).map((row) => (
+                    <div key={row.sprintId} className="flex items-center gap-2">
+                      <div className="text-sm flex-1 truncate">
+                        {sprintNameById?.[row.sprintId] || row.name}
+                      </div>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {row.donePoints} pts
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 
@@ -1613,6 +2351,7 @@ const ScrumCard = ({
   lockInfo,
   listColor,
   storyKey,
+  sprintName,
   isDragging,
   draggableEnabled = true,
 }) => {
@@ -1736,6 +2475,12 @@ const ScrumCard = ({
           (card.labels && card.labels.length) ||
           card.priority) && (
           <div className="mt-2.5 pt-2.5 border-t border-border/30 flex flex-wrap items-center gap-1.5">
+            {sprintName ? (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                <Calendar className="h-2.5 w-2.5 mr-1" />
+                {sprintName}
+              </Badge>
+            ) : null}
             {card.priority && card.priority !== "medium" && (
               <Badge
                 variant="secondary"
@@ -1845,6 +2590,7 @@ const ListColumn = ({
   isCardLocked,
   getCardLock,
   storyKeyByCardId,
+  sprintNameById,
 }) => {
   const [isEditingName, setIsEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState(list.name);
@@ -2049,6 +2795,9 @@ const ListColumn = ({
                     lockInfo={lockInfo}
                     listColor={list.color}
                     storyKey={storyKeyByCardId?.[card.id]}
+                    sprintName={
+                      card.sprintId ? sprintNameById?.[card.sprintId] : null
+                    }
                     isDragging={isDragging}
                     draggableEnabled={!disableDnd}
                   />
@@ -5349,9 +6098,13 @@ export default function ScrumBoardView() {
     getCardLock,
     getActiveBoard,
     getEpics,
+    getSprints,
     getStats,
     createEpic,
     updateEpic,
+    createSprint,
+    updateSprint,
+    deleteSprint,
     syncNow,
     // Settings
     checkServerStatus,
@@ -5365,14 +6118,17 @@ export default function ScrumBoardView() {
   const [settingsOpen, setSettingsOpen] = React.useState(false);
   const [agentAssistOpen, setAgentAssistOpen] = React.useState(false);
   const [epicManagerOpen, setEpicManagerOpen] = React.useState(false);
+  const [sprintManagerOpen, setSprintManagerOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
   const [listDrop, setListDrop] = React.useState(null);
+  const [sprintDropId, setSprintDropId] = React.useState(null);
   const [projectPickerOpen, setProjectPickerOpen] = React.useState(false);
   const [projectPickerValue, setProjectPickerValue] = React.useState("");
   const projectPickerFileRef = React.useRef(null);
 
   const [assigneeFilter, setAssigneeFilter] = React.useState("");
   const [epicFilter, setEpicFilter] = React.useState("");
+  const [sprintFilter, setSprintFilter] = React.useState("");
 
   const [overviewTab, setOverviewTab] = React.useState(() => {
     try {
@@ -5554,6 +6310,7 @@ export default function ScrumBoardView() {
 
   const activeBoard = getActiveBoard();
   const epics = getEpics();
+  const sprints = getSprints();
   const stats = getStats();
 
   const assigneeOptions = React.useMemo(() => {
@@ -5574,7 +6331,23 @@ export default function ScrumBoardView() {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [epics]);
 
-  const filtersActive = Boolean(assigneeFilter || epicFilter);
+  const sprintOptions = React.useMemo(() => {
+    return (Array.isArray(sprints) ? sprints : [])
+      .map((s) => ({ id: s.id, name: String(s.name || "").trim() }))
+      .filter((s) => s.id && s.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [sprints]);
+
+  const sprintNameById = React.useMemo(() => {
+    const map = {};
+    for (const s of Array.isArray(sprints) ? sprints : []) {
+      if (!s?.id) continue;
+      map[s.id] = String(s.name || "").trim() || s.id;
+    }
+    return map;
+  }, [sprints]);
+
+  const filtersActive = Boolean(assigneeFilter || epicFilter || sprintFilter);
 
   const displayCardsByListId = React.useMemo(() => {
     if (!activeBoard?.lists?.length) return {};
@@ -5591,7 +6364,14 @@ export default function ScrumBoardView() {
           : rawEpicId === epicFilter
         : true;
 
-      return matchesAssignee && matchesEpic;
+      const rawSprintId = card.sprintId || "";
+      const matchesSprint = sprintFilter
+        ? sprintFilter === "__none__"
+          ? !rawSprintId
+          : rawSprintId === sprintFilter
+        : true;
+
+      return matchesAssignee && matchesEpic && matchesSprint;
     };
 
     const map = {};
@@ -5600,7 +6380,7 @@ export default function ScrumBoardView() {
       map[list.id] = filtersActive ? cards.filter(matchCard) : cards;
     }
     return map;
-  }, [activeBoard, assigneeFilter, epicFilter, filtersActive]);
+  }, [activeBoard, assigneeFilter, epicFilter, sprintFilter, filtersActive]);
 
   const storyKeyByCardId = React.useMemo(() => {
     if (!activeBoard?.lists?.length) return {};
@@ -5632,6 +6412,27 @@ export default function ScrumBoardView() {
     }
     return map;
   }, [activeBoard]);
+
+  const sprintItemCounts = React.useMemo(() => {
+    const bySprintId = {};
+    const bump = (id, key) => {
+      const sid = id || "__none__";
+      bySprintId[sid] = bySprintId[sid] || { cards: 0, epics: 0 };
+      bySprintId[sid][key] += 1;
+    };
+
+    for (const list of activeBoard?.lists || []) {
+      for (const card of list.cards || []) {
+        bump(card.sprintId || null, "cards");
+      }
+    }
+
+    for (const epic of Array.isArray(epics) ? epics : []) {
+      bump(epic.sprintId || null, "epics");
+    }
+
+    return bySprintId;
+  }, [activeBoard, epics]);
 
   // Card operations
   const openNewCard = React.useCallback(
@@ -5769,11 +6570,13 @@ export default function ScrumBoardView() {
     e.dataTransfer.effectAllowed = "move";
     setDragState({ type: "card", listId, cardId, index });
     setListDrop(null);
+    setSprintDropId(null);
   };
 
   const onDragEndCard = () => {
     setDragState(null);
     setListDrop(null);
+    setSprintDropId(null);
   };
 
   const onDragStartList = (e, listId) => {
@@ -5787,6 +6590,7 @@ export default function ScrumBoardView() {
   const onDragEndList = () => {
     setDragState(null);
     setListDrop(null);
+    setSprintDropId(null);
   };
 
   const onDragOverListColumn = (e, overListId, overIndex) => {
@@ -5842,6 +6646,31 @@ export default function ScrumBoardView() {
     if (!fromListId || !cardId) return;
 
     await moveCard(activeBoardId, cardId, fromListId, toListId, toIndex);
+    setDragState(null);
+  };
+
+  const onDropToSprint = async (e, targetSprintId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const payload = safeParse(e.dataTransfer.getData("application/json"));
+    if (!payload) return;
+
+    if (payload.type === "scrum-card") {
+      const fromListId = payload.listId;
+      const cardId = payload.cardId;
+      if (!fromListId || !cardId) return;
+      await updateCard(activeBoardId, fromListId, cardId, {
+        sprintId: targetSprintId || null,
+      });
+    }
+
+    if (payload.type === "scrum-epic") {
+      const epicId = payload.epicId;
+      if (!epicId) return;
+      await updateEpic(epicId, { sprintId: targetSprintId || null });
+    }
+
+    setSprintDropId(null);
     setDragState(null);
   };
 
@@ -5991,6 +6820,16 @@ export default function ScrumBoardView() {
             Epics
           </Button>
 
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => setSprintManagerOpen(true)}
+          >
+            <Calendar className="h-4 w-4" />
+            Sprints
+          </Button>
+
           {activeBoard && (
             <Button
               variant="destructive"
@@ -6012,14 +6851,76 @@ export default function ScrumBoardView() {
         </div>
       </div>
 
+      {activeBoard && sprintOptions.length > 0 && (
+        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              Sprints
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div
+                data-testid="sprint-drop-none"
+                className={cn(
+                  "px-3 py-2 rounded-lg border text-sm bg-background/50",
+                  sprintDropId === "__none__" && "ring-2 ring-primary/30"
+                )}
+                onDragOver={(e) => {
+                  if (!dragState) return;
+                  e.preventDefault();
+                  setSprintDropId("__none__");
+                }}
+                onDragLeave={() => setSprintDropId(null)}
+                onDrop={(e) => onDropToSprint(e, null)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">No sprint</span>
+                  <Badge variant="outline" className="text-[10px]">
+                    {(sprintItemCounts["__none__"]?.cards || 0) +
+                      (sprintItemCounts["__none__"]?.epics || 0)}
+                  </Badge>
+                </div>
+              </div>
+
+              {sprintOptions.map((s) => (
+                <div
+                  key={s.id}
+                  data-testid={`sprint-drop-${s.id}`}
+                  className={cn(
+                    "px-3 py-2 rounded-lg border text-sm bg-background/50",
+                    sprintDropId === s.id && "ring-2 ring-primary/30"
+                  )}
+                  onDragOver={(e) => {
+                    if (!dragState) return;
+                    e.preventDefault();
+                    setSprintDropId(s.id);
+                  }}
+                  onDragLeave={() => setSprintDropId(null)}
+                  onDrop={(e) => onDropToSprint(e, s.id)}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{s.name}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {(sprintItemCounts[s.id]?.cards || 0) +
+                        (sprintItemCounts[s.id]?.epics || 0)}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeBoard && (
         <Tabs
           value={overviewTab}
           onValueChange={setOverviewTab}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="mcp">MCP Tool</TabsTrigger>
+            <TabsTrigger value="sprints">Sprints</TabsTrigger>
             <TabsTrigger value="stats">Stats</TabsTrigger>
           </TabsList>
 
@@ -6030,72 +6931,106 @@ export default function ScrumBoardView() {
             />
           </TabsContent>
 
+          <TabsContent value="sprints" className="mt-3">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+              <SprintTrackingView
+                board={activeBoard}
+                sprints={sprints}
+                sprintNameById={sprintNameById}
+              />
+
+              <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Filter className="h-4 w-4 text-muted-foreground" />
+                  Filters
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-3">
+                  <div className="grid gap-2">
+                    <Label htmlFor="scrum-filter-assignee">Assignee</Label>
+                    <Select
+                      value={assigneeFilter}
+                      onValueChange={(value) =>
+                        setAssigneeFilter(value === "__all__" ? "" : value)
+                      }
+                    >
+                      <SelectTrigger
+                        id="scrum-filter-assignee"
+                        className="bg-background/50"
+                      >
+                        <SelectValue placeholder="Select Assignee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All</SelectItem>
+                        {assigneeOptions.map((name) => (
+                          <SelectItem key={name} value={name}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="scrum-filter-epic">Epic</Label>
+                    <Select
+                      value={epicFilter}
+                      onValueChange={(value) =>
+                        setEpicFilter(value === "__all__" ? "" : value)
+                      }
+                    >
+                      <SelectTrigger
+                        id="scrum-filter-epic"
+                        className="bg-background/50"
+                      >
+                        <SelectValue placeholder="Select Epic" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All</SelectItem>
+                        <SelectItem value="__none__">No Epic</SelectItem>
+                        {epicOptions.map((epic) => (
+                          <SelectItem key={epic.id} value={epic.id}>
+                            {epic.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="grid gap-2">
+                    <Label htmlFor="scrum-filter-sprint">Sprint</Label>
+                    <Select
+                      value={sprintFilter}
+                      onValueChange={(value) =>
+                        setSprintFilter(value === "__all__" ? "" : value)
+                      }
+                    >
+                      <SelectTrigger
+                        id="scrum-filter-sprint"
+                        className="bg-background/50"
+                      >
+                        <SelectValue placeholder="Select Sprint" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All</SelectItem>
+                        <SelectItem value="__none__">No Sprint</SelectItem>
+                        {sprintOptions.map((sprint) => (
+                          <SelectItem key={sprint.id} value={sprint.id}>
+                            {sprint.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
           <TabsContent value="stats" className="mt-3">
             <StatsCard stats={stats} />
           </TabsContent>
         </Tabs>
-      )}
-
-      {activeBoard && (
-        <div className="mt-3 rounded-xl border border-border/50 bg-background/40 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            Filters
-          </div>
-
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="scrum-filter-assignee">Assignee</Label>
-              <Select
-                value={assigneeFilter}
-                onValueChange={(value) =>
-                  setAssigneeFilter(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="scrum-filter-assignee"
-                  className="bg-background/50"
-                >
-                  <SelectValue placeholder="Select Assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All</SelectItem>
-                  {assigneeOptions.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="scrum-filter-epic">Epic</Label>
-              <Select
-                value={epicFilter}
-                onValueChange={(value) =>
-                  setEpicFilter(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="scrum-filter-epic"
-                  className="bg-background/50"
-                >
-                  <SelectValue placeholder="Select Epic" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All</SelectItem>
-                  <SelectItem value="__none__">No Epic</SelectItem>
-                  {epicOptions.map((epic) => (
-                    <SelectItem key={epic.id} value={epic.id}>
-                      {epic.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Board */}
@@ -6134,6 +7069,7 @@ export default function ScrumBoardView() {
               isCardLocked={isCardLocked}
               getCardLock={getCardLock}
               storyKeyByCardId={storyKeyByCardId}
+              sprintNameById={sprintNameById}
             />
           ))}
 

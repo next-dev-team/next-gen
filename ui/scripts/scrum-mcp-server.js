@@ -59,6 +59,7 @@ const defaultState = () => {
       },
     ],
     epics: [], // Track epics separately for bmad-method
+    sprints: [],
     locks: {}, // Card locks for conflict prevention: { cardId: { userId, lockedAt, expiresAt } }
   };
 };
@@ -68,6 +69,7 @@ const getState = () => {
   if (current?.boards?.length) {
     // Ensure new fields exist
     if (!current.locks) current.locks = {};
+    if (!Array.isArray(current.sprints)) current.sprints = [];
     if (typeof current.stateVersion !== "number") current.stateVersion = 1;
     return current;
   }
@@ -217,8 +219,23 @@ const updateBoardInState = (state, boardId, updater) => {
   return { ...state, boards };
 };
 
+const isDoneList = (list) => {
+  if (!list) return false;
+  if (String(list.statusId || "") === "done") return true;
+  return (
+    String(list.name || "")
+      .trim()
+      .toLowerCase() === "done"
+  );
+};
+
 const moveCardInBoard = ({ board, cardId, fromListId, toListId, toIndex }) => {
   let movingCard = null;
+  const fromList = board.lists.find((l) => l.id === fromListId);
+  const toList = board.lists.find((l) => l.id === toListId);
+  const movingFromDone = isDoneList(fromList);
+  const movingToDone = isDoneList(toList);
+
   const listsAfterRemove = board.lists.map((list) => {
     if (list.id !== fromListId) return list;
     const nextCards = list.cards.filter((c) => {
@@ -232,9 +249,12 @@ const moveCardInBoard = ({ board, cardId, fromListId, toListId, toIndex }) => {
   if (!movingCard) return board;
 
   // Update card status based on target list
-  const targetList = board.lists.find((l) => l.id === toListId);
-  if (targetList?.statusId) {
-    movingCard.status = targetList.statusId;
+  if (toList?.statusId) movingCard.status = toList.statusId;
+  if (movingToDone && !movingCard.completedAt) {
+    movingCard.completedAt = nowIso();
+  }
+  if (movingFromDone && !movingToDone) {
+    movingCard.completedAt = null;
   }
 
   const normalizedToIndex = Math.max(0, Number.isFinite(toIndex) ? toIndex : 0);
@@ -1214,6 +1234,18 @@ const httpServer = http.createServer((req, res) => {
             result = await handleUpdateEpic(data);
             break;
 
+          case "/api/sprint/create":
+            result = await handleCreateSprint(data);
+            break;
+
+          case "/api/sprint/update":
+            result = await handleUpdateSprint(data);
+            break;
+
+          case "/api/sprint/delete":
+            result = await handleDeleteSprint(data);
+            break;
+
           default:
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Not found" }));
@@ -1265,12 +1297,18 @@ const httpServer = http.createServer((req, res) => {
             create: "/api/epic/create",
             update: "/api/epic/update",
           },
+          sprint: {
+            create: "/api/sprint/create",
+            update: "/api/sprint/update",
+            delete: "/api/sprint/delete",
+          },
         },
         features: [
           "BMAD-Method workflow (backlog → ready-for-dev → in-progress → review → done)",
           "Real-time SSE updates",
           "Optimistic locking for conflict prevention",
           "Epic and Story management",
+          "Sprint management",
         ],
       })
     );
@@ -1413,6 +1451,7 @@ async function handleAddCard(data) {
     points,
     labels,
     epicId,
+    sprintId,
     priority,
   } = data;
   const trimmed = String(title || "").trim();
@@ -1430,6 +1469,7 @@ async function handleAddCard(data) {
     points: typeof points === "number" ? points : null,
     labels: Array.isArray(labels) ? labels.map((l) => String(l)) : [],
     epicId: epicId || null,
+    sprintId: sprintId || null,
     priority: priority || "medium",
     status: list?.statusId || "backlog",
     createdAt: nowIso(),
@@ -1559,6 +1599,135 @@ async function handleMoveCard(data, userId, clientStateVersion) {
     boardId,
   });
 
+  return { state: next };
+}
+
+async function handleCreateSprint(data) {
+  const name = String(data.name || "").trim();
+  if (!name) throw new Error("name is required");
+
+  const state = getState();
+  const isDuplicate = (state.sprints || []).some(
+    (s) =>
+      String(s.name || "")
+        .trim()
+        .toLowerCase() === name.toLowerCase()
+  );
+  if (isDuplicate) {
+    throw new Error(`A sprint with name "${name}" already exists`);
+  }
+
+  const startDateRaw = String(data.startDate || "").trim();
+  const endDateRaw = String(data.endDate || "").trim();
+  const sprint = {
+    id: createId(),
+    name,
+    goal: String(data.goal || "").trim(),
+    startDate: startDateRaw || null,
+    endDate: endDateRaw || null,
+    capacityPoints:
+      typeof data.capacityPoints === "number" ? data.capacityPoints : null,
+    status: ["planned", "active", "completed"].includes(data.status)
+      ? data.status
+      : "planned",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  };
+
+  const next = setState({
+    ...state,
+    sprints: [...(state.sprints || []), sprint],
+  });
+
+  broadcastEvent("sprint_created", { sprint });
+  return { state: next, sprintId: sprint.id };
+}
+
+async function handleUpdateSprint(data) {
+  const { sprintId, patch } = data;
+  if (!sprintId) throw new Error("sprintId is required");
+  if (!patch || typeof patch !== "object")
+    throw new Error("patch must be an object");
+
+  const state = getState();
+  const exists = (state.sprints || []).some((s) => s.id === sprintId);
+  if (!exists) throw new Error("Sprint not found");
+
+  const nextSprints = (state.sprints || []).map((s) => {
+    if (s.id !== sprintId) return s;
+
+    const nextName =
+      patch.name === undefined ? s.name : String(patch.name || "").trim();
+    if (!nextName) throw new Error("name is required");
+
+    const nextStartDate =
+      patch.startDate === undefined
+        ? s.startDate ?? null
+        : String(patch.startDate || "").trim() || null;
+    const nextEndDate =
+      patch.endDate === undefined
+        ? s.endDate ?? null
+        : String(patch.endDate || "").trim() || null;
+
+    const nextCapacity =
+      patch.capacityPoints === undefined
+        ? s.capacityPoints ?? null
+        : typeof patch.capacityPoints === "number"
+        ? patch.capacityPoints
+        : null;
+
+    const nextStatus =
+      patch.status === undefined
+        ? s.status || "planned"
+        : ["planned", "active", "completed"].includes(patch.status)
+        ? patch.status
+        : s.status || "planned";
+
+    return {
+      ...s,
+      ...patch,
+      name: nextName,
+      startDate: nextStartDate,
+      endDate: nextEndDate,
+      capacityPoints: nextCapacity,
+      status: nextStatus,
+      updatedAt: nowIso(),
+    };
+  });
+
+  const next = setState({ ...state, sprints: nextSprints });
+  broadcastEvent("sprint_updated", { sprintId, patch });
+  return { state: next };
+}
+
+async function handleDeleteSprint(data) {
+  const { sprintId } = data;
+  if (!sprintId) throw new Error("sprintId is required");
+
+  const state = getState();
+  const exists = (state.sprints || []).some((s) => s.id === sprintId);
+  if (!exists) throw new Error("Sprint not found");
+
+  const nextBoards = (state.boards || []).map((b) => ({
+    ...b,
+    lists: (b.lists || []).map((l) => ({
+      ...l,
+      cards: (l.cards || []).map((c) =>
+        c.sprintId === sprintId ? { ...c, sprintId: null } : c
+      ),
+    })),
+  }));
+
+  const next = setState({
+    ...state,
+    boards: nextBoards,
+    epics: (state.epics || []).map((e) =>
+      e.sprintId === sprintId ? { ...e, sprintId: null } : e
+    ),
+    sprints: (state.sprints || []).filter((s) => s.id !== sprintId),
+  });
+
+  broadcastEvent("sprint_deleted", { sprintId });
   return { state: next };
 }
 
@@ -1828,6 +1997,7 @@ const main = async (enableStdio = true, logger = console) => {
         points: z.number().nullable().optional(),
         labels: z.array(z.string()).optional(),
         epicId: z.string().optional(),
+        sprintId: z.string().nullable().optional(),
         priority: z.enum(["low", "medium", "high", "critical"]).optional(),
       },
       outputSchema: { state: z.any(), cardId: z.string() },
@@ -1972,6 +2142,67 @@ const main = async (enableStdio = true, logger = console) => {
     },
     async ({ epicId, patch }) => {
       const result = await handleUpdateEpic({ epicId, patch });
+      return withStructured(result);
+    }
+  );
+
+  server.registerTool(
+    "scrum_create_sprint",
+    {
+      title: "Create Sprint",
+      description: "Create a new sprint",
+      inputSchema: {
+        name: z.string(),
+        startDate: z.string().optional(),
+        endDate: z.string().optional(),
+        goal: z.string().optional(),
+        capacityPoints: z.number().nullable().optional(),
+        status: z.enum(["planned", "active", "completed"]).optional(),
+      },
+      outputSchema: { state: z.any(), sprintId: z.string() },
+    },
+    async ({ name, startDate, endDate, goal, capacityPoints, status }) => {
+      const result = await handleCreateSprint({
+        name,
+        startDate,
+        endDate,
+        goal,
+        capacityPoints,
+        status,
+      });
+      return withStructured(result);
+    }
+  );
+
+  server.registerTool(
+    "scrum_update_sprint",
+    {
+      title: "Update Sprint",
+      description: "Update a sprint's properties",
+      inputSchema: {
+        sprintId: z.string(),
+        patch: z.any(),
+      },
+      outputSchema: { state: z.any() },
+    },
+    async ({ sprintId, patch }) => {
+      const result = await handleUpdateSprint({ sprintId, patch });
+      return withStructured(result);
+    }
+  );
+
+  server.registerTool(
+    "scrum_delete_sprint",
+    {
+      title: "Delete Sprint",
+      description: "Delete a sprint and unschedule linked items",
+      inputSchema: {
+        sprintId: z.string(),
+      },
+      outputSchema: { state: z.any() },
+    },
+    async ({ sprintId }) => {
+      const result = await handleDeleteSprint({ sprintId });
       return withStructured(result);
     }
   );
