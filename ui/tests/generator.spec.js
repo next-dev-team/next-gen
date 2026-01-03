@@ -190,6 +190,8 @@ test.describe("Generator UI", () => {
     await expect(window.getByText("Story B")).toBeVisible();
     await expect(window.getByText("Story C")).toBeVisible();
 
+    await window.getByRole("tab", { name: "Sprints", exact: true }).click();
+
     await window.locator("#scrum-filter-assignee").click();
     await window.getByRole("option", { name: "Alice", exact: true }).click();
 

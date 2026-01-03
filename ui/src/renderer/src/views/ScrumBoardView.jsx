@@ -1844,18 +1844,27 @@ const SprintManagerDialog = ({
   );
 };
 
-const SprintTrackingView = ({ board, sprints, sprintNameById }) => {
-  const [selectedSprintId, setSelectedSprintId] = React.useState("");
+const SprintTrackingView = ({
+  board,
+  sprints,
+  sprintNameById,
+  filters,
+  sprintSelector,
+  selectedSprintId: propSprintId,
+}) => {
+  const [localSprintId, setLocalSprintId] = React.useState("");
+
+  const selectedSprintId = propSprintId || localSprintId;
 
   React.useEffect(() => {
     if (selectedSprintId) return;
     const firstActive = (sprints || []).find((s) => s.status === "active")?.id;
     if (firstActive) {
-      setSelectedSprintId(firstActive);
+      setLocalSprintId(firstActive);
       return;
     }
     const first = (sprints || [])[0]?.id;
-    if (first) setSelectedSprintId(first);
+    if (first) setLocalSprintId(first);
   }, [selectedSprintId, sprints]);
 
   const selectedSprint = React.useMemo(
@@ -2041,143 +2050,11 @@ const SprintTrackingView = ({ board, sprints, sprintNameById }) => {
 
   return (
     <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="text-sm font-medium">Sprint tracking</div>
-          <Select
-            value={selectedSprintId || ""}
-            onValueChange={(v) => setSelectedSprintId(v)}
-          >
-            <SelectTrigger className="w-[260px] bg-background/50">
-              <SelectValue placeholder="Select sprint" />
-            </SelectTrigger>
-            <SelectContent>
-              {(sprints || []).map((s) => (
-                <SelectItem key={s.id} value={s.id}>
-                  {s.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {!selectedSprint ? (
-          <div className="text-sm text-muted-foreground">No sprints yet.</div>
-        ) : (
-          <div className="grid gap-4">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <LayoutGrid className="h-4 w-4 text-blue-500" />
-                  <span className="text-xs text-muted-foreground">Stories</span>
-                </div>
-                <div className="text-2xl font-bold text-foreground">
-                  {pointsSummary.totalStories}
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span className="text-xs text-muted-foreground">Done</span>
-                </div>
-                <div className="text-2xl font-bold text-foreground">
-                  {pointsSummary.doneStories}
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <Zap className="h-4 w-4 text-amber-500" />
-                  <span className="text-xs text-muted-foreground">
-                    Remaining
-                  </span>
-                </div>
-                <div className="text-2xl font-bold text-foreground">
-                  {pointsSummary.remainingPoints}
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20">
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="h-4 w-4 text-purple-500" />
-                  <span className="text-xs text-muted-foreground">
-                    Progress
-                  </span>
-                </div>
-                <div className="text-2xl font-bold text-foreground">
-                  {pointsSummary.completionPercent}%
-                </div>
-                {pointsSummary.totalPoints > 0 ? (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {pointsSummary.donePoints}/{pointsSummary.totalPoints} pts
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            {burndown && chartPath ? (
-              <div className="rounded-xl border border-border/50 bg-background/50 p-3">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="text-sm font-medium">Burndown</div>
-                  <div className="text-xs text-muted-foreground">
-                    {selectedSprint.startDate || ""}
-                    {selectedSprint.endDate
-                      ? ` → ${selectedSprint.endDate}`
-                      : ""}
-                  </div>
-                </div>
-                <svg
-                  width={chartPath.width}
-                  height={chartPath.height}
-                  viewBox={`0 0 ${chartPath.width} ${chartPath.height}`}
-                  className="w-full h-auto"
-                >
-                  <path
-                    d={chartPath.ideal}
-                    fill="none"
-                    stroke="rgba(148,163,184,0.8)"
-                    strokeWidth="2"
-                    strokeDasharray="4 4"
-                  />
-                  <path
-                    d={chartPath.actual}
-                    fill="none"
-                    stroke="rgba(59,130,246,0.9)"
-                    strokeWidth="2.5"
-                  />
-                </svg>
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground">
-                Add start/end dates to see a burndown chart.
-              </div>
-            )}
-
-            {velocity.perSprint.length > 0 ? (
-              <div className="rounded-xl border border-border/50 bg-background/50 p-3">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <div className="text-sm font-medium">Velocity</div>
-                  <div className="text-xs text-muted-foreground">
-                    Avg {velocity.avg} pts/sprint
-                  </div>
-                </div>
-                <div className="grid gap-1">
-                  {velocity.perSprint.slice(0, 6).map((row) => (
-                    <div key={row.sprintId} className="flex items-center gap-2">
-                      <div className="text-sm flex-1 truncate">
-                        {sprintNameById?.[row.sprintId] || row.name}
-                      </div>
-                      <Badge variant="secondary" className="text-[10px]">
-                        {row.donePoints} pts
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
+      <div className="grid grid-cols-1 md:grid-cols-[30%_1fr] gap-6">
+        {sprintSelector && (
+          <div className="flex flex-col gap-3">{sprintSelector}</div>
         )}
+        <div className="flex flex-col gap-3">{filters}</div>
       </div>
     </div>
   );
@@ -6133,9 +6010,9 @@ export default function ScrumBoardView() {
     try {
       const v = localStorage.getItem(SCRUM_OVERVIEW_TAB_STORAGE_KEY);
       if (v === "mcp" || v === "sprints" || v === "stats") return v;
-      return "sprints";
+      return "mcp";
     } catch {
-      return "sprints";
+      return "mcp";
     }
   });
 
@@ -6851,157 +6728,6 @@ export default function ScrumBoardView() {
         </div>
       </div>
 
-      {activeBoard && sprintOptions.length > 0 && (
-        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              Sprints
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <div
-                data-testid="sprint-drop-none"
-                className={cn(
-                  "px-3 py-2 rounded-lg border text-sm bg-background/50",
-                  sprintDropId === "__none__" && "ring-2 ring-primary/30"
-                )}
-                onDragOver={(e) => {
-                  if (!dragState) return;
-                  e.preventDefault();
-                  setSprintDropId("__none__");
-                }}
-                onDragLeave={() => setSprintDropId(null)}
-                onDrop={(e) => onDropToSprint(e, null)}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">No sprint</span>
-                  <Badge variant="outline" className="text-[10px]">
-                    {(sprintItemCounts["__none__"]?.cards || 0) +
-                      (sprintItemCounts["__none__"]?.epics || 0)}
-                  </Badge>
-                </div>
-              </div>
-
-              {sprintOptions.map((s) => (
-                <div
-                  key={s.id}
-                  data-testid={`sprint-drop-${s.id}`}
-                  className={cn(
-                    "px-3 py-2 rounded-lg border text-sm bg-background/50",
-                    sprintDropId === s.id && "ring-2 ring-primary/30"
-                  )}
-                  onDragOver={(e) => {
-                    if (!dragState) return;
-                    e.preventDefault();
-                    setSprintDropId(s.id);
-                  }}
-                  onDragLeave={() => setSprintDropId(null)}
-                  onDrop={(e) => onDropToSprint(e, s.id)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium">{s.name}</span>
-                    <Badge variant="outline" className="text-[10px]">
-                      {(sprintItemCounts[s.id]?.cards || 0) +
-                        (sprintItemCounts[s.id]?.epics || 0)}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeBoard && (
-        <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-          <div className="flex items-center justify-between text-sm font-medium">
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
-              Filters
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="scrum-filter-assignee">Assignee</Label>
-              <Select
-                value={assigneeFilter}
-                onValueChange={(value) =>
-                  setAssigneeFilter(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="scrum-filter-assignee"
-                  className="bg-background/50"
-                >
-                  <SelectValue placeholder="Select Assignee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All</SelectItem>
-                  {assigneeOptions.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="scrum-filter-epic">Epic</Label>
-              <Select
-                value={epicFilter}
-                onValueChange={(value) =>
-                  setEpicFilter(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="scrum-filter-epic"
-                  className="bg-background/50"
-                >
-                  <SelectValue placeholder="Select Epic" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All</SelectItem>
-                  <SelectItem value="__none__">No Epic</SelectItem>
-                  {epicOptions.map((epic) => (
-                    <SelectItem key={epic.id} value={epic.id}>
-                      {epic.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="scrum-filter-sprint">Sprint</Label>
-              <Select
-                value={sprintFilter}
-                onValueChange={(value) =>
-                  setSprintFilter(value === "__all__" ? "" : value)
-                }
-              >
-                <SelectTrigger
-                  id="scrum-filter-sprint"
-                  className="bg-background/50"
-                >
-                  <SelectValue placeholder="Select Sprint" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__all__">All</SelectItem>
-                  <SelectItem value="__none__">No Sprint</SelectItem>
-                  {sprintOptions.map((sprint) => (
-                    <SelectItem key={sprint.id} value={sprint.id}>
-                      {sprint.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-      )}
-
       {activeBoard && (
         <Tabs
           value={overviewTab}
@@ -7022,11 +6748,164 @@ export default function ScrumBoardView() {
           </TabsContent>
 
           <TabsContent value="sprints" className="mt-3">
-            <SprintTrackingView
-              board={activeBoard}
-              sprints={sprints}
-              sprintNameById={sprintNameById}
-            />
+            <div className="grid gap-4">
+              <SprintTrackingView
+                board={activeBoard}
+                sprints={sprints}
+                sprintNameById={sprintNameById}
+                selectedSprintId={sprintFilter}
+                sprintSelector={
+                  sprintOptions.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        Sprints
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <div
+                          data-testid="sprint-drop-none"
+                          className={cn(
+                            "px-3 py-2 rounded-lg border text-sm bg-background/50",
+                            sprintDropId === "__none__" &&
+                              "ring-2 ring-primary/30"
+                          )}
+                          onDragOver={(e) => {
+                            if (!dragState) return;
+                            e.preventDefault();
+                            setSprintDropId("__none__");
+                          }}
+                          onDragLeave={() => setSprintDropId(null)}
+                          onDrop={(e) => onDropToSprint(e, null)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">No sprint</span>
+                            <Badge variant="outline" className="text-[10px]">
+                              {(sprintItemCounts["__none__"]?.cards || 0) +
+                                (sprintItemCounts["__none__"]?.epics || 0)}
+                            </Badge>
+                          </div>
+                        </div>
+
+                        {sprintOptions.map((s) => (
+                          <div
+                            key={s.id}
+                            data-testid={`sprint-drop-${s.id}`}
+                            className={cn(
+                              "px-3 py-2 rounded-lg border text-sm bg-background/50",
+                              sprintDropId === s.id && "ring-2 ring-primary/30"
+                            )}
+                            onDragOver={(e) => {
+                              if (!dragState) return;
+                              e.preventDefault();
+                              setSprintDropId(s.id);
+                            }}
+                            onDragLeave={() => setSprintDropId(null)}
+                            onDrop={(e) => onDropToSprint(e, s.id)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{s.name}</span>
+                              <Badge variant="outline" className="text-[10px]">
+                                {(sprintItemCounts[s.id]?.cards || 0) +
+                                  (sprintItemCounts[s.id]?.epics || 0)}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                }
+                filters={
+                  <>
+                    <div className="flex items-center justify-between text-sm font-medium">
+                      <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4 text-muted-foreground" />
+                        Filters
+                      </div>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      <div className="grid gap-2">
+                        <Label htmlFor="scrum-filter-assignee">Assignee</Label>
+                        <Select
+                          value={assigneeFilter}
+                          onValueChange={(value) =>
+                            setAssigneeFilter(value === "__all__" ? "" : value)
+                          }
+                        >
+                          <SelectTrigger
+                            id="scrum-filter-assignee"
+                            className="bg-background/50"
+                          >
+                            <SelectValue placeholder="Select Assignee" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">All</SelectItem>
+                            {assigneeOptions.map((name) => (
+                              <SelectItem key={name} value={name}>
+                                {name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="scrum-filter-epic">Epic</Label>
+                        <Select
+                          value={epicFilter}
+                          onValueChange={(value) =>
+                            setEpicFilter(value === "__all__" ? "" : value)
+                          }
+                        >
+                          <SelectTrigger
+                            id="scrum-filter-epic"
+                            className="bg-background/50"
+                          >
+                            <SelectValue placeholder="Select Epic" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">All</SelectItem>
+                            <SelectItem value="__none__">No Epic</SelectItem>
+                            {epicOptions.map((epic) => (
+                              <SelectItem key={epic.id} value={epic.id}>
+                                {epic.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="grid gap-2">
+                        <Label htmlFor="scrum-filter-sprint">Sprint</Label>
+                        <Select
+                          value={sprintFilter}
+                          onValueChange={(value) =>
+                            setSprintFilter(value === "__all__" ? "" : value)
+                          }
+                        >
+                          <SelectTrigger
+                            id="scrum-filter-sprint"
+                            className="bg-background/50"
+                          >
+                            <SelectValue placeholder="Select Sprint" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__all__">All</SelectItem>
+                            <SelectItem value="__none__">No Sprint</SelectItem>
+                            {sprintOptions.map((sprint) => (
+                              <SelectItem key={sprint.id} value={sprint.id}>
+                                {sprint.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>
+                }
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value="stats" className="mt-3">
