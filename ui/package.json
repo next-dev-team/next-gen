@@ -79,7 +79,10 @@
       "output": "dist"
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "scripts/**/*",
+      "package.json",
+      "node_modules/**/*"
     ],
     "extraResources": [
       {

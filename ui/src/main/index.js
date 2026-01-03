@@ -15,6 +15,7 @@ const Conf = require("conf");
 const scrumStore = new Conf({ projectName: "next-gen-scrum" });
 const resolveMcpServerPath = () => {
   const packagedCandidates = [
+    path.join(app.getAppPath(), "scripts", "scrum-mcp-server.js"),
     path.join(process.resourcesPath, "scripts", "scrum-mcp-server.js"),
     path.join(path.dirname(app.getAppPath()), "scripts", "scrum-mcp-server.js"),
   ];
