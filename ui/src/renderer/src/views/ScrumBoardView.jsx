@@ -1614,6 +1614,7 @@ const ScrumCard = ({
   listColor,
   storyKey,
   isDragging,
+  draggableEnabled = true,
 }) => {
   const [copied, setCopied] = React.useState(false);
   const priorityConfig =
@@ -1638,7 +1639,7 @@ const ScrumCard = ({
 
   return (
     <Card
-      draggable={!isLocked}
+      draggable={!isLocked && draggableEnabled}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={cn(
@@ -1825,6 +1826,8 @@ const DropZone = ({ isActive, onDrop }) => {
 // ============ List Column ============
 const ListColumn = ({
   list,
+  displayCards,
+  disableDnd,
   listDrop,
   onDragOverList,
   onDropList,
@@ -1845,10 +1848,15 @@ const ListColumn = ({
 }) => {
   const [isEditingName, setIsEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState(list.name);
-  const isCardDrag = dragState?.type === "card";
+  const isCardDrag = !disableDnd && dragState?.type === "card";
   const isDragFromHere = isCardDrag && dragState?.listId === list.id;
   const isListDropTarget =
-    dragState?.type === "list" && listDrop?.overListId === list.id;
+    !disableDnd &&
+    dragState?.type === "list" &&
+    listDrop?.overListId === list.id;
+
+  const cards = Array.isArray(displayCards) ? displayCards : list.cards;
+  const isFilteredEmpty = cards.length === 0 && list.cards.length > 0;
 
   const StatusIcon = STATUS_ICONS[list.statusId] || Circle;
 
@@ -1864,8 +1872,8 @@ const ListColumn = ({
         "border-border/50 hover:border-border transition-all duration-300",
         isListDropTarget && "ring-2 ring-primary/30"
       )}
-      onDragOver={onDragOverList}
-      onDrop={onDropList}
+      onDragOver={disableDnd ? undefined : onDragOverList}
+      onDrop={disableDnd ? undefined : onDropList}
     >
       {isListDropTarget && (
         <div
@@ -1887,15 +1895,15 @@ const ListColumn = ({
         }}
       >
         <div
-          draggable={!isEditingName}
+          draggable={!isEditingName && !disableDnd}
           className={cn(
             "shrink-0 rounded p-1 -ml-1 text-muted-foreground",
             isEditingName
               ? "cursor-not-allowed opacity-40"
               : "cursor-grab active:cursor-grabbing hover:text-foreground"
           )}
-          onDragStart={onDragStartList}
-          onDragEnd={onDragEndList}
+          onDragStart={disableDnd ? undefined : onDragStartList}
+          onDragEnd={disableDnd ? undefined : onDragEndList}
           onClick={(e) => e.stopPropagation()}
         >
           <GripVertical className="h-4 w-4" />
@@ -1968,7 +1976,7 @@ const ListColumn = ({
             borderColor: list.color,
           }}
         >
-          {list.cards.length}
+          {cards.length}
         </Badge>
 
         <TooltipProvider>
@@ -2009,50 +2017,61 @@ const ListColumn = ({
       {/* Cards */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="p-3 flex flex-col gap-2">
-          {list.cards.map((card, index) => {
+          {cards.map((card, index) => {
             const locked = isCardLocked(card.id);
             const lockInfo = getCardLock(card.id);
             const isDragging = isCardDrag && dragState?.cardId === card.id;
 
             return (
               <React.Fragment key={card.id}>
-                <DropZone
-                  isActive={
-                    isCardDrag &&
-                    (!isDragFromHere ||
-                      (index !== dragState?.index &&
-                        index !== dragState?.index + 1))
-                  }
-                  onDrop={(e) => onDropToIndex(e, index)}
-                />
+                {!disableDnd ? (
+                  <DropZone
+                    isActive={
+                      isCardDrag &&
+                      (!isDragFromHere ||
+                        (index !== dragState?.index &&
+                          index !== dragState?.index + 1))
+                    }
+                    onDrop={(e) => onDropToIndex(e, index)}
+                  />
+                ) : null}
                 <div className="group">
                   <ScrumCard
                     card={card}
                     onClick={() => onEditCard(card)}
-                    onDragStart={(e) => onDragStartCard(e, card.id, index)}
-                    onDragEnd={onDragEndCard}
+                    onDragStart={
+                      disableDnd
+                        ? undefined
+                        : (e) => onDragStartCard(e, card.id, index)
+                    }
+                    onDragEnd={disableDnd ? undefined : onDragEndCard}
                     isLocked={locked}
                     lockInfo={lockInfo}
                     listColor={list.color}
                     storyKey={storyKeyByCardId?.[card.id]}
                     isDragging={isDragging}
+                    draggableEnabled={!disableDnd}
                   />
                 </div>
               </React.Fragment>
             );
           })}
-          <DropZone
-            isActive={
-              isCardDrag &&
-              (!isDragFromHere || dragState?.index !== list.cards.length - 1)
-            }
-            onDrop={(e) => onDropToIndex(e, list.cards.length)}
-          />
+          {!disableDnd ? (
+            <DropZone
+              isActive={
+                isCardDrag &&
+                (!isDragFromHere || dragState?.index !== list.cards.length - 1)
+              }
+              onDrop={(e) => onDropToIndex(e, list.cards.length)}
+            />
+          ) : null}
 
-          {list.cards.length === 0 && (
+          {cards.length === 0 && (
             <div className="text-center py-8 text-muted-foreground text-sm">
               <Circle className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p>No stories yet</p>
+              <p>
+                {isFilteredEmpty ? "No matching stories" : "No stories yet"}
+              </p>
               <Button
                 variant="ghost"
                 size="sm"
@@ -5352,6 +5371,9 @@ export default function ScrumBoardView() {
   const [projectPickerValue, setProjectPickerValue] = React.useState("");
   const projectPickerFileRef = React.useRef(null);
 
+  const [assigneeFilter, setAssigneeFilter] = React.useState("");
+  const [epicFilter, setEpicFilter] = React.useState("");
+
   const [overviewTab, setOverviewTab] = React.useState(() => {
     try {
       const v = localStorage.getItem(SCRUM_OVERVIEW_TAB_STORAGE_KEY);
@@ -5533,6 +5555,52 @@ export default function ScrumBoardView() {
   const activeBoard = getActiveBoard();
   const epics = getEpics();
   const stats = getStats();
+
+  const assigneeOptions = React.useMemo(() => {
+    const set = new Set();
+    for (const list of activeBoard?.lists || []) {
+      for (const card of list.cards || []) {
+        const value = String(card.assignee || "").trim();
+        if (value) set.add(value);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [activeBoard]);
+
+  const epicOptions = React.useMemo(() => {
+    return (Array.isArray(epics) ? epics : [])
+      .map((e) => ({ id: e.id, name: String(e.name || "").trim() }))
+      .filter((e) => e.id && e.name)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [epics]);
+
+  const filtersActive = Boolean(assigneeFilter || epicFilter);
+
+  const displayCardsByListId = React.useMemo(() => {
+    if (!activeBoard?.lists?.length) return {};
+
+    const matchCard = (card) => {
+      const matchesAssignee = assigneeFilter
+        ? String(card.assignee || "").trim() === assigneeFilter
+        : true;
+
+      const rawEpicId = card.epicId || "";
+      const matchesEpic = epicFilter
+        ? epicFilter === "__none__"
+          ? !rawEpicId
+          : rawEpicId === epicFilter
+        : true;
+
+      return matchesAssignee && matchesEpic;
+    };
+
+    const map = {};
+    for (const list of activeBoard.lists) {
+      const cards = Array.isArray(list.cards) ? list.cards : [];
+      map[list.id] = filtersActive ? cards.filter(matchCard) : cards;
+    }
+    return map;
+  }, [activeBoard, assigneeFilter, epicFilter, filtersActive]);
 
   const storyKeyByCardId = React.useMemo(() => {
     if (!activeBoard?.lists?.length) return {};
@@ -5968,6 +6036,68 @@ export default function ScrumBoardView() {
         </Tabs>
       )}
 
+      {activeBoard && (
+        <div className="mt-3 rounded-xl border border-border/50 bg-background/40 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            Filters
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid gap-2">
+              <Label htmlFor="scrum-filter-assignee">Assignee</Label>
+              <Select
+                value={assigneeFilter}
+                onValueChange={(value) =>
+                  setAssigneeFilter(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="scrum-filter-assignee"
+                  className="bg-background/50"
+                >
+                  <SelectValue placeholder="Select Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All</SelectItem>
+                  {assigneeOptions.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="scrum-filter-epic">Epic</Label>
+              <Select
+                value={epicFilter}
+                onValueChange={(value) =>
+                  setEpicFilter(value === "__all__" ? "" : value)
+                }
+              >
+                <SelectTrigger
+                  id="scrum-filter-epic"
+                  className="bg-background/50"
+                >
+                  <SelectValue placeholder="Select Epic" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__all__">All</SelectItem>
+                  <SelectItem value="__none__">No Epic</SelectItem>
+                  {epicOptions.map((epic) => (
+                    <SelectItem key={epic.id} value={epic.id}>
+                      {epic.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Board */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
         <div className="min-w-max flex gap-4 items-stretch pb-2 h-full">
@@ -5975,6 +6105,8 @@ export default function ScrumBoardView() {
             <ListColumn
               key={list.id}
               list={list}
+              displayCards={displayCardsByListId[list.id]}
+              disableDnd={filtersActive}
               listDrop={listDrop}
               dragState={dragState}
               onDragStartList={(e) => onDragStartList(e, list.id)}

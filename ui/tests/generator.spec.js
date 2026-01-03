@@ -71,6 +71,140 @@ test.describe("Generator UI", () => {
     ).toBeVisible();
   });
 
+  test("should filter scrum stories by assignee and epic", async () => {
+    const window = await electronApp.firstWindow();
+    await window.reload();
+    const seedState = {
+      activeBoardId: "board-1",
+      locks: {},
+      epics: [
+        {
+          id: "epic-1",
+          name: "Epic One",
+          description: "",
+          projectKey: null,
+          status: "backlog",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        {
+          id: "epic-2",
+          name: "Epic Two",
+          description: "",
+          projectKey: null,
+          status: "backlog",
+          createdAt: "2026-01-01T00:00:00.000Z",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+      ],
+      boards: [
+        {
+          id: "board-1",
+          name: "Test Board",
+          type: "bmad",
+          lists: [
+            {
+              id: "list-backlog",
+              name: "Backlog",
+              statusId: "backlog",
+              color: "#6b7280",
+              cards: [
+                {
+                  id: "card-a",
+                  title: "Story A",
+                  description: "",
+                  points: null,
+                  assignee: "Alice",
+                  priority: "medium",
+                  epicId: "epic-1",
+                  labels: [],
+                  createdAt: "2026-01-01T00:00:01.000Z",
+                  updatedAt: "2026-01-01T00:00:01.000Z",
+                },
+                {
+                  id: "card-b",
+                  title: "Story B",
+                  description: "",
+                  points: null,
+                  assignee: "Bob",
+                  priority: "medium",
+                  epicId: "epic-2",
+                  labels: [],
+                  createdAt: "2026-01-01T00:00:02.000Z",
+                  updatedAt: "2026-01-01T00:00:02.000Z",
+                },
+                {
+                  id: "card-c",
+                  title: "Story C",
+                  description: "",
+                  points: null,
+                  assignee: "Alice",
+                  priority: "medium",
+                  epicId: null,
+                  labels: [],
+                  createdAt: "2026-01-01T00:00:03.000Z",
+                  updatedAt: "2026-01-01T00:00:03.000Z",
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    await expect(window.locator(".ant-segmented")).toBeVisible();
+    await window
+      .locator(".ant-segmented")
+      .getByText("Scrum Board", { exact: true })
+      .click();
+
+    await expect(
+      window.getByRole("heading", { name: "Kanban Board" })
+    ).toBeVisible({ timeout: 15000 });
+
+    await expect
+      .poll(
+        async () => {
+          return window.evaluate(async () => {
+            try {
+              const res = await fetch("http://localhost:3847/api/state");
+              return res.ok;
+            } catch {
+              return false;
+            }
+          });
+        },
+        { timeout: 15000 }
+      )
+      .toBe(true);
+
+    await window.evaluate(async (state) => {
+      await fetch("http://localhost:3847/api/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(state),
+      });
+    }, seedState);
+
+    await expect(window.getByText("Story A")).toBeVisible({ timeout: 15000 });
+    await expect(window.getByText("Story B")).toBeVisible();
+    await expect(window.getByText("Story C")).toBeVisible();
+
+    await window.locator("#scrum-filter-assignee").click();
+    await window.getByRole("option", { name: "Alice", exact: true }).click();
+
+    await expect(window.getByText("Story A")).toBeVisible();
+    await expect(window.getByText("Story C")).toBeVisible();
+    await expect(window.getByText("Story B")).toHaveCount(0);
+
+    await window.locator("#scrum-filter-epic").click();
+    await window.getByRole("option", { name: "Epic One", exact: true }).click();
+
+    await expect(window.getByText("Story A")).toBeVisible();
+    await expect(window.getByText("Story B")).toHaveCount(0);
+    await expect(window.getByText("Story C")).toHaveCount(0);
+  });
+
   test("should handle start on boot setting", async () => {
     const window = await electronApp.firstWindow();
     await window.reload();
@@ -78,9 +212,9 @@ test.describe("Generator UI", () => {
     await window.evaluate(() => {
       window.location.hash = "#/settings";
     });
-    await expect(
-      window.getByRole("heading", { name: "Settings" })
-    ).toBeVisible({ timeout: 15000 });
+    await expect(window.getByRole("heading", { name: "Settings" })).toBeVisible(
+      { timeout: 15000 }
+    );
 
     const startOnBootSwitch = window.getByRole("switch").first();
     await expect(startOnBootSwitch).toBeVisible();
