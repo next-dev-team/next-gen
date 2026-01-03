@@ -2042,9 +2042,8 @@ const SprintTrackingView = ({ board, sprints, sprintNameById }) => {
   return (
     <div className="rounded-xl border border-border/50 bg-background/40 p-4">
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="text-sm font-medium">Sprint tracking</div>
-          <div className="flex-1" />
           <Select
             value={selectedSprintId || ""}
             onValueChange={(v) => setSelectedSprintId(v)}
@@ -6932,7 +6931,7 @@ export default function ScrumBoardView() {
           </TabsContent>
 
           <TabsContent value="sprints" className="mt-3">
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-4 items-start">
+            <div className="grid grid-cols-1 md:grid-cols-[30%_1fr] gap-4 items-start">
               <SprintTrackingView
                 board={activeBoard}
                 sprints={sprints}
@@ -6940,12 +6939,14 @@ export default function ScrumBoardView() {
               />
 
               <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Filter className="h-4 w-4 text-muted-foreground" />
-                  Filters
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-muted-foreground" />
+                    Filters
+                  </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-3">
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   <div className="grid gap-2">
                     <Label htmlFor="scrum-filter-assignee">Assignee</Label>
                     <Select

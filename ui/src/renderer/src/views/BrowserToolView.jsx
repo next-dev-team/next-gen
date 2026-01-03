@@ -10,8 +10,11 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
+  Check,
+  Copy,
   Globe,
   Monitor,
+  MousePointerClick,
   Network,
   PanelRightClose,
   PanelRightOpen,
@@ -34,6 +37,292 @@ import {
 import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
+import { ComponentRenderer } from "../components/editor/canvas/ComponentRenderer";
+import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
+
+const createId = () =>
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+function extractText(node) {
+  const raw = node?.textContent ? String(node.textContent) : "";
+  return raw.replace(/\s+/g, " ").trim();
+}
+
+function clampText(text, max = 220) {
+  const t = String(text || "");
+  return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
+function guessButtonVariant({ tag, className }) {
+  const cls = String(className || "").toLowerCase();
+  if (tag === "a") return "link";
+  if (cls.includes("outline") || cls.includes("border")) return "outline";
+  if (cls.includes("ghost")) return "ghost";
+  if (cls.includes("secondary")) return "secondary";
+  if (cls.includes("destructive") || cls.includes("danger"))
+    return "destructive";
+  return "default";
+}
+
+function domToCanvasElements(node, depth = 0, limitRef = { count: 0 }) {
+  if (!node || depth > 6) return [];
+  if (limitRef.count > 40) return [];
+
+  if (node.nodeType === Node.TEXT_NODE) {
+    const txt = extractText(node);
+    if (!txt) return [];
+    limitRef.count += 1;
+    return [
+      {
+        id: createId(),
+        type: "paragraph",
+        props: { text: clampText(txt, 240) },
+        children: [],
+      },
+    ];
+  }
+
+  if (node.nodeType !== Node.ELEMENT_NODE) return [];
+
+  const el = node;
+  const tag = String(el.tagName || "").toLowerCase();
+  const text = extractText(el);
+  const className = el.getAttribute?.("class") || "";
+
+  const childrenFromDom = () => {
+    const out = [];
+    for (const child of Array.from(el.childNodes || [])) {
+      out.push(...domToCanvasElements(child, depth + 1, limitRef));
+      if (limitRef.count > 40) break;
+    }
+    return out;
+  };
+
+  if (/^h[1-6]$/.test(tag)) {
+    limitRef.count += 1;
+    const level = Number(tag.slice(1)) || 2;
+    return [
+      {
+        id: createId(),
+        type: "heading",
+        props: {
+          level: Math.min(4, Math.max(1, level)),
+          text: text || "Heading",
+        },
+        children: [],
+      },
+    ];
+  }
+
+  if (tag === "p" || tag === "span" || tag === "small" || tag === "label") {
+    if (!text) return childrenFromDom();
+    limitRef.count += 1;
+    return [
+      {
+        id: createId(),
+        type: "paragraph",
+        props: { text: clampText(text, 360) },
+        children: [],
+      },
+    ];
+  }
+
+  if (tag === "button" || tag === "a") {
+    limitRef.count += 1;
+    return [
+      {
+        id: createId(),
+        type: "button",
+        props: {
+          variant: guessButtonVariant({ tag, className }),
+          children: text || (tag === "a" ? "Link" : "Button"),
+        },
+        children: [],
+      },
+    ];
+  }
+
+  if (tag === "input") {
+    limitRef.count += 1;
+    const type = el.getAttribute?.("type") || "text";
+    const placeholder = el.getAttribute?.("placeholder") || "";
+    return [
+      {
+        id: createId(),
+        type: "input",
+        props: { type, placeholder },
+        children: [],
+      },
+    ];
+  }
+
+  if (tag === "textarea") {
+    limitRef.count += 1;
+    const placeholder = el.getAttribute?.("placeholder") || "";
+    return [
+      {
+        id: createId(),
+        type: "textarea",
+        props: { placeholder },
+        children: [],
+      },
+    ];
+  }
+
+  if (tag === "hr") {
+    limitRef.count += 1;
+    return [
+      {
+        id: createId(),
+        type: "divider",
+        props: { spacing: "sm" },
+        children: [],
+      },
+    ];
+  }
+
+  const nested = childrenFromDom();
+  if (depth === 0) {
+    return [
+      {
+        id: createId(),
+        type: "section-container",
+        props: {
+          padding: 6,
+          background: "transparent",
+          layout: "vertical",
+          align: "left",
+          maxWidth: "6xl",
+        },
+        children: nested.length
+          ? [
+              {
+                id: createId(),
+                type: "card-root",
+                props: { width: "w-full" },
+                children: [
+                  {
+                    id: createId(),
+                    type: "card-content",
+                    props: { layout: "stack", className: "space-y-4" },
+                    children: nested,
+                  },
+                ],
+              },
+            ]
+          : [
+              {
+                id: createId(),
+                type: "card-root",
+                props: { width: "w-full" },
+                children: [
+                  {
+                    id: createId(),
+                    type: "card-content",
+                    props: { layout: "stack" },
+                    children: [
+                      {
+                        id: createId(),
+                        type: "paragraph",
+                        props: { text: "(Empty selection)" },
+                        children: [],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+      },
+    ];
+  }
+
+  if (nested.length) return nested;
+  if (text) {
+    limitRef.count += 1;
+    return [
+      {
+        id: createId(),
+        type: "paragraph",
+        props: { text: clampText(text, 360) },
+        children: [],
+      },
+    ];
+  }
+  return [];
+}
+
+function htmlToCanvasElementTree(html) {
+  const safeHtml = String(html || "").slice(0, 200_000);
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(safeHtml, "text/html");
+  const root = doc.body?.firstElementChild || doc.body;
+  const elements = domToCanvasElements(root, 0);
+  return elements[0] || null;
+}
+
+function collectImports(element, out = new Set()) {
+  if (!element) return out;
+  const t = String(element.type || "");
+  if (t === "button") out.add("Button");
+  if (t === "input") out.add("Input");
+  if (t === "card-root" || t === "card-container" || t === "card")
+    out.add("Card");
+  if (t === "card-header") out.add("CardHeader");
+  if (t === "card-content") out.add("CardContent");
+  if (t === "card-footer") out.add("CardFooter");
+  if (t === "card-title") out.add("CardTitle");
+  if (t === "card-description") out.add("CardDescription");
+  if (t === "divider") out.add("Separator");
+  if (t === "switch") out.add("Switch");
+  if (t === "badge") out.add("Badge");
+
+  for (const child of Array.isArray(element.children) ? element.children : []) {
+    collectImports(child, out);
+  }
+  return out;
+}
+
+function buildShadcnSnippet(element) {
+  if (!element) return "";
+
+  const imports = Array.from(collectImports(element));
+  const importLines = [];
+  if (imports.some((x) => x.startsWith("Card")) || imports.includes("Card")) {
+    const cards = [
+      "Card",
+      "CardHeader",
+      "CardTitle",
+      "CardDescription",
+      "CardContent",
+      "CardFooter",
+    ].filter((x) => imports.includes(x));
+    if (cards.length) {
+      importLines.push(
+        `import { ${cards.join(", ")} } from "@/components/ui/card";`
+      );
+    }
+  }
+  if (imports.includes("Button")) {
+    importLines.push(`import { Button } from "@/components/ui/button";`);
+  }
+  if (imports.includes("Input")) {
+    importLines.push(`import { Input } from "@/components/ui/input";`);
+  }
+  if (imports.includes("Separator")) {
+    importLines.push(`import { Separator } from "@/components/ui/separator";`);
+  }
+  if (imports.includes("Switch")) {
+    importLines.push(`import { Switch } from "@/components/ui/switch";`);
+  }
+  if (imports.includes("Badge")) {
+    importLines.push(`import { Badge } from "@/components/ui/badge";`);
+  }
+
+  const jsx = generateElementCode(element);
+  return `${importLines.join("\n")}\n\n${jsx}`.trim();
+}
 
 function useResizeObserver(targetRef, onResize) {
   useLayoutEffect(() => {
@@ -303,7 +592,12 @@ function Dashboard({ onOpenUrl }) {
   );
 }
 
-function DevPanel() {
+function DevPanel({
+  activeTabId,
+  activeIsBrowser,
+  hasElectronView,
+  isRouteActive,
+}) {
   const devPanel = useBrowserTabsStore((s) => s.devPanel);
   const setDevPanelTool = useBrowserTabsStore((s) => s.setDevPanelTool);
   const setDevPanelOpen = useBrowserTabsStore((s) => s.setDevPanelOpen);
@@ -311,6 +605,14 @@ function DevPanel() {
   const networkLogs = useBrowserTabsStore((s) => s.networkLogs);
   const addNetworkLog = useBrowserTabsStore((s) => s.addNetworkLog);
   const clearNetworkLogs = useBrowserTabsStore((s) => s.clearNetworkLogs);
+  const inspector = useBrowserTabsStore((s) => s.inspector);
+  const setInspectorEnabled = useBrowserTabsStore((s) => s.setInspectorEnabled);
+  const clearInspector = useBrowserTabsStore((s) => s.clearInspector);
+
+  const [copied, setCopied] = useState(false);
+  const [cloneBusy, setCloneBusy] = useState(false);
+  const [previewElement, setPreviewElement] = useState(null);
+  const [code, setCode] = useState("");
 
   const dragging = useRef(false);
   const dragStartX = useRef(0);
@@ -350,6 +652,19 @@ function DevPanel() {
       window.fetch = originalFetch;
     };
   }, [addNetworkLog, devPanel.activeTool, devPanel.isOpen]);
+
+  useEffect(() => {
+    if (devPanel.activeTool !== "inspector") return;
+    if (!inspector?.selected?.element?.outerHTML) {
+      setPreviewElement(null);
+      setCode("");
+      return;
+    }
+    const next = htmlToCanvasElementTree(inspector.selected.element.outerHTML);
+    setPreviewElement(next);
+    setCode(buildShadcnSnippet(next));
+    setCopied(false);
+  }, [devPanel.activeTool, inspector?.selected?.element?.outerHTML]);
 
   useEffect(() => {
     const onMove = (e) => {
@@ -434,11 +749,200 @@ function DevPanel() {
         ) : null}
 
         {devPanel.activeTool === "inspector" ? (
-          <div className="p-4 text-sm">
-            <div className="font-medium">Component inspector</div>
-            <div className="mt-1 text-muted-foreground">
-              Use the inspector integration to jump from UI to source.
+          <div className="flex h-full flex-col">
+            <div className="flex items-center justify-between gap-2 px-4 py-2">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">Inspector</div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {activeIsBrowser
+                    ? inspector?.selected?.element?.selector ||
+                      inspector?.hover?.element?.selector ||
+                      "Pick an element to convert"
+                    : "Open a browser tab to inspect"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={inspector.enabled ? "secondary" : "outline"}
+                  disabled={
+                    !hasElectronView || !activeIsBrowser || !isRouteActive
+                  }
+                  onClick={async () => {
+                    const next = !inspector.enabled;
+                    setInspectorEnabled(next);
+                    clearInspector();
+                    try {
+                      await window.electronAPI.browserView.setInspectorEnabled(
+                        activeTabId,
+                        next
+                      );
+                    } catch (err) {
+                      setInspectorEnabled(false);
+                      toast.error("Inspector failed", {
+                        description: String(err?.message || err),
+                      });
+                    }
+                  }}
+                >
+                  <MousePointerClick className="mr-2 h-4 w-4" />
+                  {inspector.enabled ? "Picking" : "Pick"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={
+                    !hasElectronView || !activeIsBrowser || !isRouteActive
+                  }
+                  onClick={async () => {
+                    setCloneBusy(true);
+                    try {
+                      const res =
+                        await window.electronAPI.browserView.getPageHtml(
+                          activeTabId
+                        );
+                      if (!res?.ok) {
+                        toast.error("Failed to read page HTML", {
+                          description: String(res?.error || "Unknown error"),
+                        });
+                        return;
+                      }
+                      const doc = new DOMParser().parseFromString(
+                        String(res.html || ""),
+                        "text/html"
+                      );
+                      const body = doc.body;
+                      const element = body?.firstElementChild || body;
+                      const tree = htmlToCanvasElementTree(
+                        element?.outerHTML || ""
+                      );
+                      setPreviewElement(tree);
+                      setCode(buildShadcnSnippet(tree));
+                      setCopied(false);
+                    } catch (err) {
+                      toast.error("Clone failed", {
+                        description: String(err?.message || err),
+                      });
+                    } finally {
+                      setCloneBusy(false);
+                    }
+                  }}
+                >
+                  {cloneBusy ? "Cloning…" : "Clone page"}
+                </Button>
+              </div>
             </div>
+
+            <div className="border-t" />
+
+            <ScrollArea className="flex-1">
+              <div className="flex flex-col gap-4 p-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm">Selection</CardTitle>
+                    <CardDescription>
+                      {inspector?.selected?.element?.tagName
+                        ? `${String(
+                            inspector.selected.element.tagName
+                          ).toLowerCase()} · ${
+                            inspector.selected.element.rect?.width
+                              ? `${Math.round(
+                                  inspector.selected.element.rect.width
+                                )}×${Math.round(
+                                  inspector.selected.element.rect.height || 0
+                                )}`
+                              : ""
+                          }`
+                        : "No element selected yet"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {inspector?.selected?.element?.text ? (
+                      <div className="text-xs text-muted-foreground whitespace-pre-wrap">
+                        {inspector.selected.element.text}
+                      </div>
+                    ) : null}
+                    {inspector?.selected?.element?.selector ? (
+                      <div className="text-xs font-mono text-muted-foreground break-words">
+                        {inspector.selected.element.selector}
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-sm">Preview</CardTitle>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!previewElement}
+                        onClick={() => {
+                          setPreviewElement(null);
+                          setCode("");
+                          setCopied(false);
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {previewElement ? (
+                      <div className="rounded-md border bg-background p-3">
+                        <ComponentRenderer element={previewElement} />
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        Pick an element or clone the page.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle className="text-sm">Shadcn code</CardTitle>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!code}
+                        onClick={async () => {
+                          if (!code) return;
+                          const ok = await copyToClipboard(code);
+                          if (!ok) {
+                            toast.error("Copy failed");
+                            return;
+                          }
+                          setCopied(true);
+                          setTimeout(() => setCopied(false), 1000);
+                        }}
+                      >
+                        {copied ? (
+                          <Check className="mr-2 h-4 w-4" />
+                        ) : (
+                          <Copy className="mr-2 h-4 w-4" />
+                        )}
+                        Copy
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    {code ? (
+                      <pre className="max-h-[380px] overflow-auto rounded-md border bg-muted/30 p-3 text-xs">
+                        {code}
+                      </pre>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        No code generated yet.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </ScrollArea>
           </div>
         ) : null}
 
@@ -527,6 +1031,14 @@ export default function BrowserToolView() {
   const devPanel = useBrowserTabsStore((s) => s.devPanel);
   const setDevPanelOpen = useBrowserTabsStore((s) => s.setDevPanelOpen);
 
+  const inspector = useBrowserTabsStore((s) => s.inspector);
+  const setInspectorEnabled = useBrowserTabsStore((s) => s.setInspectorEnabled);
+  const setInspectorHover = useBrowserTabsStore((s) => s.setInspectorHover);
+  const setInspectorSelection = useBrowserTabsStore(
+    (s) => s.setInspectorSelection
+  );
+  const clearInspector = useBrowserTabsStore((s) => s.clearInspector);
+
   const [address, setAddress] = useState("");
   const contentRef = useRef(null);
   const iframeRef = useRef(null);
@@ -542,6 +1054,83 @@ export default function BrowserToolView() {
   const isRouteActive =
     location.pathname === "/browser" ||
     location.pathname.startsWith("/browser/");
+
+  const lastInspectorTabIdRef = useRef(null);
+
+  useEffect(() => {
+    if (!hasElectronView) return;
+    const offHover = window.electronAPI.browserView.onInspectorHover(
+      (payload) => {
+        if (!payload?.tabId) return;
+        if (payload.tabId !== resolvedActiveTabId) return;
+        setInspectorHover(payload);
+      }
+    );
+    const offSelection = window.electronAPI.browserView.onInspectorSelection(
+      (payload) => {
+        if (!payload?.tabId) return;
+        if (payload.tabId !== resolvedActiveTabId) return;
+        setInspectorSelection(payload);
+        setInspectorEnabled(false);
+        window.electronAPI.browserView
+          .setInspectorEnabled(payload.tabId, false)
+          .catch(() => {});
+      }
+    );
+    return () => {
+      if (typeof offHover === "function") offHover();
+      if (typeof offSelection === "function") offSelection();
+    };
+  }, [
+    hasElectronView,
+    resolvedActiveTabId,
+    setInspectorEnabled,
+    setInspectorHover,
+    setInspectorSelection,
+  ]);
+
+  useEffect(() => {
+    if (!hasElectronView) return;
+
+    const prevTabId = lastInspectorTabIdRef.current;
+    lastInspectorTabIdRef.current = resolvedActiveTabId;
+
+    if (prevTabId && prevTabId !== resolvedActiveTabId) {
+      window.electronAPI.browserView
+        .setInspectorEnabled(prevTabId, false)
+        .catch(() => {});
+    }
+
+    const shouldEnable =
+      Boolean(inspector?.enabled) &&
+      activeTab?.kind === "browser" &&
+      isRouteActive;
+
+    if (!shouldEnable) {
+      if (inspector?.enabled) setInspectorEnabled(false);
+      clearInspector();
+      if (resolvedActiveTabId) {
+        window.electronAPI.browserView
+          .setInspectorEnabled(resolvedActiveTabId, false)
+          .catch(() => {});
+      }
+      return;
+    }
+
+    window.electronAPI.browserView
+      .setInspectorEnabled(resolvedActiveTabId, true)
+      .catch(() => {
+        setInspectorEnabled(false);
+      });
+  }, [
+    activeTab?.kind,
+    clearInspector,
+    hasElectronView,
+    inspector?.enabled,
+    isRouteActive,
+    resolvedActiveTabId,
+    setInspectorEnabled,
+  ]);
 
   useEffect(() => {
     if (activeTab?.kind !== "browser") {
@@ -909,7 +1498,14 @@ export default function BrowserToolView() {
           ) : null}
         </div>
 
-        {devPanel.isOpen ? <DevPanel /> : null}
+        {devPanel.isOpen ? (
+          <DevPanel
+            activeTabId={resolvedActiveTabId}
+            activeIsBrowser={activeIsBrowser}
+            hasElectronView={hasElectronView}
+            isRouteActive={isRouteActive}
+          />
+        ) : null}
       </div>
     </div>
   );
