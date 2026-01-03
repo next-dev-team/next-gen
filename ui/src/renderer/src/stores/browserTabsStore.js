@@ -218,6 +218,36 @@ export const useBrowserTabsStore = create(
         },
 
         clearNetworkLogs: () => set({ networkLogs: [] }),
+
+        inspector: {
+          enabled: false,
+          selected: null,
+          hover: null,
+        },
+
+        setInspectorEnabled: (enabled) =>
+          set((state) => ({
+            inspector: { ...state.inspector, enabled: Boolean(enabled) },
+          })),
+
+        setInspectorHover: (payload) =>
+          set((state) => ({
+            inspector: { ...state.inspector, hover: payload },
+          })),
+
+        setInspectorSelection: (payload) =>
+          set((state) => ({
+            inspector: { ...state.inspector, selected: payload },
+          })),
+
+        clearInspector: () =>
+          set((state) => ({
+            inspector: {
+              ...state.inspector,
+              selected: null,
+              hover: null,
+            },
+          })),
       }),
       {
         name: "browser-tabs-store",

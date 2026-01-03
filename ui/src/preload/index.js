@@ -121,6 +121,22 @@ contextBridge.exposeInMainWorld("electronAPI", {
     goBack: (tabId) => ipcRenderer.invoke("browserview-go-back", { tabId }),
     goForward: (tabId) => ipcRenderer.invoke("browserview-go-forward", { tabId }),
     reload: (tabId) => ipcRenderer.invoke("browserview-reload", { tabId }),
+    setInspectorEnabled: (tabId, enabled) =>
+      ipcRenderer.invoke("browserview-set-inspector-enabled", { tabId, enabled }),
+    getPageHtml: (tabId) =>
+      ipcRenderer.invoke("browserview-get-page-html", { tabId }),
+    onInspectorHover: (callback) => {
+      const handler = (event, payload) => callback(payload);
+      ipcRenderer.on("browserview-inspector-hover", handler);
+      return () =>
+        ipcRenderer.removeListener("browserview-inspector-hover", handler);
+    },
+    onInspectorSelection: (callback) => {
+      const handler = (event, payload) => callback(payload);
+      ipcRenderer.on("browserview-inspector-selection", handler);
+      return () =>
+        ipcRenderer.removeListener("browserview-inspector-selection", handler);
+    },
     onState: (callback) => {
       const handler = (event, payload) => callback(payload);
       ipcRenderer.on("browserview-state", handler);

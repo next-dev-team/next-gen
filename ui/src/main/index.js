@@ -533,6 +533,15 @@ function ensureBrowserView(tabId) {
   view.webContents.on("did-finish-load", () => notifyBrowserState(tabId));
 
   browserViews.set(tabId, view);
+
+  view.webContents.on("ipc-message", (event, channel, ...args) => {
+    if (channel === "inspector-hover") {
+      sendInspectorHover(tabId, args[0]);
+    } else if (channel === "inspector-selection") {
+      sendInspectorSelection(tabId, args[0]);
+    }
+  });
+
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (typeof mainWindow.addBrowserView === "function") {
       mainWindow.addBrowserView(view);
@@ -542,6 +551,24 @@ function ensureBrowserView(tabId) {
   }
 
   return view;
+}
+
+function sendInspectorHover(tabId, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("browserview-inspector-hover", {
+      ...payload,
+      tabId,
+    });
+  }
+}
+
+function sendInspectorSelection(tabId, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("browserview-inspector-selection", {
+      ...payload,
+      tabId,
+    });
+  }
 }
 
 function hideBrowserView(tabId) {
@@ -641,6 +668,115 @@ ipcMain.handle("browserview-reload", async (event, { tabId }) => {
   if (!view || view.webContents.isDestroyed()) return false;
   view.webContents.reload();
   return true;
+});
+
+ipcMain.handle(
+  "browserview-set-inspector-enabled",
+  async (event, { tabId, enabled }) => {
+    const view = browserViews.get(tabId);
+    if (!view || view.webContents.isDestroyed()) return false;
+
+    if (enabled) {
+      view.webContents.executeJavaScript(`
+      (function() {
+        if (window.__inspector_active) return;
+        window.__inspector_active = true;
+
+        const style = document.createElement('style');
+        style.id = 'inspector-style';
+        style.innerHTML = \`
+          .__inspector_overlay {
+            position: fixed !important;
+            pointer-events: none !important;
+            z-index: 2147483647 !important;
+            background: rgba(99, 102, 241, 0.2) !important;
+            border: 2px solid rgb(99, 102, 241) !important;
+            transition: all 0.1s ease-out !important;
+          }
+        \`;
+        document.head.appendChild(style);
+
+        const overlay = document.createElement('div');
+        overlay.className = '__inspector_overlay';
+        document.body.appendChild(overlay);
+
+        function getElementInfo(el) {
+          const rect = el.getBoundingClientRect();
+          return {
+            tagName: el.tagName,
+            id: el.id,
+            className: el.className,
+            text: el.innerText?.slice(0, 100),
+            selector: getSelector(el),
+            outerHTML: el.outerHTML,
+            rect: {
+              x: rect.x,
+              y: rect.y,
+              width: rect.width,
+              height: rect.height
+            }
+          };
+        }
+
+        function getSelector(el) {
+          if (el.id) return '#' + el.id;
+          if (el.tagName === 'BODY') return 'body';
+          let path = el.tagName.toLowerCase();
+          if (el.className) {
+             path += '.' + Array.from(el.classList).join('.');
+          }
+          return path;
+        }
+
+        function onMouseMove(e) {
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          if (!el || el === overlay || el.closest('.__inspector_overlay')) return;
+          
+          const rect = el.getBoundingClientRect();
+          overlay.style.top = rect.top + 'px';
+          overlay.style.left = rect.left + 'px';
+          overlay.style.width = rect.width + 'px';
+          overlay.style.height = rect.height + 'px';
+
+          window.ipcRenderer.send('inspector-hover', getElementInfo(el));
+        }
+
+        function onClick(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          if (!el || el === overlay) return;
+          window.ipcRenderer.send('inspector-selection', getElementInfo(el));
+        }
+
+        document.addEventListener('mousemove', onMouseMove, true);
+        document.addEventListener('click', onClick, true);
+
+        window.__inspector_cleanup = () => {
+          document.removeEventListener('mousemove', onMouseMove, true);
+          document.removeEventListener('click', onClick, true);
+          style.remove();
+          overlay.remove();
+          window.__inspector_active = false;
+        };
+      })();
+    `);
+    } else {
+      view.webContents.executeJavaScript(`
+      if (window.__inspector_cleanup) window.__inspector_cleanup();
+    `);
+    }
+    return true;
+  }
+);
+
+ipcMain.handle("browserview-get-page-html", async (event, { tabId }) => {
+  const view = browserViews.get(tabId);
+  if (!view || view.webContents.isDestroyed()) return { ok: false };
+  const html = await view.webContents.executeJavaScript(
+    "document.documentElement.outerHTML"
+  );
+  return { ok: true, html };
 });
 
 ipcMain.handle("get-start-on-boot", async () => {

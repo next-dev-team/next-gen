@@ -660,7 +660,9 @@ function DevPanel({
       setCode("");
       return;
     }
-    const next = htmlToCanvasElementTree(inspector.selected.element.outerHTML);
+    const next = htmlToCanvasElementTree(
+      inspector?.selected?.element?.outerHTML
+    );
     setPreviewElement(next);
     setCode(buildShadcnSnippet(next));
     setCopied(false);
@@ -764,19 +766,27 @@ function DevPanel({
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
-                  variant={inspector.enabled ? "secondary" : "outline"}
+                  variant={inspector?.enabled ? "secondary" : "outline"}
                   disabled={
                     !hasElectronView || !activeIsBrowser || !isRouteActive
                   }
                   onClick={async () => {
-                    const next = !inspector.enabled;
+                    const next = !inspector?.enabled;
                     setInspectorEnabled(next);
                     clearInspector();
                     try {
-                      await window.electronAPI.browserView.setInspectorEnabled(
-                        activeTabId,
-                        next
-                      );
+                      if (
+                        window.electronAPI?.browserView?.setInspectorEnabled
+                      ) {
+                        await window.electronAPI.browserView.setInspectorEnabled(
+                          activeTabId,
+                          next
+                        );
+                      } else {
+                        console.warn(
+                          "setInspectorEnabled not available in electronAPI"
+                        );
+                      }
                     } catch (err) {
                       setInspectorEnabled(false);
                       toast.error("Inspector failed", {
@@ -786,7 +796,7 @@ function DevPanel({
                   }}
                 >
                   <MousePointerClick className="mr-2 h-4 w-4" />
-                  {inspector.enabled ? "Picking" : "Pick"}
+                  {inspector?.enabled ? "Picking" : "Pick"}
                 </Button>
                 <Button
                   size="sm"
@@ -797,6 +807,14 @@ function DevPanel({
                   onClick={async () => {
                     setCloneBusy(true);
                     try {
+                      if (!window.electronAPI?.browserView?.getPageHtml) {
+                        toast.error("Clone failed", {
+                          description:
+                            "getPageHtml not available. Please restart the app.",
+                        });
+                        setCloneBusy(false);
+                        return;
+                      }
                       const res =
                         await window.electronAPI.browserView.getPageHtml(
                           activeTabId
@@ -843,13 +861,14 @@ function DevPanel({
                     <CardDescription>
                       {inspector?.selected?.element?.tagName
                         ? `${String(
-                            inspector.selected.element.tagName
+                            inspector?.selected?.element?.tagName
                           ).toLowerCase()} · ${
-                            inspector.selected.element.rect?.width
+                            inspector?.selected?.element?.rect?.width
                               ? `${Math.round(
-                                  inspector.selected.element.rect.width
+                                  inspector?.selected?.element?.rect?.width
                                 )}×${Math.round(
-                                  inspector.selected.element.rect.height || 0
+                                  inspector?.selected?.element?.rect?.height ||
+                                    0
                                 )}`
                               : ""
                           }`
@@ -859,12 +878,12 @@ function DevPanel({
                   <CardContent className="space-y-2">
                     {inspector?.selected?.element?.text ? (
                       <div className="text-xs text-muted-foreground whitespace-pre-wrap">
-                        {inspector.selected.element.text}
+                        {inspector?.selected?.element?.text}
                       </div>
                     ) : null}
                     {inspector?.selected?.element?.selector ? (
                       <div className="text-xs font-mono text-muted-foreground break-words">
-                        {inspector.selected.element.selector}
+                        {inspector?.selected?.element?.selector}
                       </div>
                     ) : null}
                   </CardContent>
@@ -1059,6 +1078,8 @@ export default function BrowserToolView() {
 
   useEffect(() => {
     if (!hasElectronView) return;
+    if (!window.electronAPI?.browserView?.onInspectorHover) return;
+
     const offHover = window.electronAPI.browserView.onInspectorHover(
       (payload) => {
         if (!payload?.tabId) return;
@@ -1066,15 +1087,20 @@ export default function BrowserToolView() {
         setInspectorHover(payload);
       }
     );
+
+    if (!window.electronAPI?.browserView?.onInspectorSelection) return;
+
     const offSelection = window.electronAPI.browserView.onInspectorSelection(
       (payload) => {
         if (!payload?.tabId) return;
         if (payload.tabId !== resolvedActiveTabId) return;
         setInspectorSelection(payload);
         setInspectorEnabled(false);
-        window.electronAPI.browserView
-          .setInspectorEnabled(payload.tabId, false)
-          .catch(() => {});
+        if (window.electronAPI?.browserView?.setInspectorEnabled) {
+          window.electronAPI.browserView
+            .setInspectorEnabled(payload.tabId, false)
+            .catch(() => {});
+        }
       }
     );
     return () => {
@@ -1095,7 +1121,11 @@ export default function BrowserToolView() {
     const prevTabId = lastInspectorTabIdRef.current;
     lastInspectorTabIdRef.current = resolvedActiveTabId;
 
-    if (prevTabId && prevTabId !== resolvedActiveTabId) {
+    if (
+      prevTabId &&
+      prevTabId !== resolvedActiveTabId &&
+      window.electronAPI?.browserView?.setInspectorEnabled
+    ) {
       window.electronAPI.browserView
         .setInspectorEnabled(prevTabId, false)
         .catch(() => {});
@@ -1109,7 +1139,10 @@ export default function BrowserToolView() {
     if (!shouldEnable) {
       if (inspector?.enabled) setInspectorEnabled(false);
       clearInspector();
-      if (resolvedActiveTabId) {
+      if (
+        resolvedActiveTabId &&
+        window.electronAPI?.browserView?.setInspectorEnabled
+      ) {
         window.electronAPI.browserView
           .setInspectorEnabled(resolvedActiveTabId, false)
           .catch(() => {});
@@ -1117,11 +1150,13 @@ export default function BrowserToolView() {
       return;
     }
 
-    window.electronAPI.browserView
-      .setInspectorEnabled(resolvedActiveTabId, true)
-      .catch(() => {
-        setInspectorEnabled(false);
-      });
+    if (window.electronAPI?.browserView?.setInspectorEnabled) {
+      window.electronAPI.browserView
+        .setInspectorEnabled(resolvedActiveTabId, true)
+        .catch(() => {
+          setInspectorEnabled(false);
+        });
+    }
   }, [
     activeTab?.kind,
     clearInspector,
@@ -1147,12 +1182,14 @@ export default function BrowserToolView() {
       if (!contentRef.current) return;
       if (activeTab?.kind !== "browser") return;
       const rect = contentRef.current.getBoundingClientRect();
-      await window.electronAPI.browserView.setBounds(resolvedActiveTabId, {
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      });
+      if (window.electronAPI?.browserView?.setBounds) {
+        await window.electronAPI.browserView.setBounds(resolvedActiveTabId, {
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
+      }
     };
   }, [activeTab?.kind, hasElectronView, isRouteActive, resolvedActiveTabId]);
 
@@ -1166,6 +1203,7 @@ export default function BrowserToolView() {
 
   useEffect(() => {
     if (!hasElectronView) return;
+    if (!window.electronAPI?.browserView?.onState) return;
     const off = window.electronAPI.browserView.onState((payload) => {
       if (!payload?.tabId) return;
       updateTabState(payload.tabId, {
@@ -1185,15 +1223,21 @@ export default function BrowserToolView() {
 
     const run = async () => {
       if (!isRouteActive) {
-        await window.electronAPI.browserView.hideAll();
+        if (window.electronAPI?.browserView?.hideAll) {
+          await window.electronAPI.browserView.hideAll();
+        }
         return;
       }
       if (activeTab?.kind === "browser") {
-        await window.electronAPI.browserView.show(resolvedActiveTabId);
+        if (window.electronAPI?.browserView?.show) {
+          await window.electronAPI.browserView.show(resolvedActiveTabId);
+        }
         await updateBounds();
         return;
       }
-      await window.electronAPI.browserView.hideAll();
+      if (window.electronAPI?.browserView?.hideAll) {
+        await window.electronAPI.browserView.hideAll();
+      }
     };
 
     run().catch(() => {});
@@ -1216,8 +1260,12 @@ export default function BrowserToolView() {
 
       if (hasElectronView) {
         try {
-          await window.electronAPI.browserView.create(id, normalized);
-          await window.electronAPI.browserView.show(id);
+          if (window.electronAPI?.browserView?.create) {
+            await window.electronAPI.browserView.create(id, normalized);
+          }
+          if (window.electronAPI?.browserView?.show) {
+            await window.electronAPI.browserView.show(id);
+          }
         } catch (err) {
           toast.error("Failed to open tab", {
             description: String(err?.message || err),
@@ -1278,7 +1326,9 @@ export default function BrowserToolView() {
     addHistoryEntry(url, url);
 
     if (hasElectronView) {
-      await window.electronAPI.browserView.loadURL(resolvedActiveTabId, url);
+      if (window.electronAPI?.browserView?.loadURL) {
+        await window.electronAPI.browserView.loadURL(resolvedActiveTabId, url);
+      }
       return;
     }
 
@@ -1347,9 +1397,11 @@ export default function BrowserToolView() {
                       e.stopPropagation();
                       closeTab(t.id);
                       if (hasElectronView) {
-                        window.electronAPI.browserView
-                          .destroy(t.id)
-                          .catch(() => {});
+                        if (window.electronAPI?.browserView?.destroy) {
+                          window.electronAPI.browserView
+                            .destroy(t.id)
+                            .catch(() => {});
+                        }
                       }
                     }}
                     className="mr-1 flex h-6 w-6 items-center justify-center rounded hover:bg-background/80"
@@ -1395,7 +1447,9 @@ export default function BrowserToolView() {
           onClick={() => {
             if (!activeIsBrowser) return;
             if (hasElectronView) {
-              window.electronAPI.browserView.goBack(resolvedActiveTabId);
+              if (window.electronAPI?.browserView?.goBack) {
+                window.electronAPI.browserView.goBack(resolvedActiveTabId);
+              }
               return;
             }
             iframeRef.current?.contentWindow?.history?.back?.();
@@ -1411,7 +1465,9 @@ export default function BrowserToolView() {
           onClick={() => {
             if (!activeIsBrowser) return;
             if (hasElectronView) {
-              window.electronAPI.browserView.goForward(resolvedActiveTabId);
+              if (window.electronAPI?.browserView?.goForward) {
+                window.electronAPI.browserView.goForward(resolvedActiveTabId);
+              }
               return;
             }
             iframeRef.current?.contentWindow?.history?.forward?.();
@@ -1424,13 +1480,17 @@ export default function BrowserToolView() {
           size="icon"
           variant="outline"
           disabled={!activeIsBrowser}
-          onClick={() =>
-            hasElectronView
-              ? window.electronAPI.browserView.reload(resolvedActiveTabId)
-              : iframeRef.current
-              ? iframeRef.current.contentWindow?.location?.reload?.()
-              : null
-          }
+          onClick={() => {
+            if (hasElectronView) {
+              if (window.electronAPI?.browserView?.reload) {
+                window.electronAPI.browserView.reload(resolvedActiveTabId);
+              }
+              return;
+            }
+            if (iframeRef.current) {
+              iframeRef.current.contentWindow?.location?.reload?.();
+            }
+          }}
           aria-label="Reload"
         >
           <RotateCw className="h-4 w-4" />

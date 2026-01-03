@@ -2049,12 +2049,14 @@ const SprintTrackingView = ({
   }, [burndown]);
 
   return (
-    <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-      <div className="grid grid-cols-1 md:grid-cols-[30%_1fr] gap-6">
-        {sprintSelector && (
-          <div className="flex flex-col gap-3">{sprintSelector}</div>
-        )}
-        <div className="flex flex-col gap-3">{filters}</div>
+    <div className="flex flex-col gap-6">
+      <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+        <div className="grid grid-cols-1 md:grid-cols-[30%_1fr] gap-6">
+          {sprintSelector && (
+            <div className="flex flex-col gap-3">{sprintSelector}</div>
+          )}
+          <div className="flex flex-col gap-3">{filters}</div>
+        </div>
       </div>
     </div>
   );
