@@ -49,7 +49,7 @@ import { generatePageCode, copyToClipboard } from "../../../utils/codeGenerator"
  * - 3: Mobile preview
  */
 
-export function useKeyboardShortcuts({ onExportCode }) {
+export function useKeyboardShortcuts({ onExportCode, enabled = true }) {
   // Store actions
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
@@ -369,14 +369,16 @@ export function useKeyboardShortcuts({ onExportCode }) {
   }, [setZoom]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("wheel", handleWheel, { passive: false });
-    
+
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("wheel", handleWheel);
     };
-  }, [handleKeyDown, handleWheel]);
+  }, [enabled, handleKeyDown, handleWheel]);
 }
 
 /**

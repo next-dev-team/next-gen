@@ -2,8 +2,12 @@ const {
   app,
   BrowserWindow,
   BrowserView,
+  Menu,
+  Tray,
   globalShortcut,
   ipcMain,
+  nativeImage,
+  powerMonitor,
   shell,
   dialog,
 } = require("electron");
@@ -53,6 +57,12 @@ async function getStore() {
 let mainWindow = null;
 let devToolsWindow = null;
 let serverRunning = false;
+let tray = null;
+let isQuitting = false;
+let registeredQuickToggleShortcut = null;
+let trayClickTimer = null;
+
+const DEFAULT_QUICK_TOGGLE_SHORTCUT = "CommandOrControl+Shift+Space";
 
 const browserViews = new Map();
 let activeBrowserTabId = null;
@@ -133,13 +143,80 @@ function stopMcpServer() {
   }
 }
 
-function createWindow() {
+async function getRunInBackground() {
+  const currentStore = await getStore();
+  return currentStore.get("runInBackground", true);
+}
+
+function sendSettingsChanged(key, value) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("settings-changed", { key, value });
+}
+
+function sendVisibilityChanged() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  mainWindow.webContents.send("app-visibility-changed", {
+    visible: mainWindow.isVisible(),
+    focused: mainWindow.isFocused(),
+    minimized: mainWindow.isMinimized(),
+  });
+}
+
+function safeShowWindow(windowInstance) {
+  if (!windowInstance || windowInstance.isDestroyed()) return;
+  try {
+    if (windowInstance.isMinimized()) windowInstance.restore();
+  } catch {}
+  try {
+    windowInstance.setSkipTaskbar(false);
+  } catch {}
+  try {
+    windowInstance.show();
+  } catch {}
+  try {
+    windowInstance.focus();
+  } catch {}
+  try {
+    if (typeof windowInstance.moveTop === "function") windowInstance.moveTop();
+  } catch {}
+  try {
+    windowInstance.setAlwaysOnTop(true);
+    windowInstance.setAlwaysOnTop(false);
+  } catch {}
+  setTimeout(() => {
+    if (!windowInstance || windowInstance.isDestroyed()) return;
+    try {
+      windowInstance.show();
+      windowInstance.focus();
+    } catch {}
+    sendVisibilityChanged();
+    updateTrayMenu().catch(() => {});
+  }, 50);
+}
+
+function safeHideWindow(windowInstance) {
+  if (!windowInstance || windowInstance.isDestroyed()) return;
+  try {
+    windowInstance.setSkipTaskbar(true);
+  } catch {}
+  try {
+    windowInstance.hide();
+  } catch {}
+  sendVisibilityChanged();
+  updateTrayMenu().catch(() => {});
+}
+
+function createWindow({ show = true } = {}) {
+  const shouldShow = Boolean(show);
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     backgroundColor: "#0f172a",
+    show: false,
+    skipTaskbar: true,
     titleBarStyle: "hidden",
     titleBarOverlay: {
       color: "#1e293b",
@@ -159,9 +236,238 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
 
+  mainWindow.once("ready-to-show", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (shouldShow) safeShowWindow(mainWindow);
+    updateTrayMenu().catch(() => {});
+  });
+
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+
+  mainWindow.on("show", sendVisibilityChanged);
+  mainWindow.on("hide", sendVisibilityChanged);
+  mainWindow.on("focus", sendVisibilityChanged);
+  mainWindow.on("blur", sendVisibilityChanged);
+  mainWindow.on("minimize", sendVisibilityChanged);
+  mainWindow.on("restore", sendVisibilityChanged);
+
+  mainWindow.on("close", async (event) => {
+    if (isQuitting) return;
+    const runInBackground = await getRunInBackground();
+    if (!runInBackground) return;
+
+    event.preventDefault();
+    safeHideWindow(mainWindow);
+  });
+}
+
+function resolveTrayIcon() {
+  const packagedCandidates = [
+    path.join(
+      process.resourcesPath,
+      "turbo",
+      "generators",
+      "templates",
+      "rnr-expo",
+      "assets",
+      "images",
+      "favicon.png"
+    ),
+    path.join(
+      process.resourcesPath,
+      "turbo",
+      "generators",
+      "templates",
+      "rnr-uniwind",
+      "assets",
+      "images",
+      "favicon.png"
+    ),
+  ];
+
+  const devCandidates = [
+    path.resolve(
+      __dirname,
+      "../../../turbo/generators/templates/rnr-expo/assets/images/favicon.png"
+    ),
+    path.resolve(
+      __dirname,
+      "../../../turbo/generators/templates/rnr-uniwind/assets/images/favicon.png"
+    ),
+  ];
+
+  const candidates = app.isPackaged
+    ? [...packagedCandidates, ...devCandidates]
+    : [...devCandidates, ...packagedCandidates];
+
+  for (const candidate of candidates) {
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const image = nativeImage.createFromPath(candidate);
+      if (image && !image.isEmpty()) {
+        const size = process.platform === "darwin" ? 18 : 16;
+        return image.resize({ width: size, height: size });
+      }
+    } catch {}
+  }
+
+  return nativeImage.createFromDataURL(
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAABmSURBVHgB7ZKxDYAwCENzJ3EFd3AEZ3AEZ3AEZ7DgQi1KM3pZVj9kqUQy4X5y0KcQ7mGdR1gHQQQyQq0v7z0yWmWcX4q8WwWQjT2QbC7a0g6y9mYp+Qb9b7QxQy2lQAAAABJRU5ErkJggg=="
+  );
+}
+
+async function updateTrayMenu() {
+  if (!tray) return;
+  const currentStore = await getStore();
+  const startOnBoot = currentStore.get("startOnBoot", false);
+
+  const hasWindow = Boolean(mainWindow && !mainWindow.isDestroyed());
+  const isVisible = hasWindow ? mainWindow.isVisible() : false;
+
+  const contextMenu = Menu.buildFromTemplate([
+    { label: "Show App", enabled: !isVisible, click: showMainWindow },
+    {
+      label: "Hide App",
+      enabled: isVisible,
+      click: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        try {
+          mainWindow.setSkipTaskbar(true);
+          mainWindow.hide();
+        } catch {}
+        sendVisibilityChanged();
+        updateTrayMenu().catch(() => {});
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Start on Boot",
+      type: "checkbox",
+      checked: Boolean(startOnBoot),
+      click: async (menuItem) => {
+        const enabled = Boolean(menuItem.checked);
+        currentStore.set("startOnBoot", enabled);
+        const loginSettings = {
+          openAtLogin: enabled,
+          args: ["--background"],
+        };
+        if (process.platform === "darwin") {
+          loginSettings.openAsHidden = true;
+        }
+        app.setLoginItemSettings(loginSettings);
+        sendSettingsChanged("startOnBoot", enabled);
+        updateTrayMenu().catch(() => {});
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+}
+
+function ensureTray() {
+  if (tray) return tray;
+
+  const icon = resolveTrayIcon();
+  tray = new Tray(icon);
+  tray.setToolTip("Next Gen");
+
+  updateTrayMenu().catch(() => {});
+
+  tray.on("click", () => {
+    if (trayClickTimer) clearTimeout(trayClickTimer);
+    trayClickTimer = setTimeout(() => {
+      trayClickTimer = null;
+      toggleMainWindowVisibility();
+    }, 250);
+  });
+
+  tray.on("double-click", () => {
+    if (trayClickTimer) {
+      clearTimeout(trayClickTimer);
+      trayClickTimer = null;
+    }
+    toggleMainWindowVisibility();
+  });
+
+  return tray;
+}
+
+async function getQuickToggleShortcut() {
+  const currentStore = await getStore();
+  return currentStore.get("quickToggleShortcut", DEFAULT_QUICK_TOGGLE_SHORTCUT);
+}
+
+async function getQuickToggleEnabled() {
+  const currentStore = await getStore();
+  return currentStore.get("quickToggleEnabled", true);
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow({ show: true });
+    return;
+  }
+  safeShowWindow(mainWindow);
+}
+
+function toggleMainWindowVisibility() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    showMainWindow();
+    return;
+  }
+
+  if (mainWindow.isVisible()) {
+    safeHideWindow(mainWindow);
+  } else {
+    showMainWindow();
+  }
+}
+
+async function registerQuickToggleShortcut() {
+  const enabled = await getQuickToggleEnabled();
+
+  if (!enabled) {
+    if (registeredQuickToggleShortcut) {
+      try {
+        globalShortcut.unregister(registeredQuickToggleShortcut);
+      } catch {}
+      registeredQuickToggleShortcut = null;
+    }
+    return;
+  }
+
+  const shortcut = await getQuickToggleShortcut();
+  const normalized =
+    String(shortcut || "").trim() || DEFAULT_QUICK_TOGGLE_SHORTCUT;
+
+  if (
+    registeredQuickToggleShortcut &&
+    registeredQuickToggleShortcut !== normalized
+  ) {
+    try {
+      globalShortcut.unregister(registeredQuickToggleShortcut);
+    } catch {}
+    registeredQuickToggleShortcut = null;
+  }
+
+  if (registeredQuickToggleShortcut === normalized) return;
+
+  try {
+    const ok = globalShortcut.register(normalized, toggleMainWindowVisibility);
+    if (ok) registeredQuickToggleShortcut = normalized;
+  } catch {
+    registeredQuickToggleShortcut = null;
+  }
 }
 
 function createFloatDevTools() {
@@ -344,9 +650,89 @@ ipcMain.handle("get-start-on-boot", async () => {
 
 ipcMain.handle("set-start-on-boot", async (event, enabled) => {
   const currentStore = await getStore();
-  currentStore.set("startOnBoot", enabled);
-  app.setLoginItemSettings({ openAtLogin: enabled });
+  const normalized = Boolean(enabled);
+  currentStore.set("startOnBoot", normalized);
+  const loginSettings = {
+    openAtLogin: normalized,
+    args: ["--background"],
+  };
+  if (process.platform === "darwin") {
+    loginSettings.openAsHidden = true;
+  }
+  app.setLoginItemSettings(loginSettings);
+  sendSettingsChanged("startOnBoot", normalized);
+  updateTrayMenu().catch(() => {});
   return true;
+});
+
+ipcMain.handle("get-app-visibility", async () => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { visible: false, focused: false, minimized: false };
+  }
+  return {
+    visible: mainWindow.isVisible(),
+    focused: mainWindow.isFocused(),
+    minimized: mainWindow.isMinimized(),
+  };
+});
+
+ipcMain.handle("app-show-window", async () => {
+  showMainWindow();
+  return true;
+});
+
+ipcMain.handle("app-hide-window", async () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    safeHideWindow(mainWindow);
+  }
+  return true;
+});
+
+ipcMain.handle("app-toggle-window", async () => {
+  toggleMainWindowVisibility();
+  return true;
+});
+
+ipcMain.handle("get-run-in-background", async () => {
+  const currentStore = await getStore();
+  return currentStore.get("runInBackground", true);
+});
+
+ipcMain.handle("set-run-in-background", async (event, enabled) => {
+  const currentStore = await getStore();
+  currentStore.set("runInBackground", enabled);
+  sendSettingsChanged("runInBackground", Boolean(enabled));
+  return true;
+});
+
+ipcMain.handle("get-keyboard-controls-enabled", async () => {
+  const currentStore = await getStore();
+  return currentStore.get("keyboardControlsEnabled", true);
+});
+
+ipcMain.handle("set-keyboard-controls-enabled", async (event, enabled) => {
+  const currentStore = await getStore();
+  currentStore.set("keyboardControlsEnabled", enabled);
+  sendSettingsChanged("keyboardControlsEnabled", Boolean(enabled));
+  return true;
+});
+
+ipcMain.handle("get-quick-toggle-enabled", async () => {
+  const currentStore = await getStore();
+  return currentStore.get("quickToggleEnabled", true);
+});
+
+ipcMain.handle("set-quick-toggle-enabled", async (event, enabled) => {
+  const currentStore = await getStore();
+  currentStore.set("quickToggleEnabled", enabled);
+  await registerQuickToggleShortcut();
+  sendSettingsChanged("quickToggleEnabled", Boolean(enabled));
+  return true;
+});
+
+ipcMain.handle("get-quick-toggle-shortcut", async () => {
+  const currentStore = await getStore();
+  return currentStore.get("quickToggleShortcut", DEFAULT_QUICK_TOGGLE_SHORTCUT);
 });
 
 // Select folder dialog
@@ -1582,11 +1968,17 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
 
 app.whenReady().then(async () => {
   const currentStore = await getStore();
+  const backgroundLaunch = process.argv.includes("--background");
+
+  ensureTray();
 
   // Auto-start MCP Server
   startMcpServer();
 
-  createWindow();
+  createWindow({ show: !backgroundLaunch && !app.isPackaged });
+  updateTrayMenu().catch(() => {});
+
+  await registerQuickToggleShortcut();
 
   globalShortcut.register("CommandOrControl+Shift+I", () => {
     if (mainWindow && !mainWindow.isDestroyed())
@@ -1598,8 +1990,39 @@ app.whenReady().then(async () => {
   });
 
   if (currentStore.get("startOnBoot", false)) {
-    app.setLoginItemSettings({ openAtLogin: true });
+    const loginSettings = {
+      openAtLogin: true,
+      args: ["--background"],
+    };
+    if (process.platform === "darwin") {
+      loginSettings.openAsHidden = true;
+    }
+    app.setLoginItemSettings(loginSettings);
   }
+
+  powerMonitor.on("suspend", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send("power-state-changed", { type: "suspend" });
+  });
+
+  powerMonitor.on("resume", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send("power-state-changed", { type: "resume" });
+  });
+
+  powerMonitor.on("on-battery", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send("power-state-changed", { type: "on-battery" });
+  });
+
+  powerMonitor.on("on-ac", () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.webContents.send("power-state-changed", { type: "on-ac" });
+  });
+});
+
+app.on("before-quit", () => {
+  isQuitting = true;
 });
 
 app.on("window-all-closed", () => {

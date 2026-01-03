@@ -10,6 +10,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Settings
   getStartOnBoot: () => ipcRenderer.invoke("get-start-on-boot"),
   setStartOnBoot: (enabled) => ipcRenderer.invoke("set-start-on-boot", enabled),
+  getRunInBackground: () => ipcRenderer.invoke("get-run-in-background"),
+  setRunInBackground: (enabled) =>
+    ipcRenderer.invoke("set-run-in-background", enabled),
+  getKeyboardControlsEnabled: () =>
+    ipcRenderer.invoke("get-keyboard-controls-enabled"),
+  setKeyboardControlsEnabled: (enabled) =>
+    ipcRenderer.invoke("set-keyboard-controls-enabled", enabled),
+  getQuickToggleEnabled: () => ipcRenderer.invoke("get-quick-toggle-enabled"),
+  setQuickToggleEnabled: (enabled) =>
+    ipcRenderer.invoke("set-quick-toggle-enabled", enabled),
+  getQuickToggleShortcut: () =>
+    ipcRenderer.invoke("get-quick-toggle-shortcut"),
+  getAppVisibility: () => ipcRenderer.invoke("get-app-visibility"),
+  showApp: () => ipcRenderer.invoke("app-show-window"),
+  hideApp: () => ipcRenderer.invoke("app-hide-window"),
+  toggleApp: () => ipcRenderer.invoke("app-toggle-window"),
+  onSettingsChanged: (callback) => {
+    const handler = (event, payload) => callback(payload);
+    ipcRenderer.on("settings-changed", handler);
+    return () => ipcRenderer.removeListener("settings-changed", handler);
+  },
+  onAppVisibilityChanged: (callback) => {
+    const handler = (event, payload) => callback(payload);
+    ipcRenderer.on("app-visibility-changed", handler);
+    return () => ipcRenderer.removeListener("app-visibility-changed", handler);
+  },
+  onPowerStateChanged: (callback) => {
+    const handler = (event, payload) => callback(payload);
+    ipcRenderer.on("power-state-changed", handler);
+    return () => ipcRenderer.removeListener("power-state-changed", handler);
+  },
 
   // Generator
   runGenerator: (generatorName, answers) =>

@@ -133,15 +133,54 @@ test.describe("Generator UI", () => {
     await expect(dropTarget).toBeVisible({ timeout: 15000 });
     await draggableButton.dragTo(dropTarget);
 
-    await expect
-      .poll(async () => {
-        const raw = await window.evaluate(() =>
-          localStorage.getItem("editor-store")
+    const dragSucceeded = await expect
+      .poll(
+        async () => {
+          const raw = await window.evaluate(() =>
+            localStorage.getItem("editor-store")
+          );
+          if (!raw) return 0;
+          const parsed = JSON.parse(raw);
+          return parsed?.state?.canvas?.elements?.length || 0;
+        },
+        { timeout: 5000 }
+      )
+      .toBeGreaterThan(0)
+      .then(
+        () => true,
+        () => false
+      );
+
+    if (!dragSucceeded) {
+      const sourceBox = await draggableButton.boundingBox();
+      const targetBox = await dropTarget.boundingBox();
+      if (sourceBox && targetBox) {
+        await window.mouse.move(
+          sourceBox.x + sourceBox.width / 2,
+          sourceBox.y + sourceBox.height / 2
         );
-        if (!raw) return 0;
-        const parsed = JSON.parse(raw);
-        return parsed?.state?.canvas?.elements?.length || 0;
-      })
+        await window.mouse.down();
+        await window.mouse.move(
+          targetBox.x + targetBox.width / 2,
+          targetBox.y + Math.min(40, targetBox.height / 2),
+          { steps: 20 }
+        );
+        await window.mouse.up();
+      }
+    }
+
+    await expect
+      .poll(
+        async () => {
+          const raw = await window.evaluate(() =>
+            localStorage.getItem("editor-store")
+          );
+          if (!raw) return 0;
+          const parsed = JSON.parse(raw);
+          return parsed?.state?.canvas?.elements?.length || 0;
+        },
+        { timeout: 15000 }
+      )
       .toBeGreaterThan(0);
 
     await expect(window.getByTitle("Undo (Ctrl+Z)")).toBeVisible();
