@@ -176,8 +176,15 @@ export default function SettingsView() {
   };
 
   return (
-    <div style={{ padding: "16px 24px", maxWidth: 600, margin: "0 auto" }}>
-      <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+    <div
+      style={{
+        height: "100%",
+        overflowY: "auto",
+        padding: "16px 24px",
+      }}
+    >
+      <div style={{ maxWidth: 600, margin: "0 auto" }}>
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
         <div style={{ marginBottom: 8 }}>
           <Title level={4} style={{ margin: 0 }}>
             <SettingOutlined style={{ marginRight: 8 }} />
@@ -424,6 +431,8 @@ export default function SettingsView() {
           </Space>
         </Card>
       </Space>
+      <div style={{ height: 40 }} />
     </div>
+  </div>
   );
 }
