@@ -34,6 +34,12 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "../components/ui/tabs";
 import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
@@ -380,7 +386,19 @@ function formatUrlLabel(url) {
 }
 
 function Dashboard({ onOpenUrl }) {
-  const [query, setQuery] = useState("");
+  const dashboardState = useBrowserTabsStore((s) => s.dashboardState);
+  const setDashboardSearchQuery = useBrowserTabsStore(
+    (s) => s.setDashboardSearchQuery
+  );
+  const setDashboardActiveTab = useBrowserTabsStore(
+    (s) => s.setDashboardActiveTab
+  );
+
+  const query = dashboardState.searchQuery;
+  const setQuery = setDashboardSearchQuery;
+  const activeTab = dashboardState.activeTab;
+  const setActiveTab = setDashboardActiveTab;
+
   const [bookmarksQuery, setBookmarksQuery] = useState("");
   const [historyQuery, setHistoryQuery] = useState("");
 
@@ -393,6 +411,13 @@ function Dashboard({ onOpenUrl }) {
     () => [
       { title: "Google", url: "https://www.google.com", group: "Search" },
       { title: "GitHub", url: "https://github.com", group: "Dev" },
+      { title: "React Docs", url: "https://react.dev", group: "Docs" },
+      {
+        title: "Tailwind CSS",
+        url: "https://tailwindcss.com/docs",
+        group: "Docs",
+      },
+      { title: "Lucide Icons", url: "https://lucide.dev", group: "Docs" },
       { title: "YouTube", url: "https://youtube.com", group: "Entertainment" },
       { title: "Netflix", url: "https://netflix.com", group: "Entertainment" },
       {
@@ -400,6 +425,28 @@ function Dashboard({ onOpenUrl }) {
         url: "https://open.spotify.com",
         group: "Entertainment",
       },
+      {
+        title: "Monochrome",
+        url: "https://monochrome.samidy.com",
+        group: "Music",
+      },
+      {
+        title: "BiniLossless",
+        url: "https://music.binimum.org/",
+        group: "Music",
+      },
+      {
+        title: "SquidWTF",
+        url: "https://tidal.squid.wtf/",
+        group: "Music",
+      },
+      {
+        title: "QQDL",
+        url: "https://tidal.qqdl.site/",
+        group: "Music",
+      },
+      { title: "Vercel", url: "https://vercel.com", group: "More" },
+      { title: "Supabase", url: "https://supabase.com", group: "More" },
     ],
     []
   );
@@ -454,57 +501,117 @@ function Dashboard({ onOpenUrl }) {
     );
   }, [history, historyQuery]);
 
-  const entertainment = filtered.filter((it) => it.group === "Entertainment");
-  const quick = filtered.filter((it) => it.group !== "Entertainment");
+  const entertainmentItems = filtered.filter(
+    (it) => it.group === "Entertainment"
+  );
+  const musicItems = filtered.filter((it) => it.group === "Music");
+  const docsItems = filtered.filter((it) => it.group === "Docs");
+  const moreItems = filtered.filter(
+    (it) => !["Entertainment", "Music", "Docs"].includes(it.group)
+  );
 
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Quick Links</CardTitle>
-            <CardDescription>Docs and development shortcuts.</CardDescription>
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle className="text-base">Quick Access</CardTitle>
+                <CardDescription>Shortcuts and entertainment.</CardDescription>
+              </div>
+              <div className="relative w-32 sm:w-48">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Filter links..."
+                  className="h-8 pl-7 text-xs"
+                />
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {quick.map((it) => (
-                <Button
-                  key={it.url}
-                  onClick={() => handleOpen(it.url)}
-                  variant="outline"
-                  className="h-auto justify-between gap-2 px-3 py-2"
-                >
-                  <span className="font-medium">{it.title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {it.group}
-                  </span>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Entertainment</CardTitle>
-            <CardDescription>Quick access for breaks.</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {entertainment.map((it) => (
-                <Button
-                  key={it.url}
-                  onClick={() => handleOpen(it.url)}
-                  variant="outline"
-                  className="h-auto justify-between gap-2 px-3 py-2"
-                >
-                  <span className="font-medium">{it.title}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {it.group}
-                  </span>
-                </Button>
-              ))}
-            </div>
+            <Tabs
+              value={activeTab}
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
+              <TabsList className="mb-4">
+                <TabsTrigger value="entertainment">Entertainment</TabsTrigger>
+                <TabsTrigger value="music">Music</TabsTrigger>
+                <TabsTrigger value="docs">Docs</TabsTrigger>
+                <TabsTrigger value="more">More</TabsTrigger>
+              </TabsList>
+              <TabsContent value="entertainment">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {entertainmentItems.map((it) => (
+                    <Button
+                      key={it.url}
+                      onClick={() => handleOpen(it.url)}
+                      variant="outline"
+                      className="h-auto justify-between gap-2 px-3 py-2"
+                    >
+                      <span className="font-medium">{it.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {it.group}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="music">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {musicItems.map((it) => (
+                    <Button
+                      key={it.url}
+                      onClick={() => handleOpen(it.url)}
+                      variant="outline"
+                      className="h-auto justify-between gap-2 px-3 py-2"
+                    >
+                      <span className="font-medium">{it.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {it.group}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="docs">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {docsItems.map((it) => (
+                    <Button
+                      key={it.url}
+                      onClick={() => handleOpen(it.url)}
+                      variant="outline"
+                      className="h-auto justify-between gap-2 px-3 py-2"
+                    >
+                      <span className="font-medium">{it.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {it.group}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="more">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {moreItems.map((it) => (
+                    <Button
+                      key={it.url}
+                      onClick={() => handleOpen(it.url)}
+                      variant="outline"
+                      className="h-auto justify-between gap-2 px-3 py-2"
+                    >
+                      <span className="font-medium">{it.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {it.group}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 

@@ -54,6 +54,21 @@ export const useBrowserTabsStore = create(
         bookmarks: [],
         history: [],
 
+        dashboardState: {
+          searchQuery: "",
+          activeTab: "docs",
+        },
+
+        setDashboardSearchQuery: (query) =>
+          set((state) => ({
+            dashboardState: { ...state.dashboardState, searchQuery: query },
+          })),
+
+        setDashboardActiveTab: (tab) =>
+          set((state) => ({
+            dashboardState: { ...state.dashboardState, activeTab: tab },
+          })),
+
         openUrlTab: (url, title) => {
           const trimmed = String(url || "").trim();
           if (!trimmed) return null;
@@ -259,6 +274,7 @@ export const useBrowserTabsStore = create(
           devPanel: state.devPanel,
           bookmarks: state.bookmarks,
           history: state.history,
+          dashboardState: state.dashboardState,
         }),
         onRehydrateStorage: () => (state, error) => {
           if (error || !state) return;
