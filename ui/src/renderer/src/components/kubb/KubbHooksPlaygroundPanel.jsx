@@ -1,7 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import * as gen from "@gen";
 import { useQueryClient } from "@tanstack/react-query";
-import { FileJson, Play, Search, Trash2 } from "lucide-react";
+import { Check, Copy, FileJson, Play, Search, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { cn } from "../../lib/utils";
+import { useBrowserTabsStore } from "../../stores/browserTabsStore";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -10,9 +13,6 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Separator } from "../ui/separator";
 import { Switch } from "../ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
-import { cn } from "../../lib/utils";
-import { useBrowserTabsStore } from "../../stores/browserTabsStore";
-import * as gen from "@gen";
 
 function safeJsonParse(text) {
   const raw = String(text ?? "").trim();
@@ -50,27 +50,62 @@ function TextArea({ className, ...props }) {
   );
 }
 
-function HookRunner({ hookName, hookFn, paramsText, autoRun, useMockClient }) {
+function HookRunner({
+  hookName,
+  hookFn,
+  paramsText,
+  optionsText,
+  autoRun,
+  useMockClient,
+}) {
   const queryClient = useQueryClient();
   const needsParams = useMemo(() => Number(hookFn?.length || 0) >= 1, [hookFn]);
   const parsedParams = useMemo(() => safeJsonParse(paramsText), [paramsText]);
+  const parsedOptions = useMemo(
+    () => safeJsonParse(optionsText),
+    [optionsText]
+  );
   const [mockText, setMockText] = useState("{}");
   const parsedMockText = useMemo(() => safeJsonParse(mockText), [mockText]);
 
   const enabled = Boolean(
-    autoRun &&
-      !useMockClient &&
-      (needsParams ? Boolean(parsedParams.ok) : true)
+    autoRun && !useMockClient && (needsParams ? Boolean(parsedParams.ok) : true)
   );
 
-  const queryOptions = useMemo(
-    () => ({ enabled, retry: false }),
-    [enabled]
-  );
+  const queryOptions = useMemo(() => {
+    const base = { enabled, retry: false };
+    if (parsedOptions.ok && typeof parsedOptions.value === "object") {
+      return { ...base, ...parsedOptions.value };
+    }
+    return base;
+  }, [enabled, parsedOptions]);
 
   const query = needsParams
-    ? hookFn(parsedParams.ok ? parsedParams.value : {}, { query: queryOptions })
+    ? hookFn(parsedParams.ok ? parsedParams.value : {}, {
+        query: queryOptions,
+      })
     : hookFn({ query: queryOptions });
+
+  const [copied, setCopied] = useState(false);
+
+  const copyUsage = useCallback(() => {
+    const params = parsedParams.ok ? prettyJson(parsedParams.value) : "{}";
+    const options =
+      parsedOptions.ok && Object.keys(parsedOptions.value).length > 0
+        ? `, { query: ${prettyJson(parsedOptions.value)} }`
+        : "";
+
+    const code = needsParams
+      ? `const { data, isLoading } = ${hookName}(${params}${options});`
+      : `const { data, isLoading } = ${hookName}(${
+          options ? `{ query: ${prettyJson(parsedOptions.value)} }` : ""
+        });`;
+
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success("Usage snippet copied to clipboard");
+  }, [hookName, needsParams, parsedParams, parsedOptions]);
 
   const clearCache = useCallback(() => {
     if (!query?.queryKey) return;
@@ -86,7 +121,9 @@ function HookRunner({ hookName, hookFn, paramsText, autoRun, useMockClient }) {
     if (!query?.queryKey) return;
     if (!parsedMockText.ok) {
       toast.error("Invalid mock JSON", {
-        description: String(parsedMockText.error?.message || parsedMockText.error),
+        description: String(
+          parsedMockText.error?.message || parsedMockText.error
+        ),
       });
       return;
     }
@@ -115,6 +152,19 @@ function HookRunner({ hookName, hookFn, paramsText, autoRun, useMockClient }) {
 
         <div className="flex shrink-0 items-center gap-2">
           <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            onClick={copyUsage}
+            title="Copy usage snippet"
+          >
+            {copied ? (
+              <Check className="h-4 w-4 text-green-500" />
+            ) : (
+              <Copy className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
             size="sm"
             variant="secondary"
             onClick={run}
@@ -123,7 +173,10 @@ function HookRunner({ hookName, hookFn, paramsText, autoRun, useMockClient }) {
             <Play className="mr-2 h-4 w-4" />
             Run
           </Button>
-          <Button size="sm" variant="outline" onClick={clearCache}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={clearCache}
             disabled={!query?.queryKey}
           >
             <Trash2 className="mr-2 h-4 w-4" />
@@ -212,7 +265,9 @@ export default function KubbHooksPlaygroundPanel() {
 
   const allHooks = useMemo(() => {
     return Object.entries(gen)
-      .filter(([name, value]) => name.startsWith("use") && typeof value === "function")
+      .filter(
+        ([name, value]) => name.startsWith("use") && typeof value === "function"
+      )
       .map(([name, value]) => ({ name, fn: value }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, []);
@@ -286,6 +341,11 @@ export default function KubbHooksPlaygroundPanel() {
     [setKubbPlaygroundState]
   );
 
+  const setOptionsText = useCallback(
+    (value) => setKubbPlaygroundState({ optionsText: value }),
+    [setKubbPlaygroundState]
+  );
+
   const setSelectedHook = useCallback(
     (name) => setKubbPlaygroundState({ selectedHookId: name }),
     [setKubbPlaygroundState]
@@ -348,7 +408,8 @@ export default function KubbHooksPlaygroundPanel() {
                 <ScrollArea className="flex-1">
                   <div className="flex flex-col p-2">
                     {filteredHooks.map((h) => {
-                      const isActive = h.name === kubbPlayground?.selectedHookId;
+                      const isActive =
+                        h.name === kubbPlayground?.selectedHookId;
                       return (
                         <button
                           key={h.name}
@@ -395,7 +456,9 @@ export default function KubbHooksPlaygroundPanel() {
                         <Switch
                           checked={Boolean(kubbPlayground?.useMockClient)}
                           onCheckedChange={(v) =>
-                            setKubbPlaygroundState({ useMockClient: Boolean(v) })
+                            setKubbPlaygroundState({
+                              useMockClient: Boolean(v),
+                            })
                           }
                         />
                         <Label className="text-xs">Mock data</Label>
@@ -408,7 +471,7 @@ export default function KubbHooksPlaygroundPanel() {
                       </Badge>
                     </div>
 
-                    <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-2">
+                    <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[0.3fr_0.7fr]">
                       <div className="min-h-0 border-b lg:border-b-0 lg:border-r">
                         <div className="p-4">
                           <Label className="text-xs">Params (JSON)</Label>
@@ -419,6 +482,18 @@ export default function KubbHooksPlaygroundPanel() {
                             placeholder='{"id": 1}'
                           />
                         </div>
+
+                        <div className="p-4">
+                          <Label className="text-xs">
+                            Query Options (JSON)
+                          </Label>
+                          <TextArea
+                            value={kubbPlayground?.optionsText || "{}"}
+                            onChange={(e) => setOptionsText(e.target.value)}
+                            className="mt-2 min-h-[6rem] font-mono text-[12px]"
+                            placeholder='{"enabled": true, "retry": false}'
+                          />
+                        </div>
                       </div>
 
                       <div className="min-h-0">
@@ -427,6 +502,7 @@ export default function KubbHooksPlaygroundPanel() {
                           hookName={selected.name}
                           hookFn={selected.fn}
                           paramsText={kubbPlayground?.paramsText || "{}"}
+                          optionsText={kubbPlayground?.optionsText || "{}"}
                           autoRun={Boolean(kubbPlayground?.autoRun)}
                           useMockClient={Boolean(kubbPlayground?.useMockClient)}
                         />
@@ -448,7 +524,9 @@ export default function KubbHooksPlaygroundPanel() {
                 <Button
                   size="sm"
                   variant={
-                    kubbPlayground?.configMode === "path" ? "secondary" : "outline"
+                    kubbPlayground?.configMode === "path"
+                      ? "secondary"
+                      : "outline"
                   }
                   onClick={() => setKubbPlaygroundState({ configMode: "path" })}
                 >
@@ -457,7 +535,9 @@ export default function KubbHooksPlaygroundPanel() {
                 <Button
                   size="sm"
                   variant={
-                    kubbPlayground?.configMode === "text" ? "secondary" : "outline"
+                    kubbPlayground?.configMode === "text"
+                      ? "secondary"
+                      : "outline"
                   }
                   onClick={() => setKubbPlaygroundState({ configMode: "text" })}
                 >
@@ -466,7 +546,9 @@ export default function KubbHooksPlaygroundPanel() {
                 <Button
                   size="sm"
                   variant={
-                    kubbPlayground?.configMode === "url" ? "secondary" : "outline"
+                    kubbPlayground?.configMode === "url"
+                      ? "secondary"
+                      : "outline"
                   }
                   onClick={() => setKubbPlaygroundState({ configMode: "url" })}
                 >
@@ -516,7 +598,8 @@ export default function KubbHooksPlaygroundPanel() {
                   placeholder="https://example.com/openapi.json"
                 />
                 <div className="text-xs text-muted-foreground">
-                  This panel does not regenerate hooks yet; it stores config inputs
+                  This panel does not regenerate hooks yet; it stores config
+                  inputs
                 </div>
               </div>
 

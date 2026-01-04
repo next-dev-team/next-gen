@@ -7,6 +7,8 @@ import {
   FileJson,
   Globe,
   Image,
+  Maximize2,
+  Minimize2,
   Monitor,
   MousePointerClick,
   Network,
@@ -866,6 +868,9 @@ function DevPanel({
   const setDevPanelTool = useBrowserTabsStore((s) => s.setDevPanelTool);
   const setDevPanelOpen = useBrowserTabsStore((s) => s.setDevPanelOpen);
   const setDevPanelWidth = useBrowserTabsStore((s) => s.setDevPanelWidth);
+  const toggleDevPanelFullWidth = useBrowserTabsStore(
+    (s) => s.toggleDevPanelFullWidth
+  );
   const networkLogs = useBrowserTabsStore((s) => s.networkLogs);
   const addNetworkLog = useBrowserTabsStore((s) => s.addNetworkLog);
   const clearNetworkLogs = useBrowserTabsStore((s) => s.clearNetworkLogs);
@@ -1140,21 +1145,29 @@ function DevPanel({
 
   return (
     <div
-      className="relative h-full border-l bg-background"
-      style={{ width: devPanel.width }}
+      className={cn(
+        "relative h-full border-l bg-background shrink-0",
+        devPanel.isFullWidth && "absolute inset-0 z-50 border-l-0"
+      )}
+      style={{
+        width: devPanel.isFullWidth ? "100%" : devPanel.width,
+        transition: "width 0.2s ease-in-out, left 0.2s ease-in-out",
+      }}
     >
       <div className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent" />
 
-      <button
-        type="button"
-        aria-label="Resize panel"
-        className="absolute left-0 top-0 h-full w-2 cursor-col-resize bg-transparent"
-        onMouseDown={(e) => {
-          dragging.current = true;
-          dragStartX.current = e.clientX;
-          dragStartWidth.current = devPanel.width;
-        }}
-      />
+      {!devPanel.isFullWidth && (
+        <button
+          type="button"
+          aria-label="Resize panel"
+          className="absolute left-0 top-0 h-full w-2 cursor-col-resize bg-transparent"
+          onMouseDown={(e) => {
+            dragging.current = true;
+            dragStartX.current = e.clientX;
+            dragStartWidth.current = devPanel.width;
+          }}
+        />
+      )}
 
       <div className="flex h-12 items-center justify-between gap-2 px-2">
         <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
@@ -1197,13 +1210,27 @@ function DevPanel({
             Kubb Hooks
           </Button>
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => setDevPanelOpen(false)}
-        >
-          <PanelRightClose className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={toggleDevPanelFullWidth}
+            title={devPanel.isFullWidth ? "Exit full width" : "Full width"}
+          >
+            {devPanel.isFullWidth ? (
+              <Minimize2 className="h-4 w-4" />
+            ) : (
+              <Maximize2 className="h-4 w-4" />
+            )}
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => setDevPanelOpen(false)}
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <div className="h-[calc(100%-3rem)]">

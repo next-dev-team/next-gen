@@ -47,6 +47,7 @@ export const useBrowserTabsStore = create(
           isOpen: false,
           width: 420,
           activeTool: "react-query",
+          isFullWidth: false,
         },
 
         kubbPlayground: {
@@ -59,6 +60,7 @@ export const useBrowserTabsStore = create(
           hooksSearch: "",
           selectedHookId: "",
           paramsText: "{}",
+          optionsText: "{}",
           useMockClient: true,
           autoRun: false,
         },
@@ -238,6 +240,15 @@ export const useBrowserTabsStore = create(
             devPanel: {
               ...state.devPanel,
               activeTool: next,
+            },
+          }));
+        },
+
+        toggleDevPanelFullWidth: () => {
+          set((state) => ({
+            devPanel: {
+              ...state.devPanel,
+              isFullWidth: !state.devPanel.isFullWidth,
             },
           }));
         },
