@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, shell } = require("electron");
+const { contextBridge, ipcRenderer, shell, clipboard } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   versions: {
@@ -142,6 +142,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.on("browserview-state", handler);
       return () => ipcRenderer.removeListener("browserview-state", handler);
     },
+  },
+
+  clipboardWriteText: (text) => {
+    try {
+      clipboard.writeText(String(text ?? ""));
+      return true;
+    } catch {
+      return false;
+    }
   },
 
   writeProjectFile: (payload) => ipcRenderer.invoke("write-project-file", payload),

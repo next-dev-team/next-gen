@@ -541,11 +541,35 @@ export const generateBlockCode = (blockId, props) => {
  * Copy text to clipboard
  */
 export const copyToClipboard = async (text) => {
+  const value = String(text ?? "");
+  if (!value) return false;
+
   try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch (err) {
-    console.error("Failed to copy:", err);
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {}
+
+  try {
+    if (window?.electronAPI?.clipboardWriteText) {
+      return Boolean(window.electronAPI.clipboardWriteText(value));
+    }
+  } catch {}
+
+  try {
+    const el = document.createElement("textarea");
+    el.value = value;
+    el.setAttribute("readonly", "");
+    el.style.position = "fixed";
+    el.style.top = "-9999px";
+    el.style.left = "-9999px";
+    document.body.appendChild(el);
+    el.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(el);
+    return Boolean(ok);
+  } catch {
     return false;
   }
 };

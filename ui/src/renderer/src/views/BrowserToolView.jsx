@@ -609,7 +609,11 @@ function DevPanel({
   const setInspectorEnabled = useBrowserTabsStore((s) => s.setInspectorEnabled);
   const clearInspector = useBrowserTabsStore((s) => s.clearInspector);
 
+  const selectedElement = inspector?.selected?.element || inspector?.selected;
+  const hoverElement = inspector?.hover?.element || inspector?.hover;
+
   const [copied, setCopied] = useState(false);
+  const [htmlCopied, setHtmlCopied] = useState(false);
   const [cloneBusy, setCloneBusy] = useState(false);
   const [previewElement, setPreviewElement] = useState(null);
   const [code, setCode] = useState("");
@@ -655,18 +659,18 @@ function DevPanel({
 
   useEffect(() => {
     if (devPanel.activeTool !== "inspector") return;
-    if (!inspector?.selected?.element?.outerHTML) {
+    if (!selectedElement?.outerHTML) {
       setPreviewElement(null);
       setCode("");
+      setHtmlCopied(false);
       return;
     }
-    const next = htmlToCanvasElementTree(
-      inspector?.selected?.element?.outerHTML
-    );
+    const next = htmlToCanvasElementTree(selectedElement?.outerHTML);
     setPreviewElement(next);
     setCode(buildShadcnSnippet(next));
     setCopied(false);
-  }, [devPanel.activeTool, inspector?.selected?.element?.outerHTML]);
+    setHtmlCopied(false);
+  }, [devPanel.activeTool, selectedElement?.outerHTML]);
 
   useEffect(() => {
     const onMove = (e) => {
@@ -757,8 +761,8 @@ function DevPanel({
                 <div className="text-sm font-medium">Inspector</div>
                 <div className="text-xs text-muted-foreground truncate">
                   {activeIsBrowser
-                    ? inspector?.selected?.element?.selector ||
-                      inspector?.hover?.element?.selector ||
+                    ? selectedElement?.selector ||
+                      hoverElement?.selector ||
                       "Pick an element to convert"
                     : "Open a browser tab to inspect"}
                 </div>
@@ -859,16 +863,15 @@ function DevPanel({
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm">Selection</CardTitle>
                     <CardDescription>
-                      {inspector?.selected?.element?.tagName
+                      {selectedElement?.tagName
                         ? `${String(
-                            inspector?.selected?.element?.tagName
+                            selectedElement?.tagName
                           ).toLowerCase()} · ${
-                            inspector?.selected?.element?.rect?.width
+                            selectedElement?.rect?.width
                               ? `${Math.round(
-                                  inspector?.selected?.element?.rect?.width
+                                  selectedElement?.rect?.width
                                 )}×${Math.round(
-                                  inspector?.selected?.element?.rect?.height ||
-                                    0
+                                  selectedElement?.rect?.height || 0
                                 )}`
                               : ""
                           }`
@@ -876,14 +879,51 @@ function DevPanel({
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {inspector?.selected?.element?.text ? (
+                    {selectedElement?.text ? (
                       <div className="text-xs text-muted-foreground whitespace-pre-wrap">
-                        {inspector?.selected?.element?.text}
+                        {selectedElement?.text}
                       </div>
                     ) : null}
-                    {inspector?.selected?.element?.selector ? (
+                    {selectedElement?.selector ? (
                       <div className="text-xs font-mono text-muted-foreground break-words">
-                        {inspector?.selected?.element?.selector}
+                        {selectedElement?.selector}
+                      </div>
+                    ) : null}
+                    {selectedElement?.outerHTML ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="text-xs font-medium text-muted-foreground">
+                            HTML
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            aria-label="Copy HTML"
+                            onClick={async () => {
+                              const html = String(
+                                selectedElement?.outerHTML || ""
+                              );
+                              if (!html) return;
+                              const ok = await copyToClipboard(html);
+                              if (!ok) {
+                                toast.error("Copy failed");
+                                return;
+                              }
+                              setHtmlCopied(true);
+                              setTimeout(() => setHtmlCopied(false), 1000);
+                            }}
+                          >
+                            {htmlCopied ? (
+                              <Check className="mr-2 h-4 w-4" />
+                            ) : (
+                              <Copy className="mr-2 h-4 w-4" />
+                            )}
+                            Copy
+                          </Button>
+                        </div>
+                        <pre className="max-h-[220px] overflow-auto rounded-md border bg-muted/30 p-3 text-[11px]">
+                          {String(selectedElement?.outerHTML)}
+                        </pre>
                       </div>
                     ) : null}
                   </CardContent>
@@ -1121,6 +1161,8 @@ export default function BrowserToolView() {
     const prevTabId = lastInspectorTabIdRef.current;
     lastInspectorTabIdRef.current = resolvedActiveTabId;
 
+    const tabChanged = Boolean(prevTabId && prevTabId !== resolvedActiveTabId);
+
     if (
       prevTabId &&
       prevTabId !== resolvedActiveTabId &&
@@ -1138,7 +1180,12 @@ export default function BrowserToolView() {
 
     if (!shouldEnable) {
       if (inspector?.enabled) setInspectorEnabled(false);
-      clearInspector();
+
+      if (tabChanged || activeTab?.kind !== "browser" || !isRouteActive) {
+        clearInspector();
+      } else if (inspector?.hover) {
+        setInspectorHover(null);
+      }
       if (
         resolvedActiveTabId &&
         window.electronAPI?.browserView?.setInspectorEnabled
@@ -1162,9 +1209,11 @@ export default function BrowserToolView() {
     clearInspector,
     hasElectronView,
     inspector?.enabled,
+    inspector?.hover,
     isRouteActive,
     resolvedActiveTabId,
     setInspectorEnabled,
+    setInspectorHover,
   ]);
 
   useEffect(() => {
@@ -1543,7 +1592,7 @@ export default function BrowserToolView() {
           ) : null}
 
           {activeTab?.kind === "browser" ? (
-            <div ref={contentRef} className="absolute inset-0">
+            <webview ref={contentRef} className="absolute inset-0">
               {!hasElectronView ? (
                 <iframe
                   ref={iframeRef}
@@ -1554,7 +1603,7 @@ export default function BrowserToolView() {
               ) : (
                 <div className="h-full w-full" />
               )}
-            </div>
+            </webview>
           ) : null}
         </div>
 
