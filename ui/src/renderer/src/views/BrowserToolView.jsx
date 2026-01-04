@@ -418,6 +418,11 @@ function Dashboard({ onOpenUrl }) {
         group: "Docs",
       },
       { title: "Lucide Icons", url: "https://lucide.dev", group: "Docs" },
+      {
+        title: "Shadcn Chat",
+        url: "https://context7.com/websites/ui_shadcn?tab=chat",
+        group: "Docs",
+      },
       { title: "YouTube", url: "https://youtube.com", group: "Entertainment" },
       { title: "Netflix", url: "https://netflix.com", group: "Entertainment" },
       {
