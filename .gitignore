@@ -17,3 +17,4 @@ _bmad
 dist-web/
 ui/dist-web/
 dist*
+gen

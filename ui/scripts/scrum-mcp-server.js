@@ -1179,7 +1179,15 @@ const httpServer = http.createServer((req, res) => {
           case "/api/state":
             if (data.state) {
               result = { state: setState(data.state) };
+              break;
             }
+
+            if (Array.isArray(data?.boards)) {
+              result = { state: setState(data) };
+              break;
+            }
+
+            result = { state: getState() };
             break;
 
           case "/api/board/create":

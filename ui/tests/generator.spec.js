@@ -73,6 +73,11 @@ test.describe("Generator UI", () => {
 
   test("should filter scrum stories by assignee and epic", async () => {
     const window = await electronApp.firstWindow();
+    await window.evaluate(() => {
+      localStorage.setItem("kanban-use-remote-server", "false");
+      localStorage.setItem("kanban-server-base-url", "http://localhost:3847");
+      localStorage.removeItem("kanban-state");
+    });
     await window.reload();
     const seedState = {
       activeBoardId: "board-1",
@@ -182,7 +187,7 @@ test.describe("Generator UI", () => {
       await fetch("http://localhost:3847/api/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(state),
+        body: JSON.stringify({ state }),
       });
     }, seedState);
 

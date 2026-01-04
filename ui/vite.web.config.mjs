@@ -12,6 +12,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve("./src/renderer/src"),
+      "@gen": resolve("./src/gen"),
     },
   },
   server: {

@@ -152,9 +152,27 @@ export const useKanbanStore = create((set, get) => ({
     es.addEventListener("state_update", (event) => {
       try {
         const data = JSON.parse(event.data);
+        const nextState = data.data;
+        const boards = Array.isArray(nextState?.boards) ? nextState.boards : [];
+        const currentActiveBoardId = get().activeBoardId;
+        const hasCurrentActive = boards.some(
+          (b) => b.id === currentActiveBoardId
+        );
+
+        const nextActiveBoardId = hasCurrentActive
+          ? currentActiveBoardId
+          : boards.some((b) => b.id === nextState?.activeBoardId)
+            ? nextState.activeBoardId
+            : boards[0]?.id || null;
+
+        try {
+          localStorage.setItem("kanban-state", JSON.stringify(nextState));
+        } catch {}
+
         set({
-          state: data.data,
-          lockedCards: data.data?.locks || {},
+          state: nextState,
+          activeBoardId: nextActiveBoardId,
+          lockedCards: nextState?.locks || {},
         });
       } catch (err) {
         console.error("Failed to parse state_update event:", err);

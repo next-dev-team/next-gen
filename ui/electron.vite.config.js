@@ -29,11 +29,15 @@ export default defineConfig({
     resolve: {
       alias: {
         "@": resolve(__dirname, "src/renderer/src"),
+        "@gen": resolve(__dirname, "src/gen"),
       },
     },
     server: {
       port: 5175,
       strictPort: true,
+      fs: {
+        allow: [resolve(__dirname, "src")],
+      },
     },
     plugins: [codeInspectorPlugin({ bundler: "vite" }), react(), tailwindcss()],
   },

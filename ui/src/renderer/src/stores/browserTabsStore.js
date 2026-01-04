@@ -49,6 +49,20 @@ export const useBrowserTabsStore = create(
           activeTool: "react-query",
         },
 
+        kubbPlayground: {
+          activeSubTab: "kubb-hooks",
+          configMode: "path",
+          configPath: "ui/kubb.config.ts",
+          configText: "",
+          openApiUrl: "",
+          validationErrors: [],
+          hooksSearch: "",
+          selectedHookId: "",
+          paramsText: "{}",
+          useMockClient: true,
+          autoRun: false,
+        },
+
         networkLogs: [],
 
         bookmarks: [],
@@ -224,6 +238,15 @@ export const useBrowserTabsStore = create(
             devPanel: {
               ...state.devPanel,
               activeTool: next,
+            },
+          }));
+        },
+
+        setKubbPlaygroundState: (patch) => {
+          set((state) => ({
+            kubbPlayground: {
+              ...state.kubbPlayground,
+              ...(patch || {}),
             },
           }));
         },

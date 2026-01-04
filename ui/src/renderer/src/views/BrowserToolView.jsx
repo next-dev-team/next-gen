@@ -1,18 +1,10 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
   Check,
   Copy,
   Download,
+  FileJson,
   Globe,
   Image,
   Monitor,
@@ -28,10 +20,19 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
+import { ComponentRenderer } from "../components/editor/canvas/ComponentRenderer";
 import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
@@ -46,16 +47,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { ScrollArea } from "../components/ui/scroll-area";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
-import { ScrollArea } from "../components/ui/scroll-area";
 import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
-import { ComponentRenderer } from "../components/editor/canvas/ComponentRenderer";
 import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
 
 const createId = () =>
@@ -1142,8 +1143,12 @@ function DevPanel({
       className="relative h-full border-l bg-background"
       style={{ width: devPanel.width }}
     >
-      <div
-        className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent"
+      <div className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent" />
+
+      <button
+        type="button"
+        aria-label="Resize panel"
+        className="absolute left-0 top-0 h-full w-2 cursor-col-resize bg-transparent"
         onMouseDown={(e) => {
           dragging.current = true;
           dragStartX.current = e.clientX;
@@ -1181,6 +1186,16 @@ function DevPanel({
             <Network className="mr-2 h-4 w-4" />
             Network
           </Button>
+          <Button
+            size="sm"
+            variant={
+              devPanel.activeTool === "kubb-hooks" ? "secondary" : "ghost"
+            }
+            onClick={() => setDevPanelTool("kubb-hooks")}
+          >
+            <FileJson className="mr-2 h-4 w-4" />
+            Kubb Hooks
+          </Button>
         </div>
         <Button
           size="icon"
@@ -1195,10 +1210,24 @@ function DevPanel({
         {devPanel.activeTool === "react-query" ? (
           <React.Suspense
             fallback={
-              <div className="p-4 text-sm text-muted-foreground">Loading…</div>
+              <div className="p-4 text-sm text-muted-foreground">
+                Loading...
+              </div>
             }
           >
             <ReactQueryPanel />
+          </React.Suspense>
+        ) : null}
+
+        {devPanel.activeTool === "kubb-hooks" ? (
+          <React.Suspense
+            fallback={
+              <div className="p-4 text-sm text-muted-foreground">
+                Loading...
+              </div>
+            }
+          >
+            <KubbHooksPlaygroundPanel />
           </React.Suspense>
         ) : null}
 
@@ -1530,9 +1559,8 @@ function DevPanel({
                       onChange={(e) => handleAddFiles(e.target.files)}
                     />
 
-                    <div
-                      role="button"
-                      tabIndex={0}
+                    <button
+                      type="button"
                       aria-label="Drop files to upload"
                       className={cn(
                         "flex flex-col items-center justify-center gap-1 rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
@@ -1541,12 +1569,6 @@ function DevPanel({
                           : "bg-background/60 hover:bg-background"
                       )}
                       onClick={handleOpenFilePicker}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          handleOpenFilePicker();
-                        }
-                      }}
                       onDragOver={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -1571,7 +1593,7 @@ function DevPanel({
                       <div className="text-[11px]">
                         Max 20 files, 25MB each.
                       </div>
-                    </div>
+                    </button>
 
                     {Array.isArray(inspectorAttachments) &&
                     inspectorAttachments.length ? (
@@ -1874,6 +1896,10 @@ const ReactQueryPanel = React.lazy(async () => {
     ),
   };
 });
+
+const KubbHooksPlaygroundPanel = React.lazy(
+  () => import("../components/kubb/KubbHooksPlaygroundPanel")
+);
 
 export default function BrowserToolView() {
   const location = useLocation();
