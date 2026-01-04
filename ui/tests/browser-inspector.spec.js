@@ -421,7 +421,7 @@ test.describe("Browser inspector", () => {
     );
 
     await openInspectorTool(window);
-    await window.getByRole("button", { name: "Full" }).click();
+    await window.getByRole("button", { name: "Capture mode: Full" }).click();
 
     await electronApp.evaluate(
       ({ BrowserWindow }, payload) => {

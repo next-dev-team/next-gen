@@ -1,6 +1,14 @@
 import * as gen from "@gen";
 import { useQueryClient } from "@tanstack/react-query";
-import { Check, Copy, FileJson, Play, Search, Trash2 } from "lucide-react";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  FileJson,
+  Play,
+  Search,
+  Trash2,
+} from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "../../lib/utils";
@@ -36,6 +44,14 @@ function extractFirstHttpUrl(text) {
   const raw = String(text ?? "");
   const match = raw.match(/https?:\/\/[^\s'"`]+/i);
   return match ? match[0] : "";
+}
+
+function extractKubbInputPath(text) {
+  const raw = String(text ?? "");
+  const inputBlock = raw.match(/\binput\s*:\s*\{[\s\S]*?\}/m);
+  const scope = inputBlock ? inputBlock[0] : raw;
+  const match = scope.match(/\bpath\s*:\s*(['"`])([^'"`]+)\1/m);
+  return match ? String(match[2] || "").trim() : "";
 }
 
 function TextArea({ className, ...props }) {
@@ -321,6 +337,44 @@ export default function KubbHooksPlaygroundPanel() {
     if (!same) setKubbPlaygroundState({ validationErrors: errors });
   }, [kubbPlayground, setKubbPlaygroundState]);
 
+  useEffect(() => {
+    if (String(kubbPlayground?.openApiUrl || "").trim()) return;
+    const configPath = String(kubbPlayground?.configPath || "").trim();
+    if (!configPath) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      if (!window.electronAPI?.getProjectRoot) return;
+      if (!window.electronAPI?.readProjectFile) return;
+
+      const projectRoot = await window.electronAPI.getProjectRoot();
+      if (!projectRoot) return;
+
+      const res = await window.electronAPI.readProjectFile({
+        projectRoot,
+        relativePath: configPath,
+        maxBytes: 250_000,
+      });
+      if (!res?.success || !res?.content) return;
+
+      const extracted = extractKubbInputPath(res.content);
+      if (!extracted || cancelled) return;
+
+      setKubbPlaygroundState({ openApiUrl: extracted });
+    };
+
+    run().catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    kubbPlayground?.configPath,
+    kubbPlayground?.openApiUrl,
+    setKubbPlaygroundState,
+  ]);
+
   const extractUrl = useCallback(() => {
     const found = extractFirstHttpUrl(kubbPlayground?.configText);
     if (!found) {
@@ -330,6 +384,21 @@ export default function KubbHooksPlaygroundPanel() {
     setKubbPlaygroundState({ openApiUrl: found });
     toast.success("OpenAPI URL extracted");
   }, [kubbPlayground?.configText, setKubbPlaygroundState]);
+
+  const openDocs = useCallback(() => {
+    const url = String(kubbPlayground?.openApiUrl || "").trim();
+    if (!/^https?:\/\//i.test(url)) {
+      toast.error("Invalid OpenAPI URL");
+      return;
+    }
+
+    if (window.electronAPI?.openExternal) {
+      window.electronAPI.openExternal(url);
+      return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }, [kubbPlayground?.openApiUrl]);
 
   const setHooksSearch = useCallback(
     (value) => setKubbPlaygroundState({ hooksSearch: value }),
@@ -590,13 +659,27 @@ export default function KubbHooksPlaygroundPanel() {
 
               <div className="grid gap-2">
                 <Label className="text-xs">OpenAPI URL</Label>
-                <Input
-                  value={kubbPlayground?.openApiUrl || ""}
-                  onChange={(e) =>
-                    setKubbPlaygroundState({ openApiUrl: e.target.value })
-                  }
-                  placeholder="https://example.com/openapi.json"
-                />
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={kubbPlayground?.openApiUrl || ""}
+                    onChange={(e) =>
+                      setKubbPlaygroundState({ openApiUrl: e.target.value })
+                    }
+                    placeholder="https://example.com/openapi.json"
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={openDocs}
+                    disabled={
+                      !/^https?:\/\//i.test(
+                        String(kubbPlayground?.openApiUrl || "").trim()
+                      )
+                    }
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </div>
                 <div className="text-xs text-muted-foreground">
                   This panel does not regenerate hooks yet; it stores config
                   inputs
