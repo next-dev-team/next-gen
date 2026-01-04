@@ -381,6 +381,8 @@ function formatUrlLabel(url) {
 
 function Dashboard({ onOpenUrl }) {
   const [query, setQuery] = useState("");
+  const [bookmarksQuery, setBookmarksQuery] = useState("");
+  const [historyQuery, setHistoryQuery] = useState("");
 
   const bookmarks = useBrowserTabsStore((s) => s.bookmarks);
   const history = useBrowserTabsStore((s) => s.history);
@@ -390,15 +392,8 @@ function Dashboard({ onOpenUrl }) {
   const items = useMemo(
     () => [
       { title: "Google", url: "https://www.google.com", group: "Search" },
-      { title: "MDN", url: "https://developer.mozilla.org", group: "Docs" },
       { title: "GitHub", url: "https://github.com", group: "Dev" },
-      {
-        title: "Stack Overflow",
-        url: "https://stackoverflow.com",
-        group: "Dev",
-      },
       { title: "YouTube", url: "https://youtube.com", group: "Entertainment" },
-      { title: "Twitch", url: "https://twitch.tv", group: "Entertainment" },
       { title: "Netflix", url: "https://netflix.com", group: "Entertainment" },
       {
         title: "Spotify",
@@ -407,6 +402,22 @@ function Dashboard({ onOpenUrl }) {
       },
     ],
     []
+  );
+
+  const handleOpen = useCallback(
+    async (url) => {
+      try {
+        const normalized = normalizeUrl(url);
+        if (!normalized) return;
+        await onOpenUrl(normalized);
+      } catch (err) {
+        console.error("Navigation error:", err);
+        toast.error("Failed to open URL", {
+          description: String(err?.message || err),
+        });
+      }
+    },
+    [onOpenUrl]
   );
 
   const filtered = useMemo(() => {
@@ -419,41 +430,35 @@ function Dashboard({ onOpenUrl }) {
     );
   }, [items, query]);
 
+  const filteredBookmarks = useMemo(() => {
+    const q = bookmarksQuery.trim().toLowerCase();
+    if (!q) return bookmarks;
+    return bookmarks.filter((b) =>
+      [b.title, b.url].some((v) =>
+        String(v || "")
+          .toLowerCase()
+          .includes(q)
+      )
+    );
+  }, [bookmarks, bookmarksQuery]);
+
+  const filteredHistory = useMemo(() => {
+    const q = historyQuery.trim().toLowerCase();
+    if (!q) return history;
+    return history.filter((h) =>
+      [h.title, h.url].some((v) =>
+        String(v || "")
+          .toLowerCase()
+          .includes(q)
+      )
+    );
+  }, [history, historyQuery]);
+
   const entertainment = filtered.filter((it) => it.group === "Entertainment");
   const quick = filtered.filter((it) => it.group !== "Entertainment");
 
   return (
     <div className="flex flex-col gap-4 p-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Dashboard</CardTitle>
-          <CardDescription>Search and open pages in new tabs.</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-0">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search links or type a URL"
-                className="pl-9"
-              />
-            </div>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const url = normalizeUrl(query);
-                if (!url) return;
-                onOpenUrl(url);
-              }}
-            >
-              Open
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
@@ -465,7 +470,7 @@ function Dashboard({ onOpenUrl }) {
               {quick.map((it) => (
                 <Button
                   key={it.url}
-                  onClick={() => onOpenUrl(it.url)}
+                  onClick={() => handleOpen(it.url)}
                   variant="outline"
                   className="h-auto justify-between gap-2 px-3 py-2"
                 >
@@ -489,7 +494,7 @@ function Dashboard({ onOpenUrl }) {
               {entertainment.map((it) => (
                 <Button
                   key={it.url}
-                  onClick={() => onOpenUrl(it.url)}
+                  onClick={() => handleOpen(it.url)}
                   variant="outline"
                   className="h-auto justify-between gap-2 px-3 py-2"
                 >
@@ -505,16 +510,29 @@ function Dashboard({ onOpenUrl }) {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Bookmarks</CardTitle>
+            <div className="flex items-center justify-between gap-2">
+              <CardTitle className="text-base">Bookmarks</CardTitle>
+              {bookmarks.length > 0 && (
+                <div className="relative w-32 sm:w-48">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                  <Input
+                    value={bookmarksQuery}
+                    onChange={(e) => setBookmarksQuery(e.target.value)}
+                    placeholder="Search..."
+                    className="h-8 pl-7 text-xs"
+                  />
+                </div>
+              )}
+            </div>
             <CardDescription>Your saved pages.</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
-            {bookmarks.length ? (
+            {filteredBookmarks.length ? (
               <div className="flex flex-col gap-2">
-                {bookmarks.map((b) => (
+                {filteredBookmarks.map((b) => (
                   <div key={b.url} className="flex items-center gap-2">
                     <Button
-                      onClick={() => onOpenUrl(b.url)}
+                      onClick={() => handleOpen(b.url)}
                       variant="outline"
                       className="h-auto flex-1 justify-start gap-2 px-3 py-2"
                       title={b.url}
@@ -537,7 +555,9 @@ function Dashboard({ onOpenUrl }) {
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">
-                No bookmarks yet.
+                {bookmarksQuery
+                  ? "No matching bookmarks."
+                  : "No bookmarks yet."}
               </div>
             )}
           </CardContent>
@@ -547,26 +567,39 @@ function Dashboard({ onOpenUrl }) {
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-2">
               <CardTitle className="text-base">Recent History</CardTitle>
-              {history.length ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={clearHistory}
-                  className="h-8"
-                >
-                  Clear
-                </Button>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {history.length > 0 && (
+                  <div className="relative w-32 sm:w-48">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                    <Input
+                      value={historyQuery}
+                      onChange={(e) => setHistoryQuery(e.target.value)}
+                      placeholder="Search..."
+                      className="h-8 pl-7 text-xs"
+                    />
+                  </div>
+                )}
+                {history.length ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={clearHistory}
+                    className="h-8"
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
             </div>
             <CardDescription>Last 10 opened pages.</CardDescription>
           </CardHeader>
           <CardContent className="pt-0">
-            {history.length ? (
+            {filteredHistory.length ? (
               <div className="flex flex-col gap-2">
-                {history.map((h) => (
+                {filteredHistory.map((h) => (
                   <Button
                     key={`${h.url}-${h.at}`}
-                    onClick={() => onOpenUrl(h.url)}
+                    onClick={() => handleOpen(h.url)}
                     variant="outline"
                     className="h-auto justify-start gap-2 px-3 py-2"
                     title={h.url}
@@ -582,7 +615,7 @@ function Dashboard({ onOpenUrl }) {
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">
-                No history yet.
+                {historyQuery ? "No matching history." : "No history yet."}
               </div>
             )}
           </CardContent>
@@ -1368,21 +1401,39 @@ export default function BrowserToolView() {
     !activeIsBrowser || (hasElectronView && !canGoForward);
 
   const go = async () => {
-    if (!activeIsBrowser) return;
     const url = normalizeUrl(address);
     if (!url) return;
-    updateTabState(resolvedActiveTabId, { url });
-    addHistoryEntry(url, url);
 
-    if (hasElectronView) {
-      if (window.electronAPI?.browserView?.loadURL) {
-        await window.electronAPI.browserView.loadURL(resolvedActiveTabId, url);
-      }
+    if (activeTab?.kind === "dashboard") {
+      openInNewTab(url);
+      setAddress("");
       return;
     }
 
-    if (iframeRef.current) {
-      iframeRef.current.src = url;
+    if (!activeIsBrowser) return;
+
+    try {
+      updateTabState(resolvedActiveTabId, { url });
+      addHistoryEntry(url, url);
+
+      if (hasElectronView) {
+        if (window.electronAPI?.browserView?.loadURL) {
+          await window.electronAPI.browserView.loadURL(
+            resolvedActiveTabId,
+            url
+          );
+        }
+        return;
+      }
+
+      if (iframeRef.current) {
+        iframeRef.current.src = url;
+      }
+    } catch (err) {
+      console.error("Navigation error:", err);
+      toast.error("Failed to load URL", {
+        description: String(err?.message || err),
+      });
     }
   };
 
@@ -1550,17 +1601,12 @@ export default function BrowserToolView() {
           <Input
             value={address}
             onChange={(e) => setAddress(e.target.value)}
-            disabled={!activeIsBrowser}
             placeholder="Enter URL or search"
             onKeyDown={(e) => {
               if (e.key === "Enter") go().catch(() => {});
             }}
           />
-          <Button
-            variant="secondary"
-            disabled={!activeIsBrowser}
-            onClick={() => go()}
-          >
+          <Button variant="secondary" onClick={() => go()}>
             Go
           </Button>
           <Button
