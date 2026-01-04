@@ -790,6 +790,29 @@ ipcMain.handle("browserview-capture-page", async (event, { tabId }) => {
   }
 });
 
+ipcMain.handle("clipboard-write-image-data-url", async (event, { dataUrl }) => {
+  try {
+    const { clipboard, nativeImage } = require("electron");
+    const url = String(dataUrl ?? "");
+    if (!url.startsWith("data:image/")) return false;
+
+    let image = nativeImage.createFromDataURL(url);
+    if (!image || image.isEmpty()) {
+      const match = url.match(/^data:image\/(png|jpe?g|webp);base64,(.*)$/i);
+      if (match) {
+        const buffer = Buffer.from(match[2] || "", "base64");
+        image = nativeImage.createFromBuffer(buffer);
+      }
+    }
+
+    if (!image || image.isEmpty()) return false;
+    clipboard.writeImage(image);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 ipcMain.handle("get-start-on-boot", async () => {
   const currentStore = await getStore();
   return currentStore.get("startOnBoot", false);

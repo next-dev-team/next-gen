@@ -167,26 +167,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }
   },
 
-  clipboardWriteImageDataUrl: (dataUrl) => {
-    try {
-      const url = String(dataUrl ?? "");
-      if (!url.startsWith("data:image/")) return false;
-      let image = nativeImage.createFromDataURL(url);
-      if (!image || image.isEmpty()) {
-        const match = url.match(/^data:image\/(png|jpe?g|webp);base64,(.*)$/i);
-        if (match) {
-          const base64 = match[2] || "";
-          const buffer = Buffer.from(base64, "base64");
-          image = nativeImage.createFromBuffer(buffer);
-        }
-      }
-      if (!image || image.isEmpty()) return false;
-      clipboard.writeImage(image);
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  clipboardWriteImageDataUrl: (dataUrl) =>
+    ipcRenderer.invoke("clipboard-write-image-data-url", { dataUrl }),
 
   writeProjectFile: (payload) =>
     ipcRenderer.invoke("write-project-file", payload),

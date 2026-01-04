@@ -1068,9 +1068,13 @@ function DevPanel({
       return;
     }
 
-    const ok = Boolean(
-      window.electronAPI?.clipboardWriteImageDataUrl?.(dataUrl)
-    );
+    let ok = false;
+    try {
+      const fn = window.electronAPI?.clipboardWriteImageDataUrl;
+      ok = typeof fn === "function" ? Boolean(await fn(dataUrl)) : false;
+    } catch {
+      ok = false;
+    }
     if (!ok) {
       toast.error("Copy failed", { description: "Clipboard not available." });
       return;
