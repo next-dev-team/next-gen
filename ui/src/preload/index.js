@@ -1,4 +1,10 @@
-const { contextBridge, ipcRenderer, shell, clipboard } = require("electron");
+const {
+  contextBridge,
+  ipcRenderer,
+  shell,
+  clipboard,
+  nativeImage,
+} = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   versions: {
@@ -20,8 +26,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getQuickToggleEnabled: () => ipcRenderer.invoke("get-quick-toggle-enabled"),
   setQuickToggleEnabled: (enabled) =>
     ipcRenderer.invoke("set-quick-toggle-enabled", enabled),
-  getQuickToggleShortcut: () =>
-    ipcRenderer.invoke("get-quick-toggle-shortcut"),
+  getQuickToggleShortcut: () => ipcRenderer.invoke("get-quick-toggle-shortcut"),
   getAppVisibility: () => ipcRenderer.invoke("get-app-visibility"),
   showApp: () => ipcRenderer.invoke("app-show-window"),
   hideApp: () => ipcRenderer.invoke("app-hide-window"),
@@ -110,7 +115,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   browserView: {
-    create: (tabId, url) => ipcRenderer.invoke("browserview-create", { tabId, url }),
+    create: (tabId, url) =>
+      ipcRenderer.invoke("browserview-create", { tabId, url }),
     show: (tabId) => ipcRenderer.invoke("browserview-show", { tabId }),
     hideAll: () => ipcRenderer.invoke("browserview-hide-all"),
     destroy: (tabId) => ipcRenderer.invoke("browserview-destroy", { tabId }),
@@ -119,12 +125,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
     loadURL: (tabId, url) =>
       ipcRenderer.invoke("browserview-load-url", { tabId, url }),
     goBack: (tabId) => ipcRenderer.invoke("browserview-go-back", { tabId }),
-    goForward: (tabId) => ipcRenderer.invoke("browserview-go-forward", { tabId }),
+    goForward: (tabId) =>
+      ipcRenderer.invoke("browserview-go-forward", { tabId }),
     reload: (tabId) => ipcRenderer.invoke("browserview-reload", { tabId }),
     setInspectorEnabled: (tabId, enabled) =>
-      ipcRenderer.invoke("browserview-set-inspector-enabled", { tabId, enabled }),
+      ipcRenderer.invoke("browserview-set-inspector-enabled", {
+        tabId,
+        enabled,
+      }),
     getPageHtml: (tabId) =>
       ipcRenderer.invoke("browserview-get-page-html", { tabId }),
+    captureRegion: (tabId, rect) =>
+      ipcRenderer.invoke("browserview-capture-region", { tabId, rect }),
+    capturePage: (tabId) =>
+      ipcRenderer.invoke("browserview-capture-page", { tabId }),
     onInspectorHover: (callback) => {
       const handler = (event, payload) => callback(payload);
       ipcRenderer.on("browserview-inspector-hover", handler);
@@ -153,8 +167,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
     }
   },
 
-  writeProjectFile: (payload) => ipcRenderer.invoke("write-project-file", payload),
-  readProjectFile: (payload) => ipcRenderer.invoke("read-project-file", payload),
+  clipboardWriteImageDataUrl: (dataUrl) => {
+    try {
+      const url = String(dataUrl ?? "");
+      if (!url.startsWith("data:image/")) return false;
+      let image = nativeImage.createFromDataURL(url);
+      if (!image || image.isEmpty()) {
+        const match = url.match(/^data:image\/(png|jpe?g|webp);base64,(.*)$/i);
+        if (match) {
+          const base64 = match[2] || "";
+          const buffer = Buffer.from(base64, "base64");
+          image = nativeImage.createFromBuffer(buffer);
+        }
+      }
+      if (!image || image.isEmpty()) return false;
+      clipboard.writeImage(image);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  writeProjectFile: (payload) =>
+    ipcRenderer.invoke("write-project-file", payload),
+  readProjectFile: (payload) =>
+    ipcRenderer.invoke("read-project-file", payload),
 
   // External links
   openExternal: (url) => {

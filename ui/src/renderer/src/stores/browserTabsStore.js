@@ -106,7 +106,9 @@ export const useBrowserTabsStore = create(
             const history = Array.isArray(state.history) ? state.history : [];
             const next = [
               { url: normalized, title: title || normalized, at },
-              ...history.filter((h) => normalizeStoredUrl(h?.url) !== normalized),
+              ...history.filter(
+                (h) => normalizeStoredUrl(h?.url) !== normalized
+              ),
             ].slice(0, 10);
             return { history: next };
           });
@@ -148,9 +150,10 @@ export const useBrowserTabsStore = create(
           const normalized = normalizeStoredUrl(url);
           if (!normalized) return;
           set((state) => ({
-            bookmarks: (Array.isArray(state.bookmarks) ? state.bookmarks : []).filter(
-              (b) => normalizeStoredUrl(b?.url) !== normalized
-            ),
+            bookmarks: (Array.isArray(state.bookmarks)
+              ? state.bookmarks
+              : []
+            ).filter((b) => normalizeStoredUrl(b?.url) !== normalized),
           }));
         },
 
@@ -238,6 +241,8 @@ export const useBrowserTabsStore = create(
           enabled: false,
           selected: null,
           hover: null,
+          attachmentsByTabId: {},
+          captureModeByTabId: {},
         },
 
         setInspectorEnabled: (enabled) =>
@@ -254,6 +259,118 @@ export const useBrowserTabsStore = create(
           set((state) => ({
             inspector: { ...state.inspector, selected: payload },
           })),
+
+        setInspectorCaptureMode: (tabId, mode) => {
+          const key = String(tabId || "").trim();
+          if (!key) return;
+          const next = String(mode || "")
+            .trim()
+            .toLowerCase();
+          const normalized = next === "full" ? "full" : "area";
+          set((state) => {
+            const prevById =
+              state.inspector && typeof state.inspector === "object"
+                ? state.inspector.captureModeByTabId
+                : {};
+            return {
+              inspector: {
+                ...state.inspector,
+                captureModeByTabId: {
+                  ...(prevById || {}),
+                  [key]: normalized,
+                },
+              },
+            };
+          });
+        },
+
+        addInspectorAttachments: (tabId, attachments) => {
+          const key = String(tabId || "").trim();
+          if (!key) return;
+          const items = Array.isArray(attachments) ? attachments : [];
+          if (items.length === 0) return;
+          set((state) => {
+            const prevById =
+              state.inspector && typeof state.inspector === "object"
+                ? state.inspector.attachmentsByTabId
+                : {};
+            const prev = Array.isArray(prevById?.[key]) ? prevById[key] : [];
+            return {
+              inspector: {
+                ...state.inspector,
+                attachmentsByTabId: {
+                  ...(prevById || {}),
+                  [key]: [...items, ...prev],
+                },
+              },
+            };
+          });
+        },
+
+        removeInspectorAttachment: (tabId, attachmentId) => {
+          const key = String(tabId || "").trim();
+          const targetId = String(attachmentId || "").trim();
+          if (!key || !targetId) return;
+          set((state) => {
+            const prevById =
+              state.inspector && typeof state.inspector === "object"
+                ? state.inspector.attachmentsByTabId
+                : {};
+            const prev = Array.isArray(prevById?.[key]) ? prevById[key] : [];
+            return {
+              inspector: {
+                ...state.inspector,
+                attachmentsByTabId: {
+                  ...(prevById || {}),
+                  [key]: prev.filter((a) => String(a?.id) !== targetId),
+                },
+              },
+            };
+          });
+        },
+
+        clearInspectorAttachments: (tabId) => {
+          const key = String(tabId || "").trim();
+          if (!key) return;
+          set((state) => {
+            const prevById =
+              state.inspector && typeof state.inspector === "object"
+                ? state.inspector.attachmentsByTabId
+                : {};
+            return {
+              inspector: {
+                ...state.inspector,
+                attachmentsByTabId: {
+                  ...(prevById || {}),
+                  [key]: [],
+                },
+              },
+            };
+          });
+        },
+
+        removeInspectorAutoCaptures: (tabId) => {
+          const key = String(tabId || "").trim();
+          if (!key) return;
+          set((state) => {
+            const prevById =
+              state.inspector && typeof state.inspector === "object"
+                ? state.inspector.attachmentsByTabId
+                : {};
+            const prev = Array.isArray(prevById?.[key]) ? prevById[key] : [];
+            return {
+              inspector: {
+                ...state.inspector,
+                attachmentsByTabId: {
+                  ...(prevById || {}),
+                  [key]: prev.filter(
+                    (a) => String(a?.source) !== "auto-capture"
+                  ),
+                },
+              },
+            };
+          });
+        },
 
         clearInspector: () =>
           set((state) => ({

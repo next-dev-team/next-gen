@@ -635,7 +635,12 @@ function destroyBrowserView(tabId) {
 ipcMain.handle("browserview-create", async (event, { tabId, url }) => {
   const view = ensureBrowserView(tabId);
   if (url) {
-    await view.webContents.loadURL(url);
+    try {
+      await view.webContents.loadURL(url);
+    } catch (err) {
+      const message = String(err?.message || err);
+      if (!message.includes("ERR_ABORTED")) throw err;
+    }
   }
   return true;
 });
@@ -713,6 +718,76 @@ ipcMain.handle("browserview-get-page-html", async (event, { tabId }) => {
     "document.documentElement.outerHTML"
   );
   return { ok: true, html };
+});
+
+ipcMain.handle("browserview-capture-region", async (event, { tabId, rect }) => {
+  try {
+    const view = browserViews.get(tabId);
+    if (!view || view.webContents.isDestroyed()) {
+      return { ok: false, error: "BrowserView not available" };
+    }
+
+    const r = rect && typeof rect === "object" ? rect : null;
+    const x = Math.max(0, Math.floor(Number(r?.x) || 0));
+    const y = Math.max(0, Math.floor(Number(r?.y) || 0));
+    const width = Math.max(1, Math.floor(Number(r?.width) || 0));
+    const height = Math.max(1, Math.floor(Number(r?.height) || 0));
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const image = await view.webContents.capturePage({ x, y, width, height });
+      const size = image?.getSize?.() || { width: 0, height: 0 };
+      if (!image?.isEmpty?.() && size.width > 0 && size.height > 0) {
+        const png = image.toPNG();
+        if (png.length > 0) {
+          const base64 = png.toString("base64");
+          return {
+            ok: true,
+            mimeType: "image/png",
+            byteLength: png.length,
+            dataUrl: `data:image/png;base64,${base64}`,
+          };
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    return { ok: false, error: "Empty capture" };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
+ipcMain.handle("browserview-capture-page", async (event, { tabId }) => {
+  try {
+    const view = browserViews.get(tabId);
+    if (!view || view.webContents.isDestroyed()) {
+      return { ok: false, error: "BrowserView not available" };
+    }
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const image = await view.webContents.capturePage();
+      const size = image?.getSize?.() || { width: 0, height: 0 };
+      if (!image?.isEmpty?.() && size.width > 0 && size.height > 0) {
+        const png = image.toPNG();
+        if (png.length > 0) {
+          const base64 = png.toString("base64");
+          return {
+            ok: true,
+            mimeType: "image/png",
+            byteLength: png.length,
+            dataUrl: `data:image/png;base64,${base64}`,
+          };
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    return { ok: false, error: "Empty capture" };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
 });
 
 ipcMain.handle("get-start-on-boot", async () => {

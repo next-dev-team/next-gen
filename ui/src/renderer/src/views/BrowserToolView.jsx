@@ -12,7 +12,9 @@ import {
   ArrowRight,
   Check,
   Copy,
+  Download,
   Globe,
+  Image,
   Monitor,
   MousePointerClick,
   Network,
@@ -22,11 +24,14 @@ import {
   RotateCw,
   Search,
   Star,
+  Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
+import { Badge } from "../components/ui/badge";
 import {
   Card,
   CardContent,
@@ -34,6 +39,13 @@ import {
   CardHeader,
   CardTitle,
 } from "../components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
 import {
   Tabs,
   TabsContent,
@@ -59,6 +71,107 @@ function extractText(node) {
 function clampText(text, max = 220) {
   const t = String(text || "");
   return t.length > max ? `${t.slice(0, max)}…` : t;
+}
+
+function formatBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  const fixed = v >= 10 || i === 0 ? 0 : 1;
+  return `${v.toFixed(fixed)} ${units[i]}`;
+}
+
+function formatDateTime(value) {
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString();
+  } catch {
+    return "";
+  }
+}
+
+function inferFileKind(mimeType, name) {
+  const type = String(mimeType || "").toLowerCase();
+  const n = String(name || "").toLowerCase();
+  if (type.startsWith("image/")) return "image";
+  if (
+    type.includes("zip") ||
+    type.includes("x-7z") ||
+    type.includes("x-rar") ||
+    n.endsWith(".zip") ||
+    n.endsWith(".7z") ||
+    n.endsWith(".rar") ||
+    n.endsWith(".tar") ||
+    n.endsWith(".gz")
+  ) {
+    return "archive";
+  }
+  if (
+    type.includes("pdf") ||
+    type.includes("msword") ||
+    type.includes("officedocument") ||
+    type.startsWith("text/") ||
+    n.endsWith(".md")
+  ) {
+    return "document";
+  }
+  return "file";
+}
+
+function revokeAttachmentUrl(attachment) {
+  const url = attachment?.objectUrl;
+  if (!url || typeof url !== "string") return;
+  if (!url.startsWith("blob:")) return;
+  try {
+    URL.revokeObjectURL(url);
+  } catch {}
+}
+
+function downloadFromUrl(url, filename) {
+  const href = String(url || "");
+  if (!href) return;
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = filename ? String(filename) : "download";
+  a.rel = "noopener";
+  a.target = "_blank";
+  a.click();
+}
+
+function isImageAttachment(attachment) {
+  const type = String(attachment?.mimeType || "").toLowerCase();
+  if (type.startsWith("image/")) return true;
+  return String(attachment?.kind || "") === "image";
+}
+
+async function urlToDataUrl(url) {
+  const href = String(url || "");
+  if (!href) return "";
+  if (href.startsWith("data:image/")) return href;
+  if (!href.startsWith("blob:")) return "";
+
+  try {
+    const res = await fetch(href);
+    const blob = await res.blob();
+    if (!blob || !String(blob.type || "").startsWith("image/")) return "";
+
+    const dataUrl = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    });
+    return String(dataUrl || "");
+  } catch {
+    return "";
+  }
 }
 
 function guessButtonVariant({ tag, className }) {
@@ -758,15 +871,37 @@ function DevPanel({
   const inspector = useBrowserTabsStore((s) => s.inspector);
   const setInspectorEnabled = useBrowserTabsStore((s) => s.setInspectorEnabled);
   const clearInspector = useBrowserTabsStore((s) => s.clearInspector);
+  const addInspectorAttachments = useBrowserTabsStore(
+    (s) => s.addInspectorAttachments
+  );
+  const removeInspectorAttachment = useBrowserTabsStore(
+    (s) => s.removeInspectorAttachment
+  );
+  const setInspectorCaptureMode = useBrowserTabsStore(
+    (s) => s.setInspectorCaptureMode
+  );
+  const removeInspectorAutoCaptures = useBrowserTabsStore(
+    (s) => s.removeInspectorAutoCaptures
+  );
 
   const selectedElement = inspector?.selected?.element || inspector?.selected;
   const hoverElement = inspector?.hover?.element || inspector?.hover;
+  const inspectorAttachmentsByTabId = inspector?.attachmentsByTabId || {};
+  const inspectorAttachments = inspectorAttachmentsByTabId?.[activeTabId] || [];
+  const captureModeByTabId = inspector?.captureModeByTabId || {};
+  const captureMode = captureModeByTabId?.[activeTabId] || "area";
 
   const [copied, setCopied] = useState(false);
   const [htmlCopied, setHtmlCopied] = useState(false);
   const [cloneBusy, setCloneBusy] = useState(false);
   const [previewElement, setPreviewElement] = useState(null);
   const [code, setCode] = useState("");
+  const [fileDialogOpen, setFileDialogOpen] = useState(false);
+  const [fileInputBusy, setFileInputBusy] = useState(false);
+  const fileInputRef = useRef(null);
+  const [dropActive, setDropActive] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+  const attachmentsRef = useRef([]);
 
   const dragging = useRef(false);
   const dragStartX = useRef(0);
@@ -822,6 +957,153 @@ function DevPanel({
     setHtmlCopied(false);
   }, [devPanel.activeTool, selectedElement?.outerHTML]);
 
+  const handleOpenFilePicker = useCallback(() => {
+    if (fileInputBusy) return;
+    try {
+      fileInputRef.current?.click?.();
+    } catch {}
+  }, [fileInputBusy]);
+
+  const handleAddFiles = useCallback(
+    async (files) => {
+      if (!activeTabId) return;
+      if (!files) return;
+
+      const MAX_FILES = 20;
+      const MAX_FILE_BYTES = 25 * 1024 * 1024;
+
+      const list = Array.from(files || []).filter(Boolean);
+      if (list.length === 0) return;
+
+      const existing = Array.isArray(inspectorAttachments)
+        ? inspectorAttachments
+        : [];
+      const availableSlots = MAX_FILES - existing.length;
+      if (availableSlots <= 0) {
+        toast.error("Upload limit reached", {
+          description: `You can attach up to ${MAX_FILES} files per inspect session.`,
+        });
+        return;
+      }
+
+      if (list.length > availableSlots) {
+        toast.error("Upload limit reached", {
+          description: `Only the first ${availableSlots} file(s) will be attached.`,
+        });
+      }
+
+      setFileInputBusy(true);
+      try {
+        const nextAttachments = [];
+        for (const file of list.slice(0, availableSlots)) {
+          const name = String(file?.name || "file");
+          const sizeBytes = Number(file?.size) || 0;
+          const mimeType = String(file?.type || "application/octet-stream");
+
+          if (sizeBytes <= 0) {
+            toast.error("Unsupported file", { description: name });
+            continue;
+          }
+
+          if (sizeBytes > MAX_FILE_BYTES) {
+            toast.error("File too large", {
+              description: `${name} exceeds ${formatBytes(MAX_FILE_BYTES)}.`,
+            });
+            continue;
+          }
+
+          let objectUrl;
+          try {
+            objectUrl = URL.createObjectURL(file);
+          } catch {
+            toast.error("Failed to attach file", { description: name });
+            continue;
+          }
+
+          nextAttachments.push({
+            id: createId(),
+            name,
+            sizeBytes,
+            mimeType,
+            kind: inferFileKind(mimeType, name),
+            createdAt: new Date().toISOString(),
+            source: "upload",
+            objectUrl,
+          });
+        }
+
+        if (nextAttachments.length === 0) return;
+        addInspectorAttachments(activeTabId, nextAttachments);
+      } catch (err) {
+        toast.error("Upload failed", {
+          description: String(err?.message || err),
+        });
+      } finally {
+        setFileInputBusy(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [activeTabId, addInspectorAttachments, inspectorAttachments]
+  );
+
+  const handleDeleteAttachment = useCallback(
+    (attachment) => {
+      try {
+        revokeAttachmentUrl(attachment);
+      } finally {
+        removeInspectorAttachment(activeTabId, attachment?.id);
+      }
+    },
+    [activeTabId, removeInspectorAttachment]
+  );
+
+  const handleCopyAttachment = useCallback(async (attachment) => {
+    const a = attachment && typeof attachment === "object" ? attachment : null;
+    if (!a) return;
+    if (!isImageAttachment(a)) return;
+    const url = a.dataUrl || a.objectUrl;
+    const dataUrl = await urlToDataUrl(url);
+    if (!dataUrl) {
+      toast.error("Copy failed", { description: "Unsupported image source." });
+      return;
+    }
+
+    const ok = Boolean(
+      window.electronAPI?.clipboardWriteImageDataUrl?.(dataUrl)
+    );
+    if (!ok) {
+      toast.error("Copy failed", { description: "Clipboard not available." });
+      return;
+    }
+    toast("Copied to clipboard");
+  }, []);
+
+  const handleRemoveCaptures = useCallback(() => {
+    if (!activeTabId) return;
+    const items = Array.isArray(inspectorAttachments)
+      ? inspectorAttachments
+      : [];
+    const removed = items.filter((a) => String(a?.source) === "auto-capture");
+    for (const a of removed) revokeAttachmentUrl(a);
+    removeInspectorAutoCaptures(activeTabId);
+  }, [activeTabId, inspectorAttachments, removeInspectorAutoCaptures]);
+
+  const openAttachmentPreview = useCallback((attachment) => {
+    const a = attachment && typeof attachment === "object" ? attachment : null;
+    if (!a) return;
+    const url = a.dataUrl || a.objectUrl;
+    if (!url) return;
+
+    if (a.kind === "image") {
+      setPreviewAttachment(a);
+      setFileDialogOpen(true);
+      return;
+    }
+    try {
+      window.open(String(url), "_blank", "noopener,noreferrer");
+    } catch {}
+  }, []);
+
   useEffect(() => {
     const onMove = (e) => {
       if (!dragging.current) return;
@@ -838,6 +1120,18 @@ function DevPanel({
       window.removeEventListener("mouseup", onUp);
     };
   }, [setDevPanelWidth]);
+
+  useEffect(() => {
+    attachmentsRef.current = Array.isArray(inspectorAttachments)
+      ? inspectorAttachments
+      : [];
+  }, [inspectorAttachments]);
+
+  useEffect(() => {
+    return () => {
+      for (const a of attachmentsRef.current) revokeAttachmentUrl(a);
+    };
+  }, []);
 
   return (
     <div
@@ -918,6 +1212,32 @@ function DevPanel({
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 rounded-md border bg-background p-1">
+                  <Button
+                    size="sm"
+                    variant={captureMode === "area" ? "secondary" : "ghost"}
+                    className="h-8 px-2"
+                    disabled={
+                      !hasElectronView || !activeIsBrowser || !isRouteActive
+                    }
+                    aria-label="Capture mode: Area"
+                    onClick={() => setInspectorCaptureMode(activeTabId, "area")}
+                  >
+                    Area
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={captureMode === "full" ? "secondary" : "ghost"}
+                    className="h-8 px-2"
+                    disabled={
+                      !hasElectronView || !activeIsBrowser || !isRouteActive
+                    }
+                    aria-label="Capture mode: Full"
+                    onClick={() => setInspectorCaptureMode(activeTabId, "full")}
+                  >
+                    Full
+                  </Button>
+                </div>
                 <Button
                   size="sm"
                   variant={inspector?.enabled ? "secondary" : "outline"}
@@ -1150,8 +1470,337 @@ function DevPanel({
                     )}
                   </CardContent>
                 </Card>
+
+                <Card className="border-l-4 border-primary/60 bg-primary/5">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <CardTitle className="text-sm">
+                          Agent attachments
+                        </CardTitle>
+                        <CardDescription>
+                          Auto-captured screenshots and your uploaded files.
+                        </CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-[10px]">
+                          {Array.isArray(inspectorAttachments)
+                            ? inspectorAttachments.length
+                            : 0}
+                        </Badge>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !Array.isArray(inspectorAttachments) ||
+                            !inspectorAttachments.some(
+                              (a) => String(a?.source) === "auto-capture"
+                            )
+                          }
+                          onClick={handleRemoveCaptures}
+                          aria-label="Remove captures"
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          Remove
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={fileInputBusy}
+                          onClick={handleOpenFilePicker}
+                          aria-label="Upload files"
+                        >
+                          <Upload className="mr-2 h-4 w-4" />
+                          Upload
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      aria-label="File upload input"
+                      onChange={(e) => handleAddFiles(e.target.files)}
+                    />
+
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Drop files to upload"
+                      className={cn(
+                        "flex flex-col items-center justify-center gap-1 rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        dropActive
+                          ? "border-primary bg-background"
+                          : "bg-background/60 hover:bg-background"
+                      )}
+                      onClick={handleOpenFilePicker}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          handleOpenFilePicker();
+                        }
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDropActive(true);
+                      }}
+                      onDragLeave={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDropActive(false);
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDropActive(false);
+                        handleAddFiles(e.dataTransfer?.files);
+                      }}
+                    >
+                      <div className="font-medium text-foreground">
+                        Drag and drop files here
+                      </div>
+                      <div>or click to upload</div>
+                      <div className="text-[11px]">
+                        Max 20 files, 25MB each.
+                      </div>
+                    </div>
+
+                    {Array.isArray(inspectorAttachments) &&
+                    inspectorAttachments.length ? (
+                      <div className="flex flex-col gap-2">
+                        {inspectorAttachments.map((a) => {
+                          const url = a?.dataUrl || a?.objectUrl;
+                          const created = formatDateTime(a?.createdAt);
+                          const typeLabel = String(a?.mimeType || "");
+                          const kindLabel = String(a?.kind || "file");
+                          const sourceLabel = String(a?.source || "");
+
+                          return (
+                            <div
+                              key={a.id}
+                              className="flex flex-col gap-2 rounded-md border bg-background p-3 sm:flex-row sm:items-center"
+                            >
+                              <button
+                                type="button"
+                                className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                onClick={() => openAttachmentPreview(a)}
+                                aria-label={`Preview ${String(
+                                  a?.name || "attachment"
+                                )}`}
+                              >
+                                {a?.kind === "image" && url ? (
+                                  <img
+                                    src={url}
+                                    alt={String(a?.name || "Image")}
+                                    className="h-10 w-10 shrink-0 rounded border object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded border bg-muted/30">
+                                    <Image className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium">
+                                    {String(a?.name || "Attachment")}
+                                  </div>
+                                  <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                                    <span>{formatBytes(a?.sizeBytes)}</span>
+                                    {typeLabel ? (
+                                      <>
+                                        <span>•</span>
+                                        <span className="truncate">
+                                          {typeLabel}
+                                        </span>
+                                      </>
+                                    ) : null}
+                                    {created ? (
+                                      <>
+                                        <span>•</span>
+                                        <span>{created}</span>
+                                      </>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap items-center gap-1">
+                                    <Badge
+                                      variant="outline"
+                                      className="text-[10px]"
+                                    >
+                                      {kindLabel}
+                                    </Badge>
+                                    {sourceLabel ? (
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-[10px]"
+                                      >
+                                        {sourceLabel}
+                                      </Badge>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </button>
+                              <div className="flex items-center gap-2 sm:ml-auto">
+                                {isImageAttachment(a) ? (
+                                  <Button
+                                    size="icon"
+                                    variant="outline"
+                                    disabled={!url}
+                                    aria-label={`Copy ${String(
+                                      a?.name || "attachment"
+                                    )} to clipboard`}
+                                    onClick={async (e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      await handleCopyAttachment(a);
+                                    }}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  size="icon"
+                                  variant="outline"
+                                  disabled={!url}
+                                  aria-label={`Download ${String(
+                                    a?.name || "attachment"
+                                  )}`}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    downloadFromUrl(url, a?.name);
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  aria-label={`Delete ${String(
+                                    a?.name || "attachment"
+                                  )}`}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleDeleteAttachment(a);
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">
+                        No attachments yet. Pick an element to auto-capture, or
+                        upload files.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
             </ScrollArea>
+
+            <Dialog
+              open={fileDialogOpen}
+              onOpenChange={(open) => {
+                setFileDialogOpen(Boolean(open));
+                if (!open) setPreviewAttachment(null);
+              }}
+            >
+              <DialogContent className="max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle>
+                    {String(previewAttachment?.name || "Attachment")}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {previewAttachment?.sizeBytes
+                      ? formatBytes(previewAttachment.sizeBytes)
+                      : ""}
+                    {previewAttachment?.mimeType
+                      ? ` · ${String(previewAttachment.mimeType)}`
+                      : ""}
+                    {previewAttachment?.createdAt
+                      ? ` · ${formatDateTime(previewAttachment.createdAt)}`
+                      : ""}
+                  </DialogDescription>
+                </DialogHeader>
+                {previewAttachment?.kind === "image" ? (
+                  <div className="overflow-hidden rounded-md border bg-background">
+                    <img
+                      src={
+                        previewAttachment?.dataUrl ||
+                        previewAttachment?.objectUrl
+                      }
+                      alt={String(previewAttachment?.name || "Image")}
+                      className="max-h-[70vh] w-full object-contain"
+                    />
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">
+                    Preview is not available for this file type.
+                  </div>
+                )}
+                <div className="flex items-center justify-end gap-2">
+                  {isImageAttachment(previewAttachment) ? (
+                    <Button
+                      variant="outline"
+                      onClick={async () =>
+                        await handleCopyAttachment(previewAttachment)
+                      }
+                      disabled={
+                        !(
+                          previewAttachment?.dataUrl ||
+                          previewAttachment?.objectUrl
+                        )
+                      }
+                      aria-label="Copy attachment to clipboard"
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      if (!previewAttachment) return;
+                      handleDeleteAttachment(previewAttachment);
+                      setFileDialogOpen(false);
+                      setPreviewAttachment(null);
+                    }}
+                    disabled={!previewAttachment}
+                    aria-label="Delete attachment"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      downloadFromUrl(
+                        previewAttachment?.dataUrl ||
+                          previewAttachment?.objectUrl,
+                        previewAttachment?.name
+                      )
+                    }
+                    disabled={
+                      !(
+                        previewAttachment?.dataUrl ||
+                        previewAttachment?.objectUrl
+                      )
+                    }
+                    aria-label="Download attachment"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         ) : null}
 
@@ -1246,6 +1895,9 @@ export default function BrowserToolView() {
   const setInspectorSelection = useBrowserTabsStore(
     (s) => s.setInspectorSelection
   );
+  const addInspectorAttachments = useBrowserTabsStore(
+    (s) => s.addInspectorAttachments
+  );
   const clearInspector = useBrowserTabsStore((s) => s.clearInspector);
 
   const [address, setAddress] = useState("");
@@ -1264,7 +1916,11 @@ export default function BrowserToolView() {
     location.pathname === "/browser" ||
     location.pathname.startsWith("/browser/");
 
+  const captureModeByTabId = inspector?.captureModeByTabId || {};
+  const captureMode = captureModeByTabId?.[resolvedActiveTabId] || "area";
+
   const lastInspectorTabIdRef = useRef(null);
+  const lastAutoCaptureRef = useRef(null);
 
   useEffect(() => {
     if (!hasElectronView) return;
@@ -1281,11 +1937,85 @@ export default function BrowserToolView() {
     if (!window.electronAPI?.browserView?.onInspectorSelection) return;
 
     const offSelection = window.electronAPI.browserView.onInspectorSelection(
-      (payload) => {
+      async (payload) => {
         if (!payload?.tabId) return;
         if (payload.tabId !== resolvedActiveTabId) return;
         setInspectorSelection(payload);
         setInspectorEnabled(false);
+
+        const rect = payload?.rect;
+        const selector = payload?.selector || payload?.tagName || "selection";
+        const mode = captureMode === "full" ? "full" : "area";
+        const captureKey =
+          mode === "full"
+            ? `${String(payload.tabId)}::${String(selector)}::full`
+            : `${String(payload.tabId)}::${String(
+                selector
+              )}::area::${Math.round(Number(rect?.x) || 0)},${Math.round(
+                Number(rect?.y) || 0
+              )},${Math.round(Number(rect?.width) || 0)}x${Math.round(
+                Number(rect?.height) || 0
+              )}`;
+
+        if (lastAutoCaptureRef.current !== captureKey) {
+          const canCaptureFull = Boolean(
+            window.electronAPI?.browserView?.capturePage
+          );
+          const canCaptureArea = Boolean(
+            rect && window.electronAPI?.browserView?.captureRegion
+          );
+          if (
+            (mode === "full" && canCaptureFull) ||
+            (mode === "area" && canCaptureArea)
+          ) {
+            lastAutoCaptureRef.current = captureKey;
+          } else {
+            lastAutoCaptureRef.current = null;
+          }
+        }
+
+        if (lastAutoCaptureRef.current === captureKey) {
+          try {
+            const res =
+              mode === "full"
+                ? await window.electronAPI.browserView.capturePage(
+                    payload.tabId
+                  )
+                : await window.electronAPI.browserView.captureRegion(
+                    payload.tabId,
+                    rect
+                  );
+            if (res?.ok && res?.dataUrl) {
+              const safeBase = String(selector)
+                .replaceAll(/[^a-z0-9._-]+/gi, "-")
+                .slice(0, 60)
+                .replaceAll(/^-+|-+$/g, "");
+              const ts = new Date().toISOString().replaceAll(":", "-");
+              const filename = `${safeBase || "selection"}-${mode}-${ts}.png`;
+              addInspectorAttachments(payload.tabId, [
+                {
+                  id: createId(),
+                  name: filename,
+                  sizeBytes: Number(res?.byteLength) || 0,
+                  mimeType: String(res?.mimeType || "image/png"),
+                  kind: "image",
+                  createdAt: new Date().toISOString(),
+                  source: "auto-capture",
+                  dataUrl: String(res.dataUrl),
+                },
+              ]);
+            } else if (res?.ok === false && res?.error) {
+              toast.error("Auto-capture failed", {
+                description: String(res.error),
+              });
+            }
+          } catch (err) {
+            toast.error("Auto-capture failed", {
+              description: String(err?.message || err),
+            });
+          }
+        }
+
         if (window.electronAPI?.browserView?.setInspectorEnabled) {
           window.electronAPI.browserView
             .setInspectorEnabled(payload.tabId, false)
@@ -1300,6 +2030,8 @@ export default function BrowserToolView() {
   }, [
     hasElectronView,
     resolvedActiveTabId,
+    captureMode,
+    addInspectorAttachments,
     setInspectorEnabled,
     setInspectorHover,
     setInspectorSelection,

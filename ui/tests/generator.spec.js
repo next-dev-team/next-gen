@@ -247,6 +247,11 @@ test.describe("Generator UI", () => {
       window.getByRole("heading", { name: "UI Builder" })
     ).toBeVisible();
 
+    const layoutModeButton = window.getByRole("button", { name: "Layout" });
+    if (await layoutModeButton.isVisible().catch(() => false)) {
+      await layoutModeButton.click();
+    }
+
     await expect(
       window.getByPlaceholder("Search blocks & components...")
     ).toBeVisible({ timeout: 15000 });
