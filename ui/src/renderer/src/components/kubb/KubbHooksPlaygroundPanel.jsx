@@ -54,6 +54,18 @@ function extractKubbInputPath(text) {
   return match ? String(match[2] || "").trim() : "";
 }
 
+function toSwaggerDocsUrl(openApiUrl) {
+  const raw = String(openApiUrl || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(raw);
+    u.pathname = u.pathname.replace(/\/openapi\.(json|ya?ml)$/i, "/docs");
+    return u.toString();
+  } catch {
+    return raw.replace(/\/openapi\.(json|ya?ml)$/i, "/docs");
+  }
+}
+
 function TextArea({ className, ...props }) {
   return (
     <textarea
@@ -276,6 +288,9 @@ export default function KubbHooksPlaygroundPanel() {
   const setKubbPlaygroundState = useBrowserTabsStore(
     (s) => s.setKubbPlaygroundState
   );
+  const openUrlTab = useBrowserTabsStore((s) => s.openUrlTab);
+  const addHistoryEntry = useBrowserTabsStore((s) => s.addHistoryEntry);
+  const setDevPanelOpen = useBrowserTabsStore((s) => s.setDevPanelOpen);
 
   const [includeSuspense, setIncludeSuspense] = useState(false);
 
@@ -385,20 +400,46 @@ export default function KubbHooksPlaygroundPanel() {
     toast.success("OpenAPI URL extracted");
   }, [kubbPlayground?.configText, setKubbPlaygroundState]);
 
-  const openDocs = useCallback(() => {
-    const url = String(kubbPlayground?.openApiUrl || "").trim();
-    if (!/^https?:\/\//i.test(url)) {
+  const openDocs = useCallback(async () => {
+    const openApiUrl = String(kubbPlayground?.openApiUrl || "").trim();
+    if (!/^https?:\/\//i.test(openApiUrl)) {
       toast.error("Invalid OpenAPI URL");
       return;
     }
 
-    if (window.electronAPI?.openExternal) {
-      window.electronAPI.openExternal(url);
+    const docsUrl = toSwaggerDocsUrl(openApiUrl);
+    if (!/^https?:\/\//i.test(docsUrl)) {
+      toast.error("Invalid docs URL");
       return;
     }
 
-    window.open(url, "_blank", "noopener,noreferrer");
-  }, [kubbPlayground?.openApiUrl]);
+    addHistoryEntry(docsUrl, docsUrl);
+    const id = openUrlTab(docsUrl, "Swagger Docs");
+    if (!id) return;
+
+    setDevPanelOpen(false);
+
+    const hasElectronView = Boolean(window.electronAPI?.browserView);
+    if (!hasElectronView) return;
+
+    try {
+      if (window.electronAPI?.browserView?.create) {
+        await window.electronAPI.browserView.create(id, docsUrl);
+      }
+      if (window.electronAPI?.browserView?.show) {
+        await window.electronAPI.browserView.show(id);
+      }
+    } catch (err) {
+      toast.error("Failed to open docs", {
+        description: String(err?.message || err),
+      });
+    }
+  }, [
+    addHistoryEntry,
+    kubbPlayground?.openApiUrl,
+    openUrlTab,
+    setDevPanelOpen,
+  ]);
 
   const setHooksSearch = useCallback(
     (value) => setKubbPlaygroundState({ hooksSearch: value }),
@@ -668,9 +709,10 @@ export default function KubbHooksPlaygroundPanel() {
                     placeholder="https://example.com/openapi.json"
                   />
                   <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={openDocs}
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => openDocs()}
+                    aria-label="Open Swagger docs"
                     disabled={
                       !/^https?:\/\//i.test(
                         String(kubbPlayground?.openApiUrl || "").trim()
