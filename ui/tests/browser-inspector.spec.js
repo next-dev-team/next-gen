@@ -519,4 +519,98 @@ test.describe("Browser inspector", () => {
     await window.getByRole("button", { name: "Delete file-1.txt" }).click();
     await expect(window.getByText("file-1.txt")).not.toBeVisible();
   });
+
+  test("should disable WebGL in BrowserView on macOS", async () => {
+    test.skip(process.platform !== "darwin");
+
+    const window = await electronApp.firstWindow();
+    await window.reload();
+
+    await expect(window.locator(".ant-segmented")).toBeVisible();
+    await window.locator(".ant-segmented").getByText("Browser").click();
+
+    await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
+      timeout: 15000,
+    });
+    await window.getByRole("button", { name: "New tab" }).click();
+
+    await expect
+      .poll(
+        async () => {
+          const raw = await window.evaluate(() =>
+            localStorage.getItem("browser-tabs-store")
+          );
+          if (!raw) return null;
+          try {
+            const parsed = JSON.parse(raw);
+            const id = parsed?.state?.activeTabId;
+            return id && id !== "dashboard" ? id : null;
+          } catch {
+            return null;
+          }
+        },
+        { timeout: 15000 }
+      )
+      .not.toBeNull();
+
+    const activeTabId = await window.evaluate(() => {
+      const raw = localStorage.getItem("browser-tabs-store");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed?.state?.activeTabId || null;
+    });
+    expect(activeTabId).toBeTruthy();
+
+    const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body><canvas id="c" width="64" height="64"></canvas></body></html>`;
+    const url = `data:text/html,${encodeURIComponent(html)}`;
+
+    await window.evaluate(
+      ({ tabId, url: nextUrl }) =>
+        window.electronAPI.browserView.loadURL(tabId, nextUrl),
+      { tabId: activeTabId, url }
+    );
+
+    const hasWebgl = await electronApp.evaluate(
+      async ({ BrowserWindow }, { expectedUrl }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) throw new Error("No BrowserWindow");
+
+        const deadline = Date.now() + 15000;
+        let view;
+
+        while (Date.now() < deadline) {
+          const views =
+            typeof win.getBrowserViews === "function" ? win.getBrowserViews() : [];
+          view =
+            views.find((v) => {
+              try {
+                return v?.webContents?.getURL?.() === expectedUrl;
+              } catch {
+                return false;
+              }
+            }) || null;
+
+          if (view) break;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+
+        if (!view) throw new Error("No BrowserView");
+
+        let ready = false;
+        while (Date.now() < deadline) {
+          ready = await view.webContents.executeJavaScript(
+            "document.readyState === 'complete'"
+          );
+          if (ready) break;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+
+        return await view.webContents.executeJavaScript(
+          "Boolean(document.getElementById('c')?.getContext('webgl'))"
+        );
+      },
+      { expectedUrl: url }
+    );
+
+    expect(hasWebgl).toBe(false);
+  });
 });

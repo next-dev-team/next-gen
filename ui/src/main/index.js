@@ -523,14 +523,15 @@ function ensureBrowserView(tabId) {
   const existing = browserViews.get(tabId);
   if (existing && !existing.webContents.isDestroyed()) return existing;
 
-  const view = new BrowserView({
-    webPreferences: {
-      preload: path.join(__dirname, "../preload/browserView.js"),
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true,
-    },
-  });
+  const webPreferences = {
+    preload: path.join(__dirname, "../preload/browserView.js"),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+    ...(process.platform === "darwin" ? { webgl: false } : {}),
+  };
+
+  const view = new BrowserView({ webPreferences });
 
   view.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
