@@ -445,6 +445,11 @@ function Dashboard({ onOpenUrl }) {
         url: "https://tidal.qqdl.site/",
         group: "Music",
       },
+      {
+        title: "HiFi Flow",
+        url: "https://hifi-flow.vercel.app/",
+        group: "Music",
+      },
       { title: "Vercel", url: "https://vercel.com", group: "More" },
       { title: "Supabase", url: "https://supabase.com", group: "More" },
     ],
@@ -538,9 +543,9 @@ function Dashboard({ onOpenUrl }) {
               className="w-full"
             >
               <TabsList className="mb-4">
+                <TabsTrigger value="docs">Docs</TabsTrigger>
                 <TabsTrigger value="entertainment">Entertainment</TabsTrigger>
                 <TabsTrigger value="music">Music</TabsTrigger>
-                <TabsTrigger value="docs">Docs</TabsTrigger>
                 <TabsTrigger value="more">More</TabsTrigger>
               </TabsList>
               <TabsContent value="entertainment">
