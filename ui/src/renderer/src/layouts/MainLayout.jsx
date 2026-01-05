@@ -86,7 +86,7 @@ export default function MainLayout({
     Boolean(
       window.electronAPI?.appCapture?.capturePage &&
       window.electronAPI?.appCapture?.captureRegion &&
-      window.electronAPI?.clipboardWriteImageDataUrl,
+      window.electronAPI?.clipboardWriteImageDataUrl
     );
 
   const addScreenshot = useResourceStore((s) => s.addScreenshot);
@@ -122,8 +122,9 @@ export default function MainLayout({
         }
 
         const ts = new Date().toISOString().replaceAll(":", "-");
+        const fileName = `app-${mode}-${ts}.png`;
         addScreenshot({
-          name: `app-${mode}-${ts}.png`,
+          name: fileName,
           source: "app",
           mode,
           dataUrl: String(res.dataUrl),
@@ -134,18 +135,24 @@ export default function MainLayout({
         });
 
         const ok = await window.electronAPI.clipboardWriteImageDataUrl(
-          res.dataUrl,
+          res.dataUrl
         );
         if (!ok) {
           toast.error("Copy to clipboard failed");
           return;
         }
-        toast.success("Copied screenshot to clipboard");
+        toast.success("Copied screenshot to clipboard", {
+          action: {
+            label: "Resources",
+            onClick: () =>
+              navigate(`/resources?shot=${encodeURIComponent(fileName)}`),
+          },
+        });
       } catch (err) {
         toast.error(String(err?.message || err || "Capture failed"));
       }
     },
-    [addScreenshot, canAppCapture],
+    [addScreenshot, canAppCapture, navigate]
   );
 
   const startAreaCapture = React.useCallback(() => {
@@ -281,7 +288,7 @@ export default function MainLayout({
                   onClick={() => {
                     if (window.electronAPI?.openExternal) {
                       window.electronAPI.openExternal(
-                        "https://github.com/next-dev-team/next-gen",
+                        "https://github.com/next-dev-team/next-gen"
                       );
                     }
                   }}

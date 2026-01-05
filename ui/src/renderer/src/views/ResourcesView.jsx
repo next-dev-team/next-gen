@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Input,
@@ -12,6 +12,7 @@ import {
   Tooltip,
   message,
 } from "antd";
+import { useLocation } from "react-router-dom";
 import { useResourceStore } from "../stores/resourceStore";
 
 const COLUMN_LAYOUT = {
@@ -40,10 +41,20 @@ const COLUMN_LAYOUT = {
 };
 
 export default function ResourcesView() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("screenshots");
   const [recordSearch, setRecordSearch] = useState("");
   const [shotSearch, setShotSearch] = useState("");
   const [activeCollectionId, setActiveCollectionId] = useState("all");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const shot = params.get("shot");
+    if (!shot) return;
+
+    setActiveTab("screenshots");
+    setShotSearch(shot);
+  }, [location.search]);
 
   const [collectionModalOpen, setCollectionModalOpen] = useState(false);
   const [collectionModalMode, setCollectionModalMode] = useState("create");
