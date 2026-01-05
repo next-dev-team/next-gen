@@ -17,6 +17,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import {
@@ -89,14 +90,63 @@ export default function MainLayout({
       window.electronAPI?.clipboardWriteImageDataUrl
     );
 
+  const canExternalCapture =
+    !isWeb &&
+    Boolean(
+      window.electronAPI?.externalCapture?.capturePrimaryScreen &&
+      window.electronAPI?.clipboardWriteImageDataUrl
+    );
+
+  const canCapture = canAppCapture || canExternalCapture;
+
   const canOpenExternal = Boolean(window.electronAPI?.openExternal);
+
+  const withAutoHideApp = React.useCallback(
+    async (fn) => {
+      const hideApp = window.electronAPI?.hideApp;
+      const showApp = window.electronAPI?.showApp;
+      const canAutoHide =
+        !isWeb &&
+        typeof hideApp === "function" &&
+        typeof showApp === "function";
+
+      if (!canAutoHide) return await fn();
+
+      try {
+        await hideApp();
+      } catch {}
+
+      await new Promise((r) => setTimeout(r, 180));
+
+      try {
+        return await fn();
+      } finally {
+        try {
+          await showApp();
+        } catch {}
+      }
+    },
+    [isWeb]
+  );
 
   const addScreenshot = useResourceStore((s) => s.addScreenshot);
 
   const [captureOverlayOpen, setCaptureOverlayOpen] = React.useState(false);
+  const [captureDropdownOpen, setCaptureDropdownOpen] = React.useState(false);
   const [captureRect, setCaptureRect] = React.useState(null);
   const captureRectRef = React.useRef(null);
   const captureDragRef = React.useRef({ active: false, startX: 0, startY: 0 });
+
+  const [externalCropOpen, setExternalCropOpen] = React.useState(false);
+  const [externalCropDataUrl, setExternalCropDataUrl] = React.useState(null);
+  const [externalCropSelection, setExternalCropSelection] =
+    React.useState(null);
+  const externalCropImgRef = React.useRef(null);
+  const externalCropDragRef = React.useRef({
+    active: false,
+    startX: 0,
+    startY: 0,
+  });
 
   const closeCaptureOverlay = React.useCallback(() => {
     captureDragRef.current.active = false;
@@ -105,11 +155,154 @@ export default function MainLayout({
     setCaptureOverlayOpen(false);
   }, []);
 
+  const closeExternalCrop = React.useCallback(() => {
+    externalCropDragRef.current.active = false;
+    setExternalCropSelection(null);
+    setExternalCropDataUrl(null);
+    setExternalCropOpen(false);
+  }, []);
+
+  const estimateByteLengthFromDataUrl = React.useCallback((dataUrl) => {
+    const s = String(dataUrl || "");
+    const idx = s.indexOf(",");
+    if (idx < 0) return 0;
+    const base64 = s.slice(idx + 1);
+    const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.floor((base64.length * 3) / 4 - padding));
+  }, []);
+
+  const captureViaDisplayMedia = React.useCallback(async () => {
+    const getDisplayMedia = navigator?.mediaDevices?.getDisplayMedia;
+    if (typeof getDisplayMedia !== "function") {
+      return { ok: false, error: "Display capture is not supported" };
+    }
+
+    let stream;
+    try {
+      stream = await getDisplayMedia.call(navigator.mediaDevices, {
+        video: true,
+        audio: false,
+      });
+    } catch (err) {
+      return { ok: false, error: String(err?.message || err) };
+    }
+
+    try {
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+
+      await new Promise((resolve, reject) => {
+        const onLoaded = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = () => {
+          cleanup();
+          reject(new Error("Video load failed"));
+        };
+        const cleanup = () => {
+          video.removeEventListener("loadedmetadata", onLoaded);
+          video.removeEventListener("error", onError);
+        };
+        video.addEventListener("loadedmetadata", onLoaded);
+        video.addEventListener("error", onError);
+      });
+
+      try {
+        await video.play();
+      } catch {}
+
+      await new Promise((r) => setTimeout(r, 60));
+
+      const width = Math.max(1, Number(video.videoWidth) || 0);
+      const height = Math.max(1, Number(video.videoHeight) || 0);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return { ok: false, error: "Capture failed" };
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const dataUrl = canvas.toDataURL("image/png");
+      if (!String(dataUrl || "").startsWith("data:image/")) {
+        return { ok: false, error: "Capture failed" };
+      }
+
+      const byteLength = estimateByteLengthFromDataUrl(dataUrl);
+      return {
+        ok: true,
+        mimeType: "image/png",
+        byteLength,
+        dataUrl,
+        meta: { method: "displayMedia", width, height },
+      };
+    } catch (err) {
+      return { ok: false, error: String(err?.message || err) };
+    } finally {
+      try {
+        const tracks = stream?.getTracks?.() || [];
+        for (const t of tracks) {
+          try {
+            t.stop();
+          } catch {}
+        }
+      } catch {}
+    }
+  }, [estimateByteLengthFromDataUrl]);
+
+  const saveCapture = React.useCallback(
+    async ({ source, mode, dataUrl, mimeType, byteLength, meta }) => {
+      const url = String(dataUrl || "");
+      if (!url.startsWith("data:image/")) {
+        toast.error("Capture failed");
+        return;
+      }
+
+      const ts = new Date().toISOString().replaceAll(":", "-");
+      const fileName = `${String(source || "capture")}-${String(
+        mode || "full"
+      )}-${ts}.png`;
+
+      addScreenshot({
+        name: fileName,
+        source: String(source || "unknown"),
+        mode: String(mode || "full"),
+        dataUrl: url,
+        mimeType: String(mimeType || "image/png"),
+        byteLength: Number(byteLength) || 0,
+        meta: meta && typeof meta === "object" ? meta : null,
+        originId: `${String(mode || "full")}::${ts}`,
+      });
+
+      const ok = await window.electronAPI.clipboardWriteImageDataUrl(url);
+      if (!ok) {
+        toast.error("Copy to clipboard failed");
+        return;
+      }
+
+      toast.success("Copied screenshot to clipboard", {
+        action: {
+          label: "Resources",
+          onClick: () =>
+            navigate(`/resources?shot=${encodeURIComponent(fileName)}`),
+        },
+      });
+    },
+    [addScreenshot, navigate]
+  );
+
   const captureAndCopy = React.useCallback(
     async ({ mode, rect }) => {
       if (!canAppCapture) {
         toast.error("Screenshot capture is not available");
         return;
+      }
+
+      // Small delay to let dropdowns/tooltips close if needed
+      if (mode === "full") {
+        await new Promise((r) => setTimeout(r, 150));
       }
 
       try {
@@ -123,39 +316,162 @@ export default function MainLayout({
           return;
         }
 
-        const ts = new Date().toISOString().replaceAll(":", "-");
-        const fileName = `app-${mode}-${ts}.png`;
-        addScreenshot({
-          name: fileName,
+        await saveCapture({
           source: "app",
           mode,
           dataUrl: String(res.dataUrl),
           mimeType: String(res?.mimeType || "image/png"),
           byteLength: Number(res?.byteLength) || 0,
           meta: rect ? { rect } : null,
-          originId: `${mode}::${ts}`,
-        });
-
-        const ok = await window.electronAPI.clipboardWriteImageDataUrl(
-          res.dataUrl
-        );
-        if (!ok) {
-          toast.error("Copy to clipboard failed");
-          return;
-        }
-        toast.success("Copied screenshot to clipboard", {
-          action: {
-            label: "Resources",
-            onClick: () =>
-              navigate(`/resources?shot=${encodeURIComponent(fileName)}`),
-          },
         });
       } catch (err) {
         toast.error(String(err?.message || err || "Capture failed"));
       }
     },
-    [addScreenshot, canAppCapture, navigate]
+    [canAppCapture, saveCapture]
   );
+
+  const captureExternalFull = React.useCallback(async () => {
+    if (!canExternalCapture) {
+      toast.error("External capture is not available");
+      return;
+    }
+
+    await withAutoHideApp(async () => {
+      await new Promise((r) => setTimeout(r, 150));
+
+      try {
+        let res =
+          await window.electronAPI.externalCapture.capturePrimaryScreen();
+        if (!res?.ok) {
+          const fallback = await captureViaDisplayMedia();
+          if (fallback?.ok) res = fallback;
+        }
+        if (!res?.ok || !res?.dataUrl) {
+          toast.error(res?.error ? String(res.error) : "Capture failed");
+          return;
+        }
+
+        await saveCapture({
+          source: "external",
+          mode: "full",
+          dataUrl: String(res.dataUrl),
+          mimeType: String(res?.mimeType || "image/png"),
+          byteLength: Number(res?.byteLength) || 0,
+          meta: res?.meta && typeof res.meta === "object" ? res.meta : null,
+        });
+      } catch (err) {
+        toast.error(String(err?.message || err || "Capture failed"));
+      }
+    });
+  }, [
+    canExternalCapture,
+    captureViaDisplayMedia,
+    saveCapture,
+    withAutoHideApp,
+  ]);
+
+  const startExternalAreaCapture = React.useCallback(async () => {
+    if (!canExternalCapture) {
+      toast.error("External capture is not available");
+      return;
+    }
+
+    await withAutoHideApp(async () => {
+      try {
+        const captureRegion =
+          window.electronAPI?.externalCapture?.capturePrimaryScreenRegion;
+        if (typeof captureRegion === "function") {
+          const res = await captureRegion();
+          if (!res?.ok) {
+            if (res?.cancelled) return;
+            toast.error(res?.error ? String(res.error) : "Capture failed");
+            return;
+          }
+
+          await saveCapture({
+            source: "external",
+            mode: "area",
+            dataUrl: String(res.dataUrl),
+            mimeType: String(res?.mimeType || "image/png"),
+            byteLength: Number(res?.byteLength) || 0,
+            meta: res?.meta && typeof res.meta === "object" ? res.meta : null,
+          });
+          return;
+        }
+
+        await new Promise((r) => setTimeout(r, 150));
+
+        let res = await window.electronAPI.externalCapture.capturePrimaryScreen();
+        if (!res?.ok) {
+          const fallback = await captureViaDisplayMedia();
+          if (fallback?.ok) res = fallback;
+        }
+        if (!res?.ok || !res?.dataUrl) {
+          toast.error(res?.error ? String(res.error) : "Capture failed");
+          return;
+        }
+
+        setExternalCropSelection(null);
+        setExternalCropDataUrl(String(res.dataUrl));
+        setExternalCropOpen(true);
+      } catch (err) {
+        toast.error(String(err?.message || err || "Capture failed"));
+      }
+    });
+  }, [canExternalCapture, captureViaDisplayMedia, saveCapture, withAutoHideApp]);
+
+  const confirmExternalCrop = React.useCallback(async () => {
+    const img = externalCropImgRef.current;
+    const sel = externalCropSelection;
+    if (!img || !sel) return;
+
+    const displayRect = img.getBoundingClientRect();
+    const dispW = Math.max(1, Number(displayRect.width) || 0);
+    const dispH = Math.max(1, Number(displayRect.height) || 0);
+    const natW = Math.max(1, Number(img.naturalWidth) || 0);
+    const natH = Math.max(1, Number(img.naturalHeight) || 0);
+
+    const scaleX = natW / dispW;
+    const scaleY = natH / dispH;
+
+    const sx = Math.max(0, Math.floor(Number(sel.x) * scaleX));
+    const sy = Math.max(0, Math.floor(Number(sel.y) * scaleY));
+    const sw = Math.max(1, Math.floor(Number(sel.width) * scaleX));
+    const sh = Math.max(1, Math.floor(Number(sel.height) * scaleY));
+
+    if (sw < 2 || sh < 2) return;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = sw;
+    canvas.height = sh;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      toast.error("Capture failed");
+      return;
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    const dataUrl = canvas.toDataURL("image/png");
+    const byteLength = estimateByteLengthFromDataUrl(dataUrl);
+
+    closeExternalCrop();
+
+    await saveCapture({
+      source: "external",
+      mode: "area",
+      dataUrl,
+      mimeType: "image/png",
+      byteLength,
+      meta: {
+        rect: { x: sx, y: sy, width: sw, height: sh },
+      },
+    });
+  }, [
+    closeExternalCrop,
+    estimateByteLengthFromDataUrl,
+    externalCropSelection,
+    saveCapture,
+  ]);
 
   const startAreaCapture = React.useCallback(() => {
     if (!canAppCapture) {
@@ -177,6 +493,17 @@ export default function MainLayout({
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [captureOverlayOpen, closeCaptureOverlay]);
+
+  React.useEffect(() => {
+    if (!externalCropOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      closeExternalCrop();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [externalCropOpen, closeExternalCrop]);
 
   // Derive active tab from pathname
   const activeTab =
@@ -252,16 +579,19 @@ export default function MainLayout({
             className="flex flex-1 items-center justify-end gap-2"
             style={{ WebkitAppRegion: "no-drag" }}
           >
-            <DropdownMenu>
+            <DropdownMenu
+              open={captureDropdownOpen}
+              onOpenChange={setCaptureDropdownOpen}
+            >
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-block">
-                    <DropdownMenuTrigger asChild disabled={!canAppCapture}>
+                    <DropdownMenuTrigger asChild disabled={!canCapture}>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="text-muted-foreground"
-                        disabled={!canAppCapture}
+                        disabled={!canCapture}
                       >
                         <Camera className="h-4 w-4" />
                       </Button>
@@ -269,21 +599,58 @@ export default function MainLayout({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {canAppCapture
+                  {canCapture
                     ? "Capture screenshot"
                     : "Screenshot capture is not available"}
                 </TooltipContent>
               </Tooltip>
-              {canAppCapture && (
+              {canCapture && (
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => startAreaCapture()}>
-                    Area (default)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => captureAndCopy({ mode: "full" })}
-                  >
-                    Full
-                  </DropdownMenuItem>
+                  {canAppCapture ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCaptureDropdownOpen(false);
+                          startAreaCapture();
+                        }}
+                      >
+                        Area (default)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCaptureDropdownOpen(false);
+                          captureAndCopy({ mode: "full" });
+                        }}
+                      >
+                        Full
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+
+                  {canAppCapture && canExternalCapture ? (
+                    <DropdownMenuSeparator />
+                  ) : null}
+
+                  {canExternalCapture ? (
+                    <>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCaptureDropdownOpen(false);
+                          startExternalAreaCapture();
+                        }}
+                      >
+                        Area (External)
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setCaptureDropdownOpen(false);
+                          captureExternalFull();
+                        }}
+                      >
+                        Full (External)
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
                 </DropdownMenuContent>
               )}
             </DropdownMenu>
@@ -436,6 +803,145 @@ export default function MainLayout({
               />
             ) : null}
           </button>
+        ) : null}
+
+        {externalCropOpen ? (
+          <div
+            role="dialog"
+            aria-label="External capture crop"
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 10000,
+              background: "rgba(0,0,0,0.72)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: 16,
+              WebkitAppRegion: "no-drag",
+            }}
+            onMouseMove={(e) => {
+              if (!externalCropDragRef.current.active) return;
+              const img = externalCropImgRef.current;
+              if (!img) return;
+              const rect = img.getBoundingClientRect();
+              const x2 = Math.min(
+                Math.max(0, e.clientX - rect.left),
+                rect.width
+              );
+              const y2 = Math.min(
+                Math.max(0, e.clientY - rect.top),
+                rect.height
+              );
+              const x1 = externalCropDragRef.current.startX;
+              const y1 = externalCropDragRef.current.startY;
+              setExternalCropSelection({
+                x: Math.min(x1, x2),
+                y: Math.min(y1, y2),
+                width: Math.abs(x2 - x1),
+                height: Math.abs(y2 - y1),
+              });
+            }}
+            onMouseUp={() => {
+              externalCropDragRef.current.active = false;
+            }}
+          >
+            <div
+              style={{
+                width: "min(92vw, 1200px)",
+                maxHeight: "92vh",
+                display: "flex",
+                flexDirection: "column",
+                gap: 10,
+              }}
+            >
+              <div
+                style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}
+              >
+                <Button variant="outline" size="sm" onClick={closeExternalCrop}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={confirmExternalCrop}
+                  disabled={
+                    !externalCropSelection ||
+                    externalCropSelection.width < 2 ||
+                    externalCropSelection.height < 2
+                  }
+                >
+                  Capture
+                </Button>
+              </div>
+
+              <button
+                type="button"
+                aria-label="Crop selection"
+                style={{
+                  position: "relative",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                  background: "rgba(15,23,42,0.55)",
+                  border: "1px solid rgba(255,255,255,0.12)",
+                  alignSelf: "center",
+                  maxHeight: "calc(92vh - 60px)",
+                  padding: 0,
+                  cursor: "crosshair",
+                }}
+                onMouseDown={(e) => {
+                  const img = externalCropImgRef.current;
+                  if (!img) return;
+                  const rect = img.getBoundingClientRect();
+                  const x = Math.min(
+                    Math.max(0, e.clientX - rect.left),
+                    rect.width
+                  );
+                  const y = Math.min(
+                    Math.max(0, e.clientY - rect.top),
+                    rect.height
+                  );
+                  externalCropDragRef.current.active = true;
+                  externalCropDragRef.current.startX = x;
+                  externalCropDragRef.current.startY = y;
+                  setExternalCropSelection({ x, y, width: 0, height: 0 });
+                }}
+              >
+                {externalCropDataUrl ? (
+                  <img
+                    ref={externalCropImgRef}
+                    src={externalCropDataUrl}
+                    alt="External capture"
+                    draggable={false}
+                    style={{
+                      display: "block",
+                      maxWidth: "92vw",
+                      maxHeight: "calc(92vh - 60px)",
+                      width: "auto",
+                      height: "auto",
+                      userSelect: "none",
+                      pointerEvents: "none",
+                    }}
+                  />
+                ) : null}
+
+                {externalCropSelection ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: externalCropSelection.x,
+                      top: externalCropSelection.y,
+                      width: externalCropSelection.width,
+                      height: externalCropSelection.height,
+                      border: "2px solid var(--color-primary)",
+                      background: "rgba(79,70,229,0.15)",
+                      boxShadow: "0 0 0 1px rgba(15,23,42,0.45) inset",
+                      pointerEvents: "none",
+                    }}
+                  />
+                ) : null}
+              </button>
+            </div>
+          </div>
         ) : null}
       </div>
     </TooltipProvider>

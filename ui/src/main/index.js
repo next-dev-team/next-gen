@@ -10,7 +10,11 @@ const {
   powerMonitor,
   shell,
   dialog,
+  desktopCapturer,
+  screen,
+  systemPreferences,
 } = require("electron");
+const os = require("os");
 const path = require("path");
 const { spawn, fork } = require("child_process");
 const fs = require("fs");
@@ -81,6 +85,177 @@ try {
   nodePty = require("node-pty");
 } catch {
   nodePty = null;
+}
+
+function ensureNodePtySpawnHelpersExecutable() {
+  if (process.platform !== "darwin") return;
+  let pkgDir = "";
+  try {
+    pkgDir = path.dirname(require.resolve("node-pty/package.json"));
+  } catch {
+    pkgDir = "";
+  }
+  if (!pkgDir) return;
+
+  const prebuildsDir = path.join(pkgDir, "prebuilds");
+  const candidates = [];
+
+  try {
+    const entries = fs.readdirSync(prebuildsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry?.isDirectory?.()) continue;
+      const name = String(entry.name || "");
+      if (!name.startsWith("darwin-")) continue;
+      candidates.push(path.join(prebuildsDir, name, "spawn-helper"));
+    }
+  } catch {}
+
+  if (candidates.length === 0) {
+    candidates.push(
+      path.join(prebuildsDir, `darwin-${process.arch}`, "spawn-helper"),
+      path.join(prebuildsDir, "darwin-arm64", "spawn-helper"),
+      path.join(prebuildsDir, "darwin-x64", "spawn-helper")
+    );
+  }
+
+  for (const filePath of candidates) {
+    const target = String(filePath || "");
+    if (!target) continue;
+    try {
+      const stat = fs.statSync(target);
+      const nextMode = stat.mode | 0o111;
+      if (nextMode !== stat.mode) fs.chmodSync(target, nextMode);
+    } catch {}
+  }
+}
+
+if (nodePty) {
+  ensureNodePtySpawnHelpersExecutable();
+}
+
+function buildAugmentedPath(rawPath) {
+  const current = String(rawPath || "");
+  const parts = current
+    .split(path.delimiter)
+    .map((p) => String(p || "").trim())
+    .filter(Boolean);
+
+  const home = (() => {
+    try {
+      return os.homedir();
+    } catch {
+      return "";
+    }
+  })();
+
+  const prepend = [];
+  if (process.platform === "darwin") {
+    prepend.push(
+      "/opt/homebrew/bin",
+      "/opt/homebrew/sbin",
+      "/usr/local/bin",
+      "/usr/local/sbin"
+    );
+  }
+
+  if (home) {
+    prepend.push(
+      path.join(home, ".volta", "bin"),
+      path.join(home, ".asdf", "shims")
+    );
+  }
+
+  prepend.push("/usr/bin", "/bin", "/usr/sbin", "/sbin");
+
+  const seen = new Set();
+  const combined = [];
+  for (const entry of [...prepend, ...parts]) {
+    if (!entry) continue;
+    const normalized = entry.replace(/\/+$/g, "");
+    if (!normalized) continue;
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+    combined.push(normalized);
+  }
+
+  return combined.join(path.delimiter);
+}
+
+async function isExecutable(filePath) {
+  const abs = String(filePath || "");
+  if (!abs) return false;
+  try {
+    await fs.promises.access(abs, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveExecutableOnPath(binName, envPath) {
+  const name = String(binName || "").trim();
+  if (!name) return null;
+  if (path.isAbsolute(name) || name.includes(path.sep)) {
+    return (await isExecutable(name)) ? name : null;
+  }
+
+  const searchPath = String(envPath || "");
+  const dirs = searchPath
+    .split(path.delimiter)
+    .map((p) => String(p || "").trim())
+    .filter(Boolean);
+
+  for (const dir of dirs) {
+    const candidate = path.join(dir, name);
+    if (await isExecutable(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+async function resolveDarwinNpxFallback() {
+  if (process.platform !== "darwin") return null;
+  const home = (() => {
+    try {
+      return os.homedir();
+    } catch {
+      return "";
+    }
+  })();
+  if (!home) return null;
+
+  const directCandidates = [
+    path.join(home, ".volta", "bin", "npx"),
+    path.join(home, ".asdf", "shims", "npx"),
+  ];
+
+  for (const candidate of directCandidates) {
+    if (await isExecutable(candidate)) return candidate;
+  }
+
+  const nvmVersionsDir = path.join(home, ".nvm", "versions", "node");
+  let entries = [];
+  try {
+    entries = await fs.promises.readdir(nvmVersionsDir, {
+      withFileTypes: true,
+    });
+  } catch {
+    entries = [];
+  }
+
+  const versionDirs = entries
+    .filter((d) => d && d.isDirectory && d.isDirectory())
+    .map((d) => String(d.name || "").trim())
+    .filter(Boolean)
+    .sort()
+    .reverse();
+
+  for (const versionDir of versionDirs) {
+    const candidate = path.join(nvmVersionsDir, versionDir, "bin", "npx");
+    if (await isExecutable(candidate)) return candidate;
+  }
+
+  return null;
 }
 
 function sendBmadLog(type, message) {
@@ -912,6 +1087,334 @@ ipcMain.handle("app-capture-page", async () => {
   }
 });
 
+async function selectPrimaryDisplayRegion() {
+  const display =
+    typeof screen?.getPrimaryDisplay === "function" ? screen.getPrimaryDisplay() : null;
+  const bounds = display?.bounds || { x: 0, y: 0, width: 0, height: 0 };
+  const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const channel = `external-area-selection-${requestId}`;
+
+  return await new Promise((resolve) => {
+    let done = false;
+    let selectionWindow = null;
+
+    const finish = (payload) => {
+      if (done) return;
+      done = true;
+      try {
+        if (selectionWindow && !selectionWindow.isDestroyed()) {
+          selectionWindow.destroy();
+        }
+      } catch {}
+      resolve(payload);
+    };
+
+    ipcMain.once(channel, (event, payload) => {
+      finish(payload);
+    });
+
+    selectionWindow = new BrowserWindow({
+      x: Math.floor(Number(bounds.x) || 0),
+      y: Math.floor(Number(bounds.y) || 0),
+      width: Math.max(1, Math.floor(Number(bounds.width) || 0)),
+      height: Math.max(1, Math.floor(Number(bounds.height) || 0)),
+      frame: false,
+      transparent: true,
+      resizable: false,
+      movable: false,
+      minimizable: false,
+      maximizable: false,
+      closable: true,
+      focusable: true,
+      skipTaskbar: true,
+      hasShadow: false,
+      alwaysOnTop: true,
+      fullscreenable: false,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+      },
+    });
+
+    try {
+      selectionWindow.setVisibleOnAllWorkspaces(true, {
+        visibleOnFullScreen: true,
+      });
+    } catch {}
+    try {
+      selectionWindow.setAlwaysOnTop(true, "screen-saver");
+    } catch {}
+    try {
+      selectionWindow.setContentProtection(true);
+    } catch {}
+
+    selectionWindow.on("closed", () => {
+      finish({ cancelled: true });
+    });
+
+    const html = `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Select Area</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+      body { cursor: crosshair; background: rgba(0, 0, 0, 0.08); }
+      #hint { position: fixed; top: 16px; left: 16px; padding: 8px 10px; border-radius: 10px;
+        color: rgba(255,255,255,0.92); font: 12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+        background: rgba(15,23,42,0.78); border: 1px solid rgba(255,255,255,0.12);
+        user-select: none; pointer-events: none; }
+      #box { position: fixed; border: 2px solid rgba(79,70,229,0.95); background: rgba(79,70,229,0.18);
+        box-shadow: 0 0 0 1px rgba(15,23,42,0.45) inset; display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="hint">Drag to select an area. Press Esc to cancel.</div>
+    <div id="box"></div>
+    <script>
+      const { ipcRenderer } = require('electron');
+      const channel = ${JSON.stringify(channel)};
+      const box = document.getElementById('box');
+      let start = null;
+
+      const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+
+      window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        try { ipcRenderer.send(channel, { cancelled: true }); } catch {}
+        window.close();
+      }, true);
+
+      window.addEventListener('mousedown', (e) => {
+        start = { x: e.clientX, y: e.clientY };
+        box.style.display = 'block';
+        box.style.left = start.x + 'px';
+        box.style.top = start.y + 'px';
+        box.style.width = '0px';
+        box.style.height = '0px';
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!start) return;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const x2 = clamp(e.clientX, 0, w);
+        const y2 = clamp(e.clientY, 0, h);
+        const x1 = clamp(start.x, 0, w);
+        const y1 = clamp(start.y, 0, h);
+        const left = Math.min(x1, x2);
+        const top = Math.min(y1, y2);
+        const width = Math.abs(x2 - x1);
+        const height = Math.abs(y2 - y1);
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
+        box.style.width = width + 'px';
+        box.style.height = height + 'px';
+      });
+
+      window.addEventListener('mouseup', (e) => {
+        if (!start) return;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const x2 = clamp(e.clientX, 0, w);
+        const y2 = clamp(e.clientY, 0, h);
+        const x1 = clamp(start.x, 0, w);
+        const y1 = clamp(start.y, 0, h);
+        const left = Math.min(x1, x2);
+        const top = Math.min(y1, y2);
+        const width = Math.abs(x2 - x1);
+        const height = Math.abs(y2 - y1);
+        start = null;
+        try { ipcRenderer.send(channel, { x: left, y: top, width, height }); } catch {}
+        window.close();
+      });
+    </script>
+  </body>
+</html>`;
+
+    const url = `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+    selectionWindow.loadURL(url).catch(() => {
+      finish({ cancelled: true });
+    });
+
+    try {
+      selectionWindow.show();
+      selectionWindow.focus();
+    } catch {}
+  });
+}
+
+ipcMain.handle("external-capture-primary-screen", async () => {
+  try {
+    if (!desktopCapturer?.getSources) {
+      return { ok: false, error: "desktopCapturer is not available" };
+    }
+
+    const status =
+      typeof systemPreferences?.getMediaAccessStatus === "function"
+        ? systemPreferences.getMediaAccessStatus("screen")
+        : "unknown";
+    if (status === "denied" || status === "restricted") {
+      return { ok: false, error: "Screen recording permission denied" };
+    }
+
+    const display =
+      typeof screen?.getPrimaryDisplay === "function"
+        ? screen.getPrimaryDisplay()
+        : null;
+    const width = Math.max(1, Math.floor(Number(display?.size?.width) || 0));
+    const height = Math.max(1, Math.floor(Number(display?.size?.height) || 0));
+    const scaleFactor = Math.max(1, Number(display?.scaleFactor) || 1);
+
+    const thumbnailSize = {
+      width: Math.max(1, Math.floor(width * scaleFactor)),
+      height: Math.max(1, Math.floor(height * scaleFactor)),
+    };
+
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize,
+    });
+    const list = Array.isArray(sources) ? sources : [];
+    if (!list.length) return { ok: false, error: "No screen sources" };
+
+    const best = list.reduce((acc, cur) => {
+      const a = acc?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+      const b = cur?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+      return a.width * a.height >= b.width * b.height ? acc : cur;
+    }, list[0]);
+
+    const image = best?.thumbnail;
+    const size = image?.getSize?.() || { width: 0, height: 0 };
+    if (image?.isEmpty?.() || size.width <= 0 || size.height <= 0) {
+      return { ok: false, error: "Empty screen capture" };
+    }
+
+    const png = image.toPNG();
+    if (!png?.length) return { ok: false, error: "Empty screen capture" };
+    const base64 = png.toString("base64");
+    return {
+      ok: true,
+      mimeType: "image/png",
+      byteLength: png.length,
+      dataUrl: `data:image/png;base64,${base64}`,
+    };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
+ipcMain.handle("external-capture-primary-screen-region", async () => {
+  let shouldShowApp = false;
+  try {
+    if (!desktopCapturer?.getSources) {
+      return { ok: false, error: "desktopCapturer is not available" };
+    }
+
+    const status =
+      typeof systemPreferences?.getMediaAccessStatus === "function"
+        ? systemPreferences.getMediaAccessStatus("screen")
+        : "unknown";
+    if (status === "denied" || status === "restricted") {
+      return { ok: false, error: "Screen recording permission denied" };
+    }
+
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      shouldShowApp = true;
+      safeHideWindow(mainWindow);
+    }
+
+    const sel = await selectPrimaryDisplayRegion();
+    if (!sel || sel.cancelled) {
+      return { ok: false, cancelled: true, error: "Cancelled" };
+    }
+
+    const sxDip = Math.max(0, Math.floor(Number(sel.x) || 0));
+    const syDip = Math.max(0, Math.floor(Number(sel.y) || 0));
+    const swDip = Math.max(1, Math.floor(Number(sel.width) || 0));
+    const shDip = Math.max(1, Math.floor(Number(sel.height) || 0));
+    if (swDip < 2 || shDip < 2) {
+      return { ok: false, cancelled: true, error: "Cancelled" };
+    }
+
+    await new Promise((r) => setTimeout(r, 120));
+
+    const display =
+      typeof screen?.getPrimaryDisplay === "function"
+        ? screen.getPrimaryDisplay()
+        : null;
+    const width = Math.max(1, Math.floor(Number(display?.size?.width) || 0));
+    const height = Math.max(1, Math.floor(Number(display?.size?.height) || 0));
+    const scaleFactor = Math.max(1, Number(display?.scaleFactor) || 1);
+
+    const thumbnailSize = {
+      width: Math.max(1, Math.floor(width * scaleFactor)),
+      height: Math.max(1, Math.floor(height * scaleFactor)),
+    };
+
+    const sources = await desktopCapturer.getSources({
+      types: ["screen"],
+      thumbnailSize,
+    });
+    const list = Array.isArray(sources) ? sources : [];
+    if (!list.length) return { ok: false, error: "No screen sources" };
+
+    const best = list.reduce((acc, cur) => {
+      const a = acc?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+      const b = cur?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+      return a.width * a.height >= b.width * b.height ? acc : cur;
+    }, list[0]);
+
+    const image = best?.thumbnail;
+    const size = image?.getSize?.() || { width: 0, height: 0 };
+    if (image?.isEmpty?.() || size.width <= 0 || size.height <= 0) {
+      return { ok: false, error: "Empty screen capture" };
+    }
+
+    if (typeof image.crop !== "function") {
+      return { ok: false, error: "Crop is not supported" };
+    }
+
+    const sx = Math.max(0, Math.floor(sxDip * scaleFactor));
+    const sy = Math.max(0, Math.floor(syDip * scaleFactor));
+    const sw = Math.max(1, Math.floor(swDip * scaleFactor));
+    const sh = Math.max(1, Math.floor(shDip * scaleFactor));
+
+    const cx = Math.min(sx, Math.max(0, size.width - 1));
+    const cy = Math.min(sy, Math.max(0, size.height - 1));
+    const cwidth = Math.max(1, Math.min(sw, size.width - cx));
+    const cheight = Math.max(1, Math.min(sh, size.height - cy));
+
+    const cropped = image.crop({ x: cx, y: cy, width: cwidth, height: cheight });
+    const png = cropped.toPNG();
+    if (!png?.length) return { ok: false, error: "Empty screen capture" };
+    const base64 = png.toString("base64");
+
+    return {
+      ok: true,
+      mimeType: "image/png",
+      byteLength: png.length,
+      dataUrl: `data:image/png;base64,${base64}`,
+      meta: {
+        method: "desktopCapturer+select",
+        rect: { x: cx, y: cy, width: cwidth, height: cheight },
+        rectDip: { x: sxDip, y: syDip, width: swDip, height: shDip },
+        scaleFactor,
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  } finally {
+    if (shouldShowApp) {
+      try {
+        showMainWindow();
+      } catch {}
+    }
+  }
+});
+
 ipcMain.handle("clipboard-write-image-data-url", async (event, { dataUrl }) => {
   try {
     const { clipboard, nativeImage } = require("electron");
@@ -1321,6 +1824,9 @@ ipcMain.handle(
     const extra = Array.isArray(extraArgs) ? extraArgs : [];
     const isVerbose = Boolean(verbose);
 
+    const runEnv = { ...process.env, FORCE_COLOR: "1" };
+    runEnv.PATH = buildAugmentedPath(runEnv.PATH);
+
     const BMAD_NPX_PACKAGE = "bmad-method@alpha";
     const getBmadFolderStatus = async () => {
       const folders = ["_bmad", "_config"];
@@ -1704,6 +2210,17 @@ ipcMain.handle(
       }
     }
 
+    const resolvedOnPath = await resolveExecutableOnPath(command, runEnv.PATH);
+    if (resolvedOnPath) {
+      command = resolvedOnPath;
+    } else if (process.platform === "darwin") {
+      const base = path.basename(String(command)).toLowerCase();
+      if (base === "npx") {
+        const fallback = await resolveDarwinNpxFallback();
+        if (fallback) command = fallback;
+      }
+    }
+
     const maybeRetryWithoutVerbose = async (result, runCommand, runArgs) => {
       if (!isVerbose) return result;
       if (!Array.isArray(runArgs) || !runArgs.includes("-v")) return result;
@@ -1731,7 +2248,7 @@ ipcMain.handle(
         const child = spawn(runCommand, runArgs, {
           cwd: workingDir,
           shell: true,
-          env: { ...process.env, FORCE_COLOR: "1" },
+          env: runEnv,
         });
         bmadChildProcess = child;
 
@@ -1823,7 +2340,7 @@ ipcMain.handle(
             cols: 120,
             rows: 30,
             cwd: workingDir,
-            env: { ...process.env, FORCE_COLOR: "1" },
+            env: runEnv,
           });
         } catch (error) {
           sendBmadLog(
@@ -1915,8 +2432,8 @@ ipcMain.handle(
             typeof payload?.exitCode === "number"
               ? payload.exitCode
               : typeof payload === "number"
-              ? payload
-              : -1;
+                ? payload
+                : -1;
 
           resolve({
             success: code === 0,
@@ -1998,8 +2515,24 @@ ipcMain.handle(
 
     const wantsInteractive =
       Boolean(interactive) || selectedAction === "install";
-    const canUsePty = Boolean(nodePty && typeof nodePty.spawn === "function");
-    const runOnce = wantsInteractive && canUsePty ? runOncePty : runOnceSpawn;
+    let canUsePty = Boolean(nodePty && typeof nodePty.spawn === "function");
+    const runOnce = async (runCommand, runArgs, options) => {
+      if (wantsInteractive && canUsePty) {
+        const result = await runOncePty(runCommand, runArgs, options);
+        const stderr = String(result?.stderr || "");
+        if (
+          !result?.success &&
+          result?.code === -1 &&
+          /posix_spawnp failed/i.test(stderr)
+        ) {
+          nodePty = null;
+          canUsePty = false;
+          return await runOnceSpawn(runCommand, runArgs, options);
+        }
+        return result;
+      }
+      return await runOnceSpawn(runCommand, runArgs, options);
+    };
 
     const autoAcceptDefaults =
       typeof autoAcceptDefaultsOption === "boolean"
@@ -2035,7 +2568,7 @@ ipcMain.handle(
         fallbackArgs.push(...extra);
       }
 
-      let second = await runOnce(fallbackCommand, fallbackArgs, {
+      const second = await runOnce(fallbackCommand, fallbackArgs, {
         autoAcceptDefaults,
       });
 

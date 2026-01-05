@@ -163,6 +163,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
     capturePage: () => ipcRenderer.invoke("app-capture-page"),
   },
 
+  externalCapture: {
+    capturePrimaryScreen: () =>
+      ipcRenderer.invoke("external-capture-primary-screen"),
+    capturePrimaryScreenRegion: () =>
+      ipcRenderer.invoke("external-capture-primary-screen-region"),
+  },
+
   clipboardWriteText: (text) => {
     try {
       clipboard.writeText(String(text ?? ""));
