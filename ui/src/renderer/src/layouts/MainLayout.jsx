@@ -358,8 +358,14 @@ export default function MainLayout({
         </div>
 
         {captureOverlayOpen ? (
-          <div
-            role="presentation"
+          <button
+            type="button"
+            aria-label="Capture overlay"
+            onKeyDown={(e) => {
+              if (e.key !== "Escape") return;
+              e.preventDefault();
+              closeCaptureOverlay();
+            }}
             onMouseDown={(e) => {
               captureDragRef.current.active = true;
               captureDragRef.current.startX = e.clientX;
@@ -407,6 +413,8 @@ export default function MainLayout({
               position: "fixed",
               inset: 0,
               zIndex: 10000,
+              padding: 0,
+              border: "none",
               background: "rgba(15,23,42,0.18)",
               cursor: "crosshair",
               WebkitAppRegion: "no-drag",
@@ -427,7 +435,7 @@ export default function MainLayout({
                 }}
               />
             ) : null}
-          </div>
+          </button>
         ) : null}
       </div>
     </TooltipProvider>

@@ -2563,7 +2563,7 @@ export default function BrowserToolView() {
           ) : null}
 
           {activeTab?.kind === "browser" ? (
-            <webview ref={contentRef} className="absolute inset-0">
+            <div ref={contentRef} className="absolute inset-0">
               {!hasElectronView ? (
                 <iframe
                   ref={iframeRef}
@@ -2574,7 +2574,7 @@ export default function BrowserToolView() {
               ) : (
                 <div className="h-full w-full" />
               )}
-            </webview>
+            </div>
           ) : null}
         </div>
 
