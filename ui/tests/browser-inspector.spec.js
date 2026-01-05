@@ -520,7 +520,161 @@ test.describe("Browser inspector", () => {
     await expect(window.getByText("file-1.txt")).not.toBeVisible();
   });
 
-  test("should disable WebGL in BrowserView on macOS", async () => {
+  test("should keep BrowserView rendering after switching to Scrum Board", async () => {
+    const window = await electronApp.firstWindow();
+    await window.reload();
+
+    await expect(window.locator(".ant-segmented")).toBeVisible();
+    await window.locator(".ant-segmented").getByText("Browser").click();
+
+    await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
+      timeout: 15000,
+    });
+    await window.getByRole("button", { name: "New tab" }).click();
+
+    await expect
+      .poll(
+        async () => {
+          const raw = await window.evaluate(() =>
+            localStorage.getItem("browser-tabs-store")
+          );
+          if (!raw) return null;
+          try {
+            const parsed = JSON.parse(raw);
+            const id = parsed?.state?.activeTabId;
+            return id && id !== "dashboard" ? id : null;
+          } catch {
+            return null;
+          }
+        },
+        { timeout: 15000 }
+      )
+      .not.toBeNull();
+
+    const activeTabId = await window.evaluate(() => {
+      const raw = localStorage.getItem("browser-tabs-store");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed?.state?.activeTabId || null;
+    });
+    expect(activeTabId).toBeTruthy();
+
+    const html = `<!doctype html><html><head><meta charset="utf-8" /><style>html,body{margin:0;width:100%;height:100%;}body{background:linear-gradient(90deg,#ff0000,#00ff00,#0000ff);display:flex;align-items:center;justify-content:center;font-family:sans-serif;font-size:48px;color:#111}</style></head><body><div id="marker">OK</div></body></html>`;
+    const url = `data:text/html,${encodeURIComponent(html)}`;
+
+    await window.evaluate(
+      ({ tabId, url: nextUrl }) =>
+        window.electronAPI.browserView.loadURL(tabId, nextUrl),
+      { tabId: activeTabId, url }
+    );
+
+    await electronApp.evaluate(
+      async ({ BrowserWindow }, { expectedUrl }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) throw new Error("No BrowserWindow");
+
+        const deadline = Date.now() + 15000;
+        while (Date.now() < deadline) {
+          const views =
+            typeof win.getBrowserViews === "function" ? win.getBrowserViews() : [];
+          const view =
+            views.find((v) => {
+              try {
+                return v?.webContents?.getURL?.() === expectedUrl;
+              } catch {
+                return false;
+              }
+            }) || null;
+          if (view) {
+            const ready = await view.webContents.executeJavaScript(
+              "document.readyState === 'complete'"
+            );
+            if (ready) return true;
+          }
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        throw new Error("BrowserView did not finish loading");
+      },
+      { expectedUrl: url }
+    );
+
+    await window.locator(".ant-segmented").getByText("Scrum Board").click();
+    await expect(window.getByText("Scrum Board")).toBeVisible({ timeout: 15000 });
+
+    await window.locator(".ant-segmented").getByText("Browser").click();
+    await expect(window.getByRole("button", { name: "Reload" })).toBeVisible({
+      timeout: 15000,
+    });
+
+    const stats = await electronApp.evaluate(
+      async ({ BrowserWindow }, { expectedUrl }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) throw new Error("No BrowserWindow");
+
+        const deadline = Date.now() + 15000;
+        let view;
+        while (Date.now() < deadline) {
+          const views =
+            typeof win.getBrowserViews === "function" ? win.getBrowserViews() : [];
+          view =
+            views.find((v) => {
+              try {
+                return v?.webContents?.getURL?.() === expectedUrl;
+              } catch {
+                return false;
+              }
+            }) || null;
+
+          if (view) {
+            try {
+              const b = typeof view.getBounds === "function" ? view.getBounds() : null;
+              if (b && b.width > 50 && b.height > 50) break;
+            } catch {}
+          }
+          await new Promise((r) => setTimeout(r, 100));
+        }
+
+        if (!view) throw new Error("No BrowserView after tab switch");
+
+        const image = await view.webContents.capturePage();
+        const size = image.getSize();
+        const bitmap = image.toBitmap();
+        const width = size.width;
+        const height = size.height;
+        if (!width || !height || !bitmap || bitmap.length < width * height * 4) {
+          throw new Error("Invalid capture");
+        }
+
+        const stepX = Math.max(1, Math.floor(width / 64));
+        const stepY = Math.max(1, Math.floor(height / 64));
+        let sum = 0;
+        let sumSq = 0;
+        let count = 0;
+
+        for (let y = 0; y < height; y += stepY) {
+          for (let x = 0; x < width; x += stepX) {
+            const idx = (y * width + x) * 4;
+            const b = bitmap[idx + 0];
+            const g = bitmap[idx + 1];
+            const r = bitmap[idx + 2];
+            const lum = (r + g + b) / 3;
+            sum += lum;
+            sumSq += lum * lum;
+            count++;
+          }
+        }
+
+        const avg = sum / count;
+        const variance = sumSq / count - avg * avg;
+        return { avg, variance };
+      },
+      { expectedUrl: url }
+    );
+
+    expect(stats.avg).toBeGreaterThan(15);
+    expect(stats.variance).toBeGreaterThan(50);
+  });
+
+  test("should enable WebGL in BrowserView on macOS", async () => {
     test.skip(process.platform !== "darwin");
 
     const window = await electronApp.firstWindow();
@@ -611,6 +765,6 @@ test.describe("Browser inspector", () => {
       { expectedUrl: url }
     );
 
-    expect(hasWebgl).toBe(false);
+    expect(hasWebgl).toBe(true);
   });
 });

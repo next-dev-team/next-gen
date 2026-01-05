@@ -1,3 +1,4 @@
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import {
   ArrowLeft,
   ArrowRight,
@@ -44,9 +45,10 @@ import {
 } from "../components/ui/card";
 import {
   Dialog,
-  DialogContent,
+  DialogClose,
   DialogDescription,
   DialogHeader,
+  DialogPortal,
   DialogTitle,
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
@@ -909,35 +911,25 @@ function DevPanel({
   const [dropActive, setDropActive] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState(null);
   const attachmentsRef = useRef([]);
+  const panelRef = useRef(null);
+  const [dialogPortalContainer, setDialogPortalContainer] = useState(null);
+  const setPanelNode = useCallback((node) => {
+    panelRef.current = node;
+    setDialogPortalContainer(node);
+  }, []);
 
   useEffect(() => {
-    if (!hasElectronView) return;
-    if (!window.electronAPI?.browserView?.hideAll) return;
+    if (
+      isRouteActive &&
+      devPanel.isOpen &&
+      devPanel.activeTool === "inspector"
+    ) {
+      return;
+    }
 
-    const run = async () => {
-      if (fileDialogOpen) {
-        await window.electronAPI.browserView.hideAll();
-        return;
-      }
-
-      if (!isRouteActive || !activeIsBrowser || !activeTabId) {
-        await window.electronAPI.browserView.hideAll();
-        return;
-      }
-
-      if (window.electronAPI?.browserView?.show) {
-        await window.electronAPI.browserView.show(activeTabId);
-      }
-    };
-
-    run().catch(() => {});
-  }, [
-    activeIsBrowser,
-    activeTabId,
-    fileDialogOpen,
-    hasElectronView,
-    isRouteActive,
-  ]);
+    setFileDialogOpen(false);
+    setPreviewAttachment(null);
+  }, [devPanel.activeTool, devPanel.isOpen, isRouteActive]);
 
   const dragging = useRef(false);
   const dragStartX = useRef(0);
@@ -1175,13 +1167,14 @@ function DevPanel({
 
   return (
     <div
+      ref={setPanelNode}
       className={cn(
-        "relative h-full border-l bg-background shrink-0",
-        devPanel.isFullWidth && "absolute inset-0 z-50 border-l-0"
+        "relative h-full border-l bg-background",
+        devPanel.isFullWidth ? "flex-1 w-full border-l-0" : "shrink-0"
       )}
       style={{
         width: devPanel.isFullWidth ? "100%" : devPanel.width,
-        transition: "width 0.2s ease-in-out, left 0.2s ease-in-out",
+        transition: "width 0.2s ease-in-out",
       }}
     >
       <div className="absolute left-0 top-0 h-full w-1 cursor-col-resize bg-transparent" />
@@ -1795,45 +1788,84 @@ function DevPanel({
                 if (!open) setPreviewAttachment(null);
               }}
             >
-              <DialogContent className="max-w-3xl z-[100]">
-                <DialogHeader>
-                  <DialogTitle>
-                    {String(previewAttachment?.name || "Attachment")}
-                  </DialogTitle>
-                  <DialogDescription>
-                    {previewAttachment?.sizeBytes
-                      ? formatBytes(previewAttachment.sizeBytes)
-                      : ""}
-                    {previewAttachment?.mimeType
-                      ? ` · ${String(previewAttachment.mimeType)}`
-                      : ""}
-                    {previewAttachment?.createdAt
-                      ? ` · ${formatDateTime(previewAttachment.createdAt)}`
-                      : ""}
-                  </DialogDescription>
-                </DialogHeader>
-                {previewAttachment?.kind === "image" ? (
-                  <div className="overflow-hidden rounded-md border bg-background">
-                    <img
-                      src={
-                        previewAttachment?.dataUrl ||
-                        previewAttachment?.objectUrl
-                      }
-                      alt={String(previewAttachment?.name || "Image")}
-                      className="max-h-[70vh] w-full object-contain"
-                    />
-                  </div>
-                ) : (
-                  <div className="text-sm text-muted-foreground">
-                    Preview is not available for this file type.
-                  </div>
-                )}
-                <div className="flex items-center justify-end gap-2">
-                  {isImageAttachment(previewAttachment) ? (
+              <DialogPortal container={dialogPortalContainer || undefined}>
+                <DialogPrimitive.Overlay className="absolute inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+                <DialogPrimitive.Content className="absolute left-1/2 top-1/2 z-50 grid w-[92%] max-w-3xl max-h-[88%] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-auto rounded-lg border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {String(previewAttachment?.name || "Attachment")}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {previewAttachment?.sizeBytes
+                        ? formatBytes(previewAttachment.sizeBytes)
+                        : ""}
+                      {previewAttachment?.mimeType
+                        ? ` · ${String(previewAttachment.mimeType)}`
+                        : ""}
+                      {previewAttachment?.createdAt
+                        ? ` · ${formatDateTime(previewAttachment.createdAt)}`
+                        : ""}
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  {previewAttachment?.kind === "image" ? (
+                    <div className="overflow-hidden rounded-md border bg-background">
+                      <img
+                        src={
+                          previewAttachment?.dataUrl ||
+                          previewAttachment?.objectUrl
+                        }
+                        alt={String(previewAttachment?.name || "Image")}
+                        className="max-h-[60vh] w-full object-contain"
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">
+                      Preview is not available for this file type.
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2">
+                    {isImageAttachment(previewAttachment) ? (
+                      <Button
+                        variant="outline"
+                        onClick={async () =>
+                          await handleCopyAttachment(previewAttachment)
+                        }
+                        disabled={
+                          !(
+                            previewAttachment?.dataUrl ||
+                            previewAttachment?.objectUrl
+                          )
+                        }
+                        aria-label="Copy attachment to clipboard"
+                      >
+                        <Copy className="mr-2 h-4 w-4" />
+                        Copy
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="destructive"
+                      onClick={() => {
+                        if (!previewAttachment) return;
+                        handleDeleteAttachment(previewAttachment);
+                        setFileDialogOpen(false);
+                        setPreviewAttachment(null);
+                      }}
+                      disabled={!previewAttachment}
+                      aria-label="Delete attachment"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </Button>
                     <Button
                       variant="outline"
-                      onClick={async () =>
-                        await handleCopyAttachment(previewAttachment)
+                      onClick={() =>
+                        downloadFromUrl(
+                          previewAttachment?.dataUrl ||
+                            previewAttachment?.objectUrl,
+                          previewAttachment?.name
+                        )
                       }
                       disabled={
                         !(
@@ -1841,48 +1873,25 @@ function DevPanel({
                           previewAttachment?.objectUrl
                         )
                       }
-                      aria-label="Copy attachment to clipboard"
+                      aria-label="Download attachment"
                     >
-                      <Copy className="mr-2 h-4 w-4" />
-                      Copy
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
                     </Button>
-                  ) : null}
-                  <Button
-                    variant="destructive"
-                    onClick={() => {
-                      if (!previewAttachment) return;
-                      handleDeleteAttachment(previewAttachment);
-                      setFileDialogOpen(false);
-                      setPreviewAttachment(null);
-                    }}
-                    disabled={!previewAttachment}
-                    aria-label="Delete attachment"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      downloadFromUrl(
-                        previewAttachment?.dataUrl ||
-                          previewAttachment?.objectUrl,
-                        previewAttachment?.name
-                      )
-                    }
-                    disabled={
-                      !(
-                        previewAttachment?.dataUrl ||
-                        previewAttachment?.objectUrl
-                      )
-                    }
-                    aria-label="Download attachment"
-                  >
-                    <Download className="mr-2 h-4 w-4" />
-                    Download
-                  </Button>
-                </div>
-              </DialogContent>
+                  </div>
+
+                  <DialogClose asChild>
+                    <button
+                      type="button"
+                      className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="sr-only">Close</span>
+                    </button>
+                  </DialogClose>
+                </DialogPrimitive.Content>
+              </DialogPortal>
             </Dialog>
           </div>
         ) : null}
@@ -2264,6 +2273,12 @@ export default function BrowserToolView() {
         }
         return;
       }
+      if (devPanel.isOpen && devPanel.isFullWidth) {
+        if (window.electronAPI?.browserView?.hideAll) {
+          await window.electronAPI.browserView.hideAll();
+        }
+        return;
+      }
       if (activeTab?.kind === "browser") {
         if (window.electronAPI?.browserView?.show) {
           await window.electronAPI.browserView.show(resolvedActiveTabId);
@@ -2280,6 +2295,8 @@ export default function BrowserToolView() {
   }, [
     activeTab?.kind,
     hasElectronView,
+    devPanel.isFullWidth,
+    devPanel.isOpen,
     isRouteActive,
     resolvedActiveTabId,
     updateBounds,
@@ -2584,7 +2601,12 @@ export default function BrowserToolView() {
       </div>
 
       <div className="flex min-h-0 flex-1">
-        <div className="relative min-h-0 flex-1">
+        <div
+          className={cn(
+            "relative min-h-0 flex-1",
+            devPanel.isOpen && devPanel.isFullWidth && "hidden"
+          )}
+        >
           {activeTab?.kind === "dashboard" ? (
             <ScrollArea className="h-full">
               <Dashboard onOpenUrl={openInNewTab} />

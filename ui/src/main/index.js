@@ -528,10 +528,13 @@ function ensureBrowserView(tabId) {
     nodeIntegration: false,
     contextIsolation: true,
     sandbox: true,
-    ...(process.platform === "darwin" ? { webgl: false } : {}),
   };
 
   const view = new BrowserView({ webPreferences });
+
+  try {
+    view.webContents.setBackgroundColor("#ffffff");
+  } catch {}
 
   view.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
@@ -545,15 +548,64 @@ function ensureBrowserView(tabId) {
 
   browserViews.set(tabId, view);
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (typeof mainWindow.addBrowserView === "function") {
-      mainWindow.addBrowserView(view);
-    } else {
-      mainWindow.setBrowserView(view);
-    }
-  }
+  attachBrowserView(view);
 
   return view;
+}
+
+function isBrowserViewAttached(view) {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  if (typeof mainWindow.getBrowserViews === "function") {
+    try {
+      return mainWindow.getBrowserViews().includes(view);
+    } catch {
+      return false;
+    }
+  }
+  if (typeof mainWindow.getBrowserView === "function") {
+    try {
+      return mainWindow.getBrowserView() === view;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+
+function attachBrowserView(view) {
+  if (!view || !view.webContents || view.webContents.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (isBrowserViewAttached(view)) return;
+
+  if (typeof mainWindow.addBrowserView === "function") {
+    try {
+      mainWindow.addBrowserView(view);
+    } catch {}
+    return;
+  }
+  if (typeof mainWindow.setBrowserView === "function") {
+    try {
+      mainWindow.setBrowserView(view);
+    } catch {}
+  }
+}
+
+function detachBrowserView(view) {
+  if (!view || !view.webContents || view.webContents.isDestroyed()) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (!isBrowserViewAttached(view)) return;
+
+  if (typeof mainWindow.removeBrowserView === "function") {
+    try {
+      mainWindow.removeBrowserView(view);
+    } catch {}
+    return;
+  }
+  if (typeof mainWindow.setBrowserView === "function") {
+    try {
+      mainWindow.setBrowserView(null);
+    } catch {}
+  }
 }
 
 ipcMain.on("inspector-hover", (event, payload) => {
@@ -597,6 +649,7 @@ function sendInspectorSelection(tabId, payload) {
 function hideBrowserView(tabId) {
   const view = browserViews.get(tabId);
   if (!view || view.webContents.isDestroyed()) return;
+  detachBrowserView(view);
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 }
 
@@ -608,6 +661,7 @@ function showBrowserView(tabId) {
   }
 
   const view = ensureBrowserView(tabId);
+  attachBrowserView(view);
   const bounds = browserBoundsCache.get(tabId);
   if (bounds) view.setBounds(bounds);
   notifyBrowserState(tabId);
@@ -620,13 +674,7 @@ function destroyBrowserView(tabId) {
   browserBoundsCache.delete(tabId);
   if (activeBrowserTabId === tabId) activeBrowserTabId = null;
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (typeof mainWindow.removeBrowserView === "function") {
-      try {
-        mainWindow.removeBrowserView(view);
-      } catch {}
-    }
-  }
+  detachBrowserView(view);
 
   try {
     view.webContents.destroy();
