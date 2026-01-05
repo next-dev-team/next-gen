@@ -59,8 +59,8 @@ import {
 } from "../components/ui/tabs";
 import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
-import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
 import { useResourceStore } from "../stores/resourceStore";
+import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
 
 const createId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -909,6 +909,35 @@ function DevPanel({
   const [dropActive, setDropActive] = useState(false);
   const [previewAttachment, setPreviewAttachment] = useState(null);
   const attachmentsRef = useRef([]);
+
+  useEffect(() => {
+    if (!hasElectronView) return;
+    if (!window.electronAPI?.browserView?.hideAll) return;
+
+    const run = async () => {
+      if (fileDialogOpen) {
+        await window.electronAPI.browserView.hideAll();
+        return;
+      }
+
+      if (!isRouteActive || !activeIsBrowser || !activeTabId) {
+        await window.electronAPI.browserView.hideAll();
+        return;
+      }
+
+      if (window.electronAPI?.browserView?.show) {
+        await window.electronAPI.browserView.show(activeTabId);
+      }
+    };
+
+    run().catch(() => {});
+  }, [
+    activeIsBrowser,
+    activeTabId,
+    fileDialogOpen,
+    hasElectronView,
+    isRouteActive,
+  ]);
 
   const dragging = useRef(false);
   const dragStartX = useRef(0);
@@ -1766,7 +1795,7 @@ function DevPanel({
                 if (!open) setPreviewAttachment(null);
               }}
             >
-              <DialogContent className="max-w-3xl">
+              <DialogContent className="max-w-3xl z-[100]">
                 <DialogHeader>
                   <DialogTitle>
                     {String(previewAttachment?.name || "Attachment")}
