@@ -7,6 +7,7 @@ import { Toaster } from "./components/ui/sonner";
 
 const GeneratorView = lazy(() => import("./views/GeneratorView"));
 const ProjectsView = lazy(() => import("./views/ProjectsView"));
+const LaunchpadView = lazy(() => import("./views/LaunchpadView"));
 const UIView = lazy(() => import("./views/UIView"));
 const BrowserToolView = lazy(() => import("./views/BrowserToolView"));
 const ScrumBoardView = lazy(() => import("./views/ScrumBoardView"));
@@ -117,9 +118,10 @@ function App() {
                 />
               }
             >
-              <Route index element={<Navigate to="/generator" replace />} />
+              <Route index element={<Navigate to="/launchpad" replace />} />
               <Route path="generator" element={<GeneratorView />} />
               <Route path="projects" element={<ProjectsView />} />
+              <Route path="launchpad" element={<LaunchpadView />} />
               <Route path="ui" element={<UIView />} />
               <Route path="browser" element={<BrowserToolView />} />
               <Route path="scrum-board" element={<ScrumBoardView />} />

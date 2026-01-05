@@ -1089,8 +1089,15 @@ ipcMain.handle("app-capture-page", async () => {
 
 async function selectPrimaryDisplayRegion() {
   const display =
-    typeof screen?.getPrimaryDisplay === "function" ? screen.getPrimaryDisplay() : null;
+    typeof screen?.getPrimaryDisplay === "function"
+      ? screen.getPrimaryDisplay()
+      : null;
   const bounds = display?.bounds || { x: 0, y: 0, width: 0, height: 0 };
+  const workArea = display?.workArea || bounds;
+  const originX = Math.floor(Number(workArea.x) || 0);
+  const originY = Math.floor(Number(workArea.y) || 0);
+  const boundsWidth = Math.max(1, Math.floor(Number(workArea.width) || 0));
+  const boundsHeight = Math.max(1, Math.floor(Number(workArea.height) || 0));
   const requestId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const channel = `external-area-selection-${requestId}`;
 
@@ -1114,10 +1121,10 @@ async function selectPrimaryDisplayRegion() {
     });
 
     selectionWindow = new BrowserWindow({
-      x: Math.floor(Number(bounds.x) || 0),
-      y: Math.floor(Number(bounds.y) || 0),
-      width: Math.max(1, Math.floor(Number(bounds.width) || 0)),
-      height: Math.max(1, Math.floor(Number(bounds.height) || 0)),
+      x: originX,
+      y: originY,
+      width: boundsWidth,
+      height: boundsHeight,
       frame: false,
       transparent: true,
       resizable: false,
@@ -1175,10 +1182,22 @@ async function selectPrimaryDisplayRegion() {
     <script>
       const { ipcRenderer } = require('electron');
       const channel = ${JSON.stringify(channel)};
+      const originX = ${originX};
+      const originY = ${originY};
+      const boundsWidth = ${boundsWidth};
+      const boundsHeight = ${boundsHeight};
       const box = document.getElementById('box');
       let start = null;
 
       const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
+      const clampScreen = (screen) => ({
+        x: clamp(screen.x, originX, originX + boundsWidth),
+        y: clamp(screen.y, originY, originY + boundsHeight),
+      });
+      const toClient = (screen) => ({
+        x: screen.x - window.screenX,
+        y: screen.y - window.screenY,
+      });
 
       window.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
@@ -1188,26 +1207,23 @@ async function selectPrimaryDisplayRegion() {
       }, true);
 
       window.addEventListener('mousedown', (e) => {
-        start = { x: e.clientX, y: e.clientY };
+        const s = clampScreen({ x: e.screenX, y: e.screenY });
+        start = { screen: s, client: toClient(s) };
         box.style.display = 'block';
-        box.style.left = start.x + 'px';
-        box.style.top = start.y + 'px';
+        box.style.left = start.client.x + 'px';
+        box.style.top = start.client.y + 'px';
         box.style.width = '0px';
         box.style.height = '0px';
       });
 
       window.addEventListener('mousemove', (e) => {
         if (!start) return;
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        const x2 = clamp(e.clientX, 0, w);
-        const y2 = clamp(e.clientY, 0, h);
-        const x1 = clamp(start.x, 0, w);
-        const y1 = clamp(start.y, 0, h);
-        const left = Math.min(x1, x2);
-        const top = Math.min(y1, y2);
-        const width = Math.abs(x2 - x1);
-        const height = Math.abs(y2 - y1);
+        const curScreen = clampScreen({ x: e.screenX, y: e.screenY });
+        const curClient = toClient(curScreen);
+        const left = Math.min(start.client.x, curClient.x);
+        const top = Math.min(start.client.y, curClient.y);
+        const width = Math.abs(curClient.x - start.client.x);
+        const height = Math.abs(curClient.y - start.client.y);
         box.style.left = left + 'px';
         box.style.top = top + 'px';
         box.style.width = width + 'px';
@@ -1216,16 +1232,11 @@ async function selectPrimaryDisplayRegion() {
 
       window.addEventListener('mouseup', (e) => {
         if (!start) return;
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        const x2 = clamp(e.clientX, 0, w);
-        const y2 = clamp(e.clientY, 0, h);
-        const x1 = clamp(start.x, 0, w);
-        const y1 = clamp(start.y, 0, h);
-        const left = Math.min(x1, x2);
-        const top = Math.min(y1, y2);
-        const width = Math.abs(x2 - x1);
-        const height = Math.abs(y2 - y1);
+        const curScreen = clampScreen({ x: e.screenX, y: e.screenY });
+        const left = Math.min(start.screen.x, curScreen.x);
+        const top = Math.min(start.screen.y, curScreen.y);
+        const width = Math.abs(curScreen.x - start.screen.x);
+        const height = Math.abs(curScreen.y - start.screen.y);
         start = null;
         try { ipcRenderer.send(channel, { x: left, y: top, width, height }); } catch {}
         window.close();
@@ -1280,11 +1291,43 @@ ipcMain.handle("external-capture-primary-screen", async () => {
     const list = Array.isArray(sources) ? sources : [];
     if (!list.length) return { ok: false, error: "No screen sources" };
 
-    const best = list.reduce((acc, cur) => {
-      const a = acc?.thumbnail?.getSize?.() || { width: 0, height: 0 };
-      const b = cur?.thumbnail?.getSize?.() || { width: 0, height: 0 };
-      return a.width * a.height >= b.width * b.height ? acc : cur;
-    }, list[0]);
+    const displayId =
+      display && typeof display.id !== "undefined" ? String(display.id) : null;
+
+    const byDisplayId = displayId
+      ? list.find((source) => {
+          const sid = String(source?.display_id ?? source?.displayId ?? "");
+          return sid && sid === displayId;
+        })
+      : null;
+
+    const expectedW = Math.max(
+      1,
+      Math.floor(Number(thumbnailSize?.width) || 0)
+    );
+    const expectedH = Math.max(
+      1,
+      Math.floor(Number(thumbnailSize?.height) || 0)
+    );
+    const tolerance = 3;
+    const bySize = list.find((source) => {
+      const s = source?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+      const sw = Math.floor(Number(s.width) || 0);
+      const sh = Math.floor(Number(s.height) || 0);
+      return (
+        Math.abs(sw - expectedW) <= tolerance &&
+        Math.abs(sh - expectedH) <= tolerance
+      );
+    });
+
+    const best =
+      byDisplayId ||
+      bySize ||
+      list.reduce((acc, cur) => {
+        const a = acc?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+        const b = cur?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+        return a.width * a.height >= b.width * b.height ? acc : cur;
+      }, list[0]);
 
     const image = best?.thumbnail;
     const size = image?.getSize?.() || { width: 0, height: 0 };
@@ -1331,27 +1374,32 @@ ipcMain.handle("external-capture-primary-screen-region", async () => {
       return { ok: false, cancelled: true, error: "Cancelled" };
     }
 
-    const sxDip = Math.max(0, Math.floor(Number(sel.x) || 0));
-    const syDip = Math.max(0, Math.floor(Number(sel.y) || 0));
-    const swDip = Math.max(1, Math.floor(Number(sel.width) || 0));
-    const shDip = Math.max(1, Math.floor(Number(sel.height) || 0));
-    if (swDip < 2 || shDip < 2) {
-      return { ok: false, cancelled: true, error: "Cancelled" };
-    }
-
-    await new Promise((r) => setTimeout(r, 120));
-
     const display =
       typeof screen?.getPrimaryDisplay === "function"
         ? screen.getPrimaryDisplay()
         : null;
-    const width = Math.max(1, Math.floor(Number(display?.size?.width) || 0));
-    const height = Math.max(1, Math.floor(Number(display?.size?.height) || 0));
-    const scaleFactor = Math.max(1, Number(display?.scaleFactor) || 1);
+    const bounds = display?.bounds || { x: 0, y: 0, width: 1, height: 1 };
+    const workArea = display?.workArea || bounds;
+    const boundsX = Math.floor(Number(bounds.x) || 0);
+    const boundsY = Math.floor(Number(bounds.y) || 0);
+    const boundsWidth = Math.max(1, Math.floor(Number(bounds.width) || 0));
+    const boundsHeight = Math.max(1, Math.floor(Number(bounds.height) || 0));
+    const workX = Math.floor(Number(workArea.x) || 0);
+    const workY = Math.floor(Number(workArea.y) || 0);
+    const workWidth = Math.max(1, Math.floor(Number(workArea.width) || 0));
+    const workHeight = Math.max(1, Math.floor(Number(workArea.height) || 0));
 
+    const selXAbs = Math.floor(Number(sel.x) || 0);
+    const selYAbs = Math.floor(Number(sel.y) || 0);
+    const selW = Math.floor(Number(sel.width) || 0);
+    const selH = Math.floor(Number(sel.height) || 0);
+
+    await new Promise((r) => setTimeout(r, 120));
+
+    const scaleFactor = Math.max(1, Number(display?.scaleFactor) || 1);
     const thumbnailSize = {
-      width: Math.max(1, Math.floor(width * scaleFactor)),
-      height: Math.max(1, Math.floor(height * scaleFactor)),
+      width: Math.max(1, Math.floor(boundsWidth * scaleFactor)),
+      height: Math.max(1, Math.floor(boundsHeight * scaleFactor)),
     };
 
     const sources = await desktopCapturer.getSources({
@@ -1361,11 +1409,57 @@ ipcMain.handle("external-capture-primary-screen-region", async () => {
     const list = Array.isArray(sources) ? sources : [];
     if (!list.length) return { ok: false, error: "No screen sources" };
 
-    const best = list.reduce((acc, cur) => {
-      const a = acc?.thumbnail?.getSize?.() || { width: 0, height: 0 };
-      const b = cur?.thumbnail?.getSize?.() || { width: 0, height: 0 };
-      return a.width * a.height >= b.width * b.height ? acc : cur;
-    }, list[0]);
+    const displayId =
+      display && typeof display.id !== "undefined" ? String(display.id) : null;
+
+    const byDisplayId = displayId
+      ? list.find((source) => {
+          const sid = String(source?.display_id ?? source?.displayId ?? "");
+          return sid && sid === displayId;
+        })
+      : null;
+
+    const expectedW = Math.max(
+      1,
+      Math.floor(Number(thumbnailSize?.width) || 0)
+    );
+    const expectedH = Math.max(
+      1,
+      Math.floor(Number(thumbnailSize?.height) || 0)
+    );
+    const tolerance = 3;
+    const bySize = list.find((source) => {
+      const s = source?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+      const sw = Math.floor(Number(s.width) || 0);
+      const sh = Math.floor(Number(s.height) || 0);
+      return (
+        Math.abs(sw - expectedW) <= tolerance &&
+        Math.abs(sh - expectedH) <= tolerance
+      );
+    });
+
+    const expectedRatio = boundsWidth / boundsHeight;
+    const best =
+      byDisplayId ||
+      bySize ||
+      list.reduce((acc, cur) => {
+        const aSize = acc?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+        const bSize = cur?.thumbnail?.getSize?.() || { width: 0, height: 0 };
+        const aArea =
+          Math.max(0, Number(aSize.width) || 0) *
+          Math.max(0, Number(aSize.height) || 0);
+        const bArea =
+          Math.max(0, Number(bSize.width) || 0) *
+          Math.max(0, Number(bSize.height) || 0);
+        const aRatio = aSize.height ? aSize.width / aSize.height : 0;
+        const bRatio = bSize.height ? bSize.width / bSize.height : 0;
+        const aDiff = Math.abs(aRatio - expectedRatio);
+        const bDiff = Math.abs(bRatio - expectedRatio);
+
+        if (bDiff < aDiff - 1e-6) return cur;
+        if (aDiff < bDiff - 1e-6) return acc;
+        return bArea > aArea ? cur : acc;
+      }, list[0]);
 
     const image = best?.thumbnail;
     const size = image?.getSize?.() || { width: 0, height: 0 };
@@ -1377,17 +1471,76 @@ ipcMain.handle("external-capture-primary-screen-region", async () => {
       return { ok: false, error: "Crop is not supported" };
     }
 
-    const sx = Math.max(0, Math.floor(sxDip * scaleFactor));
-    const sy = Math.max(0, Math.floor(syDip * scaleFactor));
-    const sw = Math.max(1, Math.floor(swDip * scaleFactor));
-    const sh = Math.max(1, Math.floor(shDip * scaleFactor));
+    const ratioOf = (w, h) => {
+      const ww = Math.max(1, Number(w) || 0);
+      const hh = Math.max(1, Number(h) || 0);
+      return ww / hh;
+    };
+    const scoreBasis = (rectW, rectH) => {
+      const expW = Math.max(1, Math.floor(Number(rectW) * scaleFactor));
+      const expH = Math.max(1, Math.floor(Number(rectH) * scaleFactor));
+      const dw = Math.abs(size.width - expW);
+      const dh = Math.abs(size.height - expH);
+      const dr = Math.abs(
+        ratioOf(size.width, size.height) - ratioOf(rectW, rectH)
+      );
+      return dw + dh + dr * 2000;
+    };
+    const useWorkArea =
+      scoreBasis(workWidth, workHeight) < scoreBasis(boundsWidth, boundsHeight);
+    const basis = useWorkArea
+      ? {
+          name: "workArea",
+          x: workX,
+          y: workY,
+          width: workWidth,
+          height: workHeight,
+        }
+      : {
+          name: "bounds",
+          x: boundsX,
+          y: boundsY,
+          width: boundsWidth,
+          height: boundsHeight,
+        };
+
+    const relX = selXAbs - basis.x;
+    const relY = selYAbs - basis.y;
+
+    const x1Dip = Math.max(0, Math.min(relX, basis.width));
+    const y1Dip = Math.max(0, Math.min(relY, basis.height));
+    const x2Dip = Math.max(0, Math.min(relX + selW, basis.width));
+    const y2Dip = Math.max(0, Math.min(relY + selH, basis.height));
+
+    const sxDip = Math.min(x1Dip, x2Dip);
+    const syDip = Math.min(y1Dip, y2Dip);
+    const swDip = Math.max(0, Math.abs(x2Dip - x1Dip));
+    const shDip = Math.max(0, Math.abs(y2Dip - y1Dip));
+
+    if (swDip < 2 || shDip < 2) {
+      return { ok: false, cancelled: true, error: "Cancelled" };
+    }
+
+    const scaleX = size.width / basis.width;
+    const scaleY = size.height / basis.height;
+    const sx = Math.max(0, Math.floor(sxDip * scaleX));
+    const sy = Math.max(0, Math.floor(syDip * scaleY));
+    const ex = Math.min(size.width, Math.ceil((sxDip + swDip) * scaleX));
+    const ey = Math.min(size.height, Math.ceil((syDip + shDip) * scaleY));
+    const sw = Math.max(1, ex - sx);
+    const sh = Math.max(1, ey - sy);
 
     const cx = Math.min(sx, Math.max(0, size.width - 1));
     const cy = Math.min(sy, Math.max(0, size.height - 1));
     const cwidth = Math.max(1, Math.min(sw, size.width - cx));
     const cheight = Math.max(1, Math.min(sh, size.height - cy));
 
-    const cropped = image.crop({ x: cx, y: cy, width: cwidth, height: cheight });
+    const cropped = image.crop({
+      x: cx,
+      y: cy,
+      width: cwidth,
+      height: cheight,
+    });
     const png = cropped.toPNG();
     if (!png?.length) return { ok: false, error: "Empty screen capture" };
     const base64 = png.toString("base64");
@@ -1401,7 +1554,17 @@ ipcMain.handle("external-capture-primary-screen-region", async () => {
         method: "desktopCapturer+select",
         rect: { x: cx, y: cy, width: cwidth, height: cheight },
         rectDip: { x: sxDip, y: syDip, width: swDip, height: shDip },
+        scale: { x: scaleX, y: scaleY },
         scaleFactor,
+        basis: {
+          name: basis.name,
+          rectDip: {
+            x: basis.x,
+            y: basis.y,
+            width: basis.width,
+            height: basis.height,
+          },
+        },
       },
     };
   } catch (err) {

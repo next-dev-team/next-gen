@@ -30,7 +30,7 @@ turbo-generators/
 
 **The key is:** Generators must be inside `turbo/generators/` directory!
 
-## Step-by-Step Fix:
+## Step-by-Step Fix
 
 ### 1. **Restructure your repo:**
 
@@ -131,7 +131,7 @@ turbo gen
 
 You should now see your generators listed!
 
-## Quick Development Workflow:
+## Quick Development Workflow
 
 **Option A - Local Path:**
 
@@ -154,8 +154,19 @@ cd ../your-monorepo
 npm link turbo-generators
 ```
 
+## Roadmap
+
+[ ] Add launchpad Raycast or apple spotlight style
+[ ] OCR capture
+[ ] Plugin like Raycast
+[ ] Browser device responsive + mockup device frame
+[ ] Browser extension, Proxy, ads block etc
+[ ] Add more generators
+[ ] Add more templates
+[ ] Add more documentation
+
 The main issue was the missing `turbo/generators/` folder structure. Turborepo looks specifically for that path! 🎯
 
 ## Useful links
 
-https://github.com/olliethedev/ui-builder
+<https://github.com/olliethedev/ui-builder>

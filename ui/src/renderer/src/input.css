@@ -65,6 +65,8 @@
 /* Base styles */
 :root {
   /* Shadcn Light Theme - v4 Compatible (Raw HSL) */
+  --Base-White: #fff;
+  --lines-color-rgb: 99, 102, 241;
   --background: 0 0% 100%;
   --foreground: 222.2 84% 4.9%;
   --card: 0 0% 100%;

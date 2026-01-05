@@ -1,4 +1,3 @@
-import { Segmented } from "antd";
 import {
   AppWindow,
   Camera,
@@ -6,6 +5,7 @@ import {
   Globe,
   LayoutGrid,
   Rocket,
+  Search,
   Settings,
   Table,
 } from "lucide-react";
@@ -402,7 +402,8 @@ export default function MainLayout({
 
         await new Promise((r) => setTimeout(r, 150));
 
-        let res = await window.electronAPI.externalCapture.capturePrimaryScreen();
+        let res =
+          await window.electronAPI.externalCapture.capturePrimaryScreen();
         if (!res?.ok) {
           const fallback = await captureViaDisplayMedia();
           if (fallback?.ok) res = fallback;
@@ -419,7 +420,12 @@ export default function MainLayout({
         toast.error(String(err?.message || err || "Capture failed"));
       }
     });
-  }, [canExternalCapture, captureViaDisplayMedia, saveCapture, withAutoHideApp]);
+  }, [
+    canExternalCapture,
+    captureViaDisplayMedia,
+    saveCapture,
+    withAutoHideApp,
+  ]);
 
   const confirmExternalCrop = React.useCallback(async () => {
     const img = externalCropImgRef.current;
@@ -511,21 +517,65 @@ export default function MainLayout({
       ? "generator"
       : location.pathname.substring(1).split("/")[0];
 
-  const handleTabChange = (value) => {
-    navigate(`/${value}`);
-  };
+  const handleTabChange = React.useCallback(
+    (value) => {
+      navigate(`/${value}`);
+    },
+    [navigate]
+  );
 
-  const tabOptions = [
-    { key: "generator", label: "Generator", icon: Rocket },
-    { key: "projects", label: "Projects", icon: AppWindow },
-    { key: "ui", label: "UI", icon: LayoutGrid },
-    { key: "scrum-board", label: "Scrum Board", icon: Table },
-    { key: "browser", label: "Browser", icon: Globe },
-  ];
+  const tabOptions = React.useMemo(
+    () => [
+      { key: "generator", label: "Generator", icon: Rocket },
+      { key: "projects", label: "Projects", icon: AppWindow },
+      { key: "launchpad", label: "Launchpad", icon: Search },
+      { key: "ui", label: "UI", icon: LayoutGrid },
+      { key: "scrum-board", label: "Scrum Board", icon: Table },
+      { key: "browser", label: "Browser", icon: Globe },
+    ],
+    []
+  );
 
   const segmentedValue = tabOptions.some((t) => t.key === activeTab)
     ? activeTab
-    : "generator";
+    : "launchpad";
+
+  const handleTabsKeyDown = React.useCallback(
+    (e) => {
+      if (
+        e.key !== "ArrowLeft" &&
+        e.key !== "ArrowRight" &&
+        e.key !== "Home" &&
+        e.key !== "End"
+      ) {
+        return;
+      }
+
+      e.preventDefault();
+      const currentIndex = tabOptions.findIndex(
+        (t) => t.key === segmentedValue
+      );
+      if (currentIndex < 0) return;
+
+      const lastIndex = tabOptions.length - 1;
+      let nextIndex = currentIndex;
+
+      if (e.key === "ArrowLeft") {
+        nextIndex = currentIndex === 0 ? lastIndex : currentIndex - 1;
+      } else if (e.key === "ArrowRight") {
+        nextIndex = currentIndex === lastIndex ? 0 : currentIndex + 1;
+      } else if (e.key === "Home") {
+        nextIndex = 0;
+      } else if (e.key === "End") {
+        nextIndex = lastIndex;
+      }
+
+      const next = tabOptions[nextIndex];
+      if (!next) return;
+      handleTabChange(next.key);
+    },
+    [handleTabChange, segmentedValue, tabOptions]
+  );
 
   return (
     <TooltipProvider>
@@ -546,7 +596,9 @@ export default function MainLayout({
                 ? "UI Builder"
                 : activeTab === "resources"
                   ? "Resources"
-                  : "Next Gen"}
+                  : activeTab === "launchpad"
+                    ? "Launchpad"
+                    : "Next Gen"}
             </h1>
             <div className="rounded bg-[var(--color-bg-elevated)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]">
               v1.0
@@ -557,22 +609,64 @@ export default function MainLayout({
             className="flex flex-1 items-center justify-center"
             style={{ WebkitAppRegion: "no-drag" }}
           >
-            <Segmented
-              value={segmentedValue}
-              onChange={handleTabChange}
-              options={tabOptions.map((t) => {
+            <div
+              role="tablist"
+              aria-label="segmented control"
+              tabIndex={0}
+              onKeyDown={handleTabsKeyDown}
+              className="flex items-center gap-1 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.03)_100%)] p-1 shadow-inner overflow-visible"
+            >
+              {tabOptions.map((t) => {
                 const Icon = t.icon;
-                return {
-                  value: t.key,
-                  label: (
-                    <span className="inline-flex items-center gap-2">
-                      <Icon className="h-4 w-4" />
-                      <span>{t.label}</span>
-                    </span>
-                  ),
-                };
+                const isActive = t.key === segmentedValue;
+                const isLaunchpad = t.key === "launchpad";
+
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    aria-label={t.label}
+                    onClick={() => handleTabChange(t.key)}
+                    className={
+                      (isLaunchpad
+                        ? "relative -my-2 inline-flex items-center justify-center rounded-full p-1 transition-all duration-200 ease-out [will-change:transform] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.5)] hover:scale-[1.03] active:scale-[0.98]"
+                        : "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition-colors focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.5)] ") +
+                      (isActive
+                        ? "border-[hsla(0,0%,100%,.1)] bg-clip-padding bg-[radial-gradient(51.07%_92.4%_at_51%_7.61%,#5a5a5a_0,#1a1a1a_100%)] text-[var(--Base-White)] shadow-sm"
+                        : isLaunchpad
+                          ? "text-[var(--color-text-secondary)]"
+                          : "border-transparent text-[var(--color-text-secondary)] hover:bg-white/5 hover:text-[var(--Base-White)]")
+                    }
+                  >
+                    {isLaunchpad ? (
+                      <span
+                        className={
+                          "relative flex h-10 w-10 items-center justify-center rounded-full border bg-[radial-gradient(85%_85%_at_32%_22%,rgba(255,255,255,0.32)_0%,rgba(255,255,255,0.12)_36%,rgba(0,0,0,0.32)_100%)] shadow-[0_14px_26px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.24)] transition-all duration-200 ease-out [will-change:transform] " +
+                          (isActive
+                            ? "border-[hsla(0,0%,100%,.14)]"
+                            : "border-white/10")
+                        }
+                      >
+                        <span className="pointer-events-none absolute -inset-3 -z-10 rounded-full bg-[radial-gradient(55%_55%_at_50%_45%,rgba(var(--lines-color-rgb),0.45)_0%,rgba(var(--lines-color-rgb),0.12)_35%,transparent_72%)] blur-md" />
+                        <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(60%_60%_at_30%_20%,rgba(255,255,255,0.38)_0%,transparent_70%)]" />
+                        <span className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(70%_80%_at_50%_85%,rgba(0,0,0,0.35)_0%,transparent_55%)]" />
+                        <Icon
+                          className="h-[18px] w-[18px]"
+                          aria-hidden="true"
+                        />
+                      </span>
+                    ) : (
+                      <>
+                        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>{t.label}</span>
+                      </>
+                    )}
+                  </button>
+                );
               })}
-            />
+            </div>
           </div>
 
           <div
