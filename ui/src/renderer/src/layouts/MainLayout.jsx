@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   BugOutlined,
+  CameraOutlined,
   GlobalOutlined,
   GithubOutlined,
   LayoutOutlined,
@@ -8,7 +9,7 @@ import {
   SettingOutlined,
   TableOutlined,
 } from "@ant-design/icons";
-import { Button, Layout, Segmented, Tooltip, Typography } from "antd";
+import { Button, Dropdown, Layout, Segmented, Tooltip, Typography, message } from "antd";
 import React from "react";
 import { useLocation, useNavigate, useOutlet } from "react-router-dom";
 
@@ -67,6 +68,81 @@ export default function MainLayout({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const isWeb = typeof __WEB__ !== "undefined" && Boolean(__WEB__);
+  const canAppCapture =
+    !isWeb &&
+    Boolean(
+      window.electronAPI?.appCapture?.capturePage &&
+        window.electronAPI?.appCapture?.captureRegion &&
+        window.electronAPI?.clipboardWriteImageDataUrl
+    );
+
+  const [captureOverlayOpen, setCaptureOverlayOpen] = React.useState(false);
+  const [captureRect, setCaptureRect] = React.useState(null);
+  const captureRectRef = React.useRef(null);
+  const captureDragRef = React.useRef({ active: false, startX: 0, startY: 0 });
+
+  const closeCaptureOverlay = React.useCallback(() => {
+    captureDragRef.current.active = false;
+    captureRectRef.current = null;
+    setCaptureRect(null);
+    setCaptureOverlayOpen(false);
+  }, []);
+
+  const captureAndCopy = React.useCallback(
+    async ({ mode, rect }) => {
+      if (!canAppCapture) {
+        message.error("Screenshot capture is not available");
+        return;
+      }
+
+      try {
+        const res =
+          mode === "full"
+            ? await window.electronAPI.appCapture.capturePage()
+            : await window.electronAPI.appCapture.captureRegion(rect);
+
+        if (!res?.ok || !res?.dataUrl) {
+          message.error(res?.error ? String(res.error) : "Capture failed");
+          return;
+        }
+
+        const ok = await window.electronAPI.clipboardWriteImageDataUrl(
+          res.dataUrl
+        );
+        if (!ok) {
+          message.error("Copy to clipboard failed");
+          return;
+        }
+        message.success("Copied screenshot to clipboard");
+      } catch (err) {
+        message.error(String(err?.message || err || "Capture failed"));
+      }
+    },
+    [canAppCapture]
+  );
+
+  const startAreaCapture = React.useCallback(() => {
+    if (!canAppCapture) {
+      message.error("Screenshot capture is not available");
+      return;
+    }
+    setCaptureOverlayOpen(true);
+    captureRectRef.current = null;
+    setCaptureRect(null);
+  }, [canAppCapture]);
+
+  React.useEffect(() => {
+    if (!captureOverlayOpen) return;
+    const onKeyDown = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      closeCaptureOverlay();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [captureOverlayOpen, closeCaptureOverlay]);
 
   // Derive active tab from pathname
   const activeTab =
@@ -269,6 +345,34 @@ export default function MainLayout({
             WebkitAppRegion: "no-drag",
           }}
         >
+          {canAppCapture ? (
+            <Tooltip title="Capture screenshot">
+              <Dropdown
+                trigger={["click"]}
+                placement="bottomRight"
+                menu={{
+                  items: [
+                    { key: "area", label: "Area (default)" },
+                    { key: "full", label: "Full" },
+                  ],
+                  onClick: ({ key }) => {
+                    if (key === "full") {
+                      captureAndCopy({ mode: "full" });
+                      return;
+                    }
+                    startAreaCapture();
+                  },
+                }}
+              >
+                <Button
+                  type="text"
+                  icon={<CameraOutlined />}
+                  style={{ color: "var(--color-text-secondary)" }}
+                />
+              </Dropdown>
+            </Tooltip>
+          ) : null}
+
           <Tooltip title="View on GitHub">
             <Button
               type="text"
@@ -310,6 +414,79 @@ export default function MainLayout({
           keepAliveKeys={["browser"]}
         />
       </Content>
+
+      {captureOverlayOpen ? (
+        <div
+          role="presentation"
+          onMouseDown={(e) => {
+            captureDragRef.current.active = true;
+            captureDragRef.current.startX = e.clientX;
+            captureDragRef.current.startY = e.clientY;
+            const next = { x: e.clientX, y: e.clientY, width: 0, height: 0 };
+            captureRectRef.current = next;
+            setCaptureRect(next);
+          }}
+          onMouseMove={(e) => {
+            if (!captureDragRef.current.active) return;
+            const x1 = captureDragRef.current.startX;
+            const y1 = captureDragRef.current.startY;
+            const x2 = e.clientX;
+            const y2 = e.clientY;
+            const x = Math.min(x1, x2);
+            const y = Math.min(y1, y2);
+            const width = Math.max(0, Math.abs(x2 - x1));
+            const height = Math.max(0, Math.abs(y2 - y1));
+            const next = { x, y, width, height };
+            captureRectRef.current = next;
+            setCaptureRect(next);
+          }}
+          onMouseUp={async () => {
+            const r = captureRectRef.current;
+            closeCaptureOverlay();
+            if (!r) return;
+            const width = Math.floor(Number(r.width) || 0);
+            const height = Math.floor(Number(r.height) || 0);
+            if (width < 2 || height < 2) return;
+            await captureAndCopy({
+              mode: "area",
+              rect: {
+                x: Math.floor(Number(r.x) || 0),
+                y: Math.floor(Number(r.y) || 0),
+                width,
+                height,
+              },
+            });
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            closeCaptureOverlay();
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10000,
+            background: "rgba(15,23,42,0.18)",
+            cursor: "crosshair",
+            WebkitAppRegion: "no-drag",
+            userSelect: "none",
+          }}
+        >
+          {captureRect ? (
+            <div
+              style={{
+                position: "absolute",
+                left: captureRect.x,
+                top: captureRect.y,
+                width: captureRect.width,
+                height: captureRect.height,
+                border: "1px solid var(--color-primary)",
+                background: "rgba(79,70,229,0.12)",
+                boxShadow: "0 0 0 1px rgba(15,23,42,0.45) inset",
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
     </Layout>
   );
 }

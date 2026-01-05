@@ -158,6 +158,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
 
+  appCapture: {
+    captureRegion: (rect) => ipcRenderer.invoke("app-capture-region", { rect }),
+    capturePage: () => ipcRenderer.invoke("app-capture-page"),
+  },
+
   clipboardWriteText: (text) => {
     try {
       clipboard.writeText(String(text ?? ""));

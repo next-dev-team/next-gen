@@ -791,6 +791,79 @@ ipcMain.handle("browserview-capture-page", async (event, { tabId }) => {
   }
 });
 
+ipcMain.handle("app-capture-region", async (event, { rect }) => {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { ok: false, error: "Main window not available" };
+    }
+
+    const r = rect && typeof rect === "object" ? rect : null;
+    const x = Math.max(0, Math.floor(Number(r?.x) || 0));
+    const y = Math.max(0, Math.floor(Number(r?.y) || 0));
+    const width = Math.max(1, Math.floor(Number(r?.width) || 0));
+    const height = Math.max(1, Math.floor(Number(r?.height) || 0));
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const image = await mainWindow.webContents.capturePage({
+        x,
+        y,
+        width,
+        height,
+      });
+      const size = image?.getSize?.() || { width: 0, height: 0 };
+      if (!image?.isEmpty?.() && size.width > 0 && size.height > 0) {
+        const png = image.toPNG();
+        if (png.length > 0) {
+          const base64 = png.toString("base64");
+          return {
+            ok: true,
+            mimeType: "image/png",
+            byteLength: png.length,
+            dataUrl: `data:image/png;base64,${base64}`,
+          };
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    return { ok: false, error: "Empty capture" };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
+ipcMain.handle("app-capture-page", async () => {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return { ok: false, error: "Main window not available" };
+    }
+
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const image = await mainWindow.webContents.capturePage();
+      const size = image?.getSize?.() || { width: 0, height: 0 };
+      if (!image?.isEmpty?.() && size.width > 0 && size.height > 0) {
+        const png = image.toPNG();
+        if (png.length > 0) {
+          const base64 = png.toString("base64");
+          return {
+            ok: true,
+            mimeType: "image/png",
+            byteLength: png.length,
+            dataUrl: `data:image/png;base64,${base64}`,
+          };
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, 100));
+    }
+
+    return { ok: false, error: "Empty capture" };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
 ipcMain.handle("clipboard-write-image-data-url", async (event, { dataUrl }) => {
   try {
     const { clipboard, nativeImage } = require("electron");
