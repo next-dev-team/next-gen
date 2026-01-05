@@ -161,6 +161,10 @@ npm link turbo-generators
 [ ] Plugin like Raycast
 [ ] Browser device responsive + mockup device frame
 [ ] Browser extension, Proxy, ads block etc
+[ ] well Agent flow for all flow
+[ ] projects mgt with @nut-tree/nut-js for user logic many accounts or other tasks
+[ ] install MCP to target project
+[ ] Chat llm \_ Chat MCP
 [ ] Add more generators
 [ ] Add more templates
 [ ] Add more documentation
