@@ -224,7 +224,7 @@ export default function MainLayout({
             <RocketOutlined style={{ color: "#fff", fontSize: 18 }} />
           </div>
           <Title
-            level={4}
+            level={5}
             style={{ color: "var(--color-text-primary)", margin: 0 }}
           >
             {activeTab === "ui"
@@ -339,22 +339,22 @@ export default function MainLayout({
                 ),
                 value: "browser",
               },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "2px 4px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <DatabaseOutlined />
-                    <span>Resources</span>
-                  </div>
-                ),
-                value: "resources",
-              },
+              // {
+              //   label: (
+              //     <div
+              //       style={{
+              //         padding: "2px 4px",
+              //         display: "flex",
+              //         alignItems: "center",
+              //         gap: 8,
+              //       }}
+              //     >
+              //       <DatabaseOutlined />
+              //       <span>Resources</span>
+              //     </div>
+              //   ),
+              //   value: "resources",
+              // },
               // {
               //   label: (
               //     <div
@@ -433,12 +433,37 @@ export default function MainLayout({
           </Tooltip>
 
           <Tooltip title="Settings">
-            <Button
-              type="text"
-              icon={<SettingOutlined />}
-              style={{ color: "var(--color-text-secondary)", fontSize: 18 }}
-              onClick={() => navigate("/settings")}
-            />
+            <Dropdown
+              trigger={["click"]}
+              placement="bottomRight"
+              menu={{
+                items: [
+                  {
+                    key: "resources",
+                    label: "Resources",
+                    icon: <DatabaseOutlined />,
+                  },
+                  {
+                    key: "settings",
+                    label: "Settings",
+                    icon: <SettingOutlined />,
+                  },
+                ],
+                onClick: ({ key }) => {
+                  if (key === "resources") {
+                    navigate("/resources");
+                  } else if (key === "settings") {
+                    navigate("/settings");
+                  }
+                },
+              }}
+            >
+              <Button
+                type="text"
+                icon={<SettingOutlined />}
+                style={{ color: "var(--color-text-secondary)", fontSize: 18 }}
+              />
+            </Dropdown>
           </Tooltip>
         </div>
       </Header>
