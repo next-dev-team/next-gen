@@ -1,30 +1,31 @@
 import {
-  AppstoreOutlined,
-  BugOutlined,
-  CameraOutlined,
-  DatabaseOutlined,
-  GlobalOutlined,
-  GithubOutlined,
-  LayoutOutlined,
-  RocketOutlined,
-  SettingOutlined,
-  TableOutlined,
-} from "@ant-design/icons";
-import {
-  Button,
-  Dropdown,
-  Layout,
-  Segmented,
-  Tooltip,
-  Typography,
-  message,
-} from "antd";
+  AppWindow,
+  Camera,
+  Globe,
+  Github,
+  LayoutGrid,
+  Rocket,
+  Settings,
+  Table,
+} from "lucide-react";
 import React from "react";
+import { Segmented } from "antd";
 import { useLocation, useNavigate, useOutlet } from "react-router-dom";
+import { toast } from "sonner";
+import { Button } from "../components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../components/ui/tooltip";
 import { useResourceStore } from "../stores/resourceStore";
-
-const { Header, Content, Footer } = Layout;
-const { Title, Text } = Typography;
 
 function KeepAliveOutlet({ outletContext, keepAliveKeys }) {
   const location = useLocation();
@@ -85,7 +86,7 @@ export default function MainLayout({
     Boolean(
       window.electronAPI?.appCapture?.capturePage &&
       window.electronAPI?.appCapture?.captureRegion &&
-      window.electronAPI?.clipboardWriteImageDataUrl
+      window.electronAPI?.clipboardWriteImageDataUrl,
     );
 
   const addScreenshot = useResourceStore((s) => s.addScreenshot);
@@ -105,7 +106,7 @@ export default function MainLayout({
   const captureAndCopy = React.useCallback(
     async ({ mode, rect }) => {
       if (!canAppCapture) {
-        message.error("Screenshot capture is not available");
+        toast.error("Screenshot capture is not available");
         return;
       }
 
@@ -116,7 +117,7 @@ export default function MainLayout({
             : await window.electronAPI.appCapture.captureRegion(rect);
 
         if (!res?.ok || !res?.dataUrl) {
-          message.error(res?.error ? String(res.error) : "Capture failed");
+          toast.error(res?.error ? String(res.error) : "Capture failed");
           return;
         }
 
@@ -133,23 +134,23 @@ export default function MainLayout({
         });
 
         const ok = await window.electronAPI.clipboardWriteImageDataUrl(
-          res.dataUrl
+          res.dataUrl,
         );
         if (!ok) {
-          message.error("Copy to clipboard failed");
+          toast.error("Copy to clipboard failed");
           return;
         }
-        message.success("Copied screenshot to clipboard");
+        toast.success("Copied screenshot to clipboard");
       } catch (err) {
-        message.error(String(err?.message || err || "Capture failed"));
+        toast.error(String(err?.message || err || "Capture failed"));
       }
     },
-    [addScreenshot, canAppCapture]
+    [addScreenshot, canAppCapture],
   );
 
   const startAreaCapture = React.useCallback(() => {
     if (!canAppCapture) {
-      message.error("Screenshot capture is not available");
+      toast.error("Screenshot capture is not available");
       return;
     }
     setCaptureOverlayOpen(true);
@@ -178,384 +179,234 @@ export default function MainLayout({
     navigate(`/${value}`);
   };
 
+  const tabOptions = [
+    { key: "generator", label: "Generator", icon: Rocket },
+    { key: "projects", label: "Projects", icon: AppWindow },
+    { key: "ui", label: "UI", icon: LayoutGrid },
+    { key: "scrum-board", label: "Scrum Board", icon: Table },
+    { key: "browser", label: "Browser", icon: Globe },
+  ];
+
+  const segmentedValue = tabOptions.some((t) => t.key === activeTab)
+    ? activeTab
+    : "generator";
+
   return (
-    <Layout
-      style={{
-        height: "100vh",
-        background: "var(--color-bg-base)",
-        transition: "background 0.3s ease",
-      }}
-    >
-      {/* Header */}
-      <Header
-        style={{
-          background: "var(--color-bg-container)",
-          borderBottom: "1px solid var(--color-border)",
-          padding: "0 24px",
-          paddingRight: 150, // Space for window control buttons
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          height: 64,
-          WebkitAppRegion: "drag", // Make header draggable
-          transition: "background 0.3s ease, border-color 0.3s ease",
-        }}
-      >
+    <TooltipProvider>
+      <div className="flex h-screen flex-col bg-[var(--color-bg-base)]">
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 12,
-            flex: 1,
-            WebkitAppRegion: "no-drag",
-          }}
+          className="flex h-16 items-center justify-between border-b bg-[var(--color-bg-container)] px-6"
+          style={{ WebkitAppRegion: "drag", paddingRight: 150 }}
         >
           <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
+            className="flex min-w-0 flex-1 items-center gap-3"
+            style={{ WebkitAppRegion: "no-drag" }}
           >
-            <RocketOutlined style={{ color: "#fff", fontSize: 18 }} />
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-indigo-600 to-indigo-500">
+              <Rocket className="h-[18px] w-[18px] text-white" />
+            </div>
+            <h1 className="truncate text-sm font-medium text-[var(--color-text-primary)]">
+              {activeTab === "ui"
+                ? "UI Builder"
+                : activeTab === "resources"
+                  ? "Resources"
+                  : "Next Gen"}
+            </h1>
+            <div className="rounded bg-[var(--color-bg-elevated)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]">
+              v1.0
+            </div>
           </div>
-          <Title
-            level={5}
-            style={{ color: "var(--color-text-primary)", margin: 0 }}
+
+          <div
+            className="flex flex-1 items-center justify-center"
+            style={{ WebkitAppRegion: "no-drag" }}
           >
-            {activeTab === "ui"
-              ? "UI Builder"
-              : activeTab === "resources"
-                ? "Resources"
-                : "Next Gen"}
-          </Title>
-          <Text
-            style={{
-              color: "var(--color-text-secondary)",
-              fontSize: 12,
-              padding: "2px 8px",
-              background: "var(--color-bg-elevated)",
-              borderRadius: 4,
-            }}
+            <Segmented
+              value={segmentedValue}
+              onChange={handleTabChange}
+              options={tabOptions.map((t) => {
+                const Icon = t.icon;
+                return {
+                  value: t.key,
+                  label: (
+                    <span className="inline-flex items-center gap-2">
+                      <Icon className="h-4 w-4" />
+                      <span>{t.label}</span>
+                    </span>
+                  ),
+                };
+              })}
+            />
+          </div>
+
+          <div
+            className="flex flex-1 items-center justify-end gap-2"
+            style={{ WebkitAppRegion: "no-drag" }}
           >
-            v1.0
-          </Text>
+            {canAppCapture ? (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-muted-foreground"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Capture screenshot</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => startAreaCapture()}>
+                    Area (default)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => captureAndCopy({ mode: "full" })}
+                  >
+                    Full
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
+                  onClick={() => {
+                    if (window.electronAPI?.openExternal) {
+                      window.electronAPI.openExternal(
+                        "https://github.com/next-dev-team/next-gen",
+                      );
+                    }
+                  }}
+                >
+                  <Github className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View on GitHub</TooltipContent>
+            </Tooltip>
+
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Settings</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => navigate("/resources")}>
+                  Resources
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/settings")}>
+                  Settings
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         <div
-          style={{
-            flex: 1,
-            display: "flex",
-            justifyContent: "center",
-            WebkitAppRegion: "no-drag",
-          }}
+          className="flex flex-1 flex-col overflow-hidden px-12 pb-6"
+          style={{ WebkitAppRegion: "no-drag" }}
         >
-          <Segmented
-            value={activeTab}
-            onChange={handleTabChange}
-            options={[
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "2px 4px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <RocketOutlined />
-                    <span>Generator</span>
-                  </div>
-                ),
-                value: "generator",
-              },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "2px 4px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <AppstoreOutlined />
-                    <span>Projects</span>
-                  </div>
-                ),
-                value: "projects",
-              },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "2px 4px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <LayoutOutlined />
-                    <span>UI</span>
-                  </div>
-                ),
-                value: "ui",
-              },
-
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "2px 4px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <TableOutlined />
-                    <span>Scrum Board</span>
-                  </div>
-                ),
-                value: "scrum-board",
-              },
-              {
-                label: (
-                  <div
-                    style={{
-                      padding: "2px 4px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                    }}
-                  >
-                    <GlobalOutlined />
-                    <span>Browser</span>
-                  </div>
-                ),
-                value: "browser",
-              },
-              // {
-              //   label: (
-              //     <div
-              //       style={{
-              //         padding: "2px 4px",
-              //         display: "flex",
-              //         alignItems: "center",
-              //         gap: 8,
-              //       }}
-              //     >
-              //       <DatabaseOutlined />
-              //       <span>Resources</span>
-              //     </div>
-              //   ),
-              //   value: "resources",
-              // },
-              // {
-              //   label: (
-              //     <div
-              //       style={{
-              //         padding: "2px 4px",
-              //         display: "flex",
-              //         alignItems: "center",
-              //         gap: 8,
-              //       }}
-              //     >
-              //       <BugOutlined />
-              //       <span>Dev Tool</span>
-              //     </div>
-              //   ),
-              //   value: "dev-tool",
-              // },
-            ]}
-            style={{
-              padding: 2,
-              borderRadius: 12,
+          <KeepAliveOutlet
+            outletContext={{
+              isDarkMode,
+              setIsDarkMode,
+              designMode,
+              setDesignMode,
             }}
+            keepAliveKeys={["browser"]}
           />
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            gap: 12,
-            flex: 1,
-            WebkitAppRegion: "no-drag",
-          }}
-        >
-          {canAppCapture ? (
-            <Tooltip title="Capture screenshot">
-              <Dropdown
-                trigger={["click"]}
-                placement="bottomRight"
-                menu={{
-                  items: [
-                    { key: "area", label: "Area (default)" },
-                    { key: "full", label: "Full" },
-                  ],
-                  onClick: ({ key }) => {
-                    if (key === "full") {
-                      captureAndCopy({ mode: "full" });
-                      return;
-                    }
-                    startAreaCapture();
-                  },
-                }}
-              >
-                <Button
-                  type="text"
-                  icon={<CameraOutlined />}
-                  style={{ color: "var(--color-text-secondary)" }}
-                />
-              </Dropdown>
-            </Tooltip>
-          ) : null}
-
-          <Tooltip title="View on GitHub">
-            <Button
-              type="text"
-              icon={<GithubOutlined />}
-              style={{ color: "var(--color-text-secondary)" }}
-              onClick={() => {
-                if (window.electronAPI?.openExternal) {
-                  window.electronAPI.openExternal(
-                    "https://github.com/next-dev-team/next-gen"
-                  );
-                }
-              }}
-            />
-          </Tooltip>
-
-          <Tooltip title="Settings">
-            <Dropdown
-              trigger={["click"]}
-              placement="bottomRight"
-              menu={{
-                items: [
-                  {
-                    key: "resources",
-                    label: "Resources",
-                    icon: <DatabaseOutlined />,
-                  },
-                  {
-                    key: "settings",
-                    label: "Settings",
-                    icon: <SettingOutlined />,
-                  },
-                ],
-                onClick: ({ key }) => {
-                  if (key === "resources") {
-                    navigate("/resources");
-                  } else if (key === "settings") {
-                    navigate("/settings");
-                  }
+        {captureOverlayOpen ? (
+          <div
+            role="presentation"
+            onMouseDown={(e) => {
+              captureDragRef.current.active = true;
+              captureDragRef.current.startX = e.clientX;
+              captureDragRef.current.startY = e.clientY;
+              const next = { x: e.clientX, y: e.clientY, width: 0, height: 0 };
+              captureRectRef.current = next;
+              setCaptureRect(next);
+            }}
+            onMouseMove={(e) => {
+              if (!captureDragRef.current.active) return;
+              const x1 = captureDragRef.current.startX;
+              const y1 = captureDragRef.current.startY;
+              const x2 = e.clientX;
+              const y2 = e.clientY;
+              const x = Math.min(x1, x2);
+              const y = Math.min(y1, y2);
+              const width = Math.max(0, Math.abs(x2 - x1));
+              const height = Math.max(0, Math.abs(y2 - y1));
+              const next = { x, y, width, height };
+              captureRectRef.current = next;
+              setCaptureRect(next);
+            }}
+            onMouseUp={async () => {
+              const r = captureRectRef.current;
+              closeCaptureOverlay();
+              if (!r) return;
+              const width = Math.floor(Number(r.width) || 0);
+              const height = Math.floor(Number(r.height) || 0);
+              if (width < 2 || height < 2) return;
+              await captureAndCopy({
+                mode: "area",
+                rect: {
+                  x: Math.floor(Number(r.x) || 0),
+                  y: Math.floor(Number(r.y) || 0),
+                  width,
+                  height,
                 },
-              }}
-            >
-              <Button
-                type="text"
-                icon={<SettingOutlined />}
-                style={{ color: "var(--color-text-secondary)", fontSize: 18 }}
+              });
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              closeCaptureOverlay();
+            }}
+            style={{
+              position: "fixed",
+              inset: 0,
+              zIndex: 10000,
+              background: "rgba(15,23,42,0.18)",
+              cursor: "crosshair",
+              WebkitAppRegion: "no-drag",
+              userSelect: "none",
+            }}
+          >
+            {captureRect ? (
+              <div
+                style={{
+                  position: "absolute",
+                  left: captureRect.x,
+                  top: captureRect.y,
+                  width: captureRect.width,
+                  height: captureRect.height,
+                  border: "1px solid var(--color-primary)",
+                  background: "rgba(79,70,229,0.12)",
+                  boxShadow: "0 0 0 1px rgba(15,23,42,0.45) inset",
+                }}
               />
-            </Dropdown>
-          </Tooltip>
-        </div>
-      </Header>
-
-      {/* Main Content */}
-      <Content
-        className="flex flex-col flex-1 overflow-hidden"
-        style={{ padding: "0 48px 24px" }}
-      >
-        <KeepAliveOutlet
-          outletContext={{
-            isDarkMode,
-            setIsDarkMode,
-            designMode,
-            setDesignMode,
-          }}
-          keepAliveKeys={["browser"]}
-        />
-      </Content>
-
-      {captureOverlayOpen ? (
-        <div
-          role="presentation"
-          onMouseDown={(e) => {
-            captureDragRef.current.active = true;
-            captureDragRef.current.startX = e.clientX;
-            captureDragRef.current.startY = e.clientY;
-            const next = { x: e.clientX, y: e.clientY, width: 0, height: 0 };
-            captureRectRef.current = next;
-            setCaptureRect(next);
-          }}
-          onMouseMove={(e) => {
-            if (!captureDragRef.current.active) return;
-            const x1 = captureDragRef.current.startX;
-            const y1 = captureDragRef.current.startY;
-            const x2 = e.clientX;
-            const y2 = e.clientY;
-            const x = Math.min(x1, x2);
-            const y = Math.min(y1, y2);
-            const width = Math.max(0, Math.abs(x2 - x1));
-            const height = Math.max(0, Math.abs(y2 - y1));
-            const next = { x, y, width, height };
-            captureRectRef.current = next;
-            setCaptureRect(next);
-          }}
-          onMouseUp={async () => {
-            const r = captureRectRef.current;
-            closeCaptureOverlay();
-            if (!r) return;
-            const width = Math.floor(Number(r.width) || 0);
-            const height = Math.floor(Number(r.height) || 0);
-            if (width < 2 || height < 2) return;
-            await captureAndCopy({
-              mode: "area",
-              rect: {
-                x: Math.floor(Number(r.x) || 0),
-                y: Math.floor(Number(r.y) || 0),
-                width,
-                height,
-              },
-            });
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            closeCaptureOverlay();
-          }}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 10000,
-            background: "rgba(15,23,42,0.18)",
-            cursor: "crosshair",
-            WebkitAppRegion: "no-drag",
-            userSelect: "none",
-          }}
-        >
-          {captureRect ? (
-            <div
-              style={{
-                position: "absolute",
-                left: captureRect.x,
-                top: captureRect.y,
-                width: captureRect.width,
-                height: captureRect.height,
-                border: "1px solid var(--color-primary)",
-                background: "rgba(79,70,229,0.12)",
-                boxShadow: "0 0 0 1px rgba(15,23,42,0.45) inset",
-              }}
-            />
-          ) : null}
-        </div>
-      ) : null}
-    </Layout>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </TooltipProvider>
   );
 }

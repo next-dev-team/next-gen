@@ -105,10 +105,6 @@ export const generators = [
           { name: "RN Reusables (Expo Nativewind)", value: "rnr-expo" },
           { name: "RN Reusables (Expo Uniwind)", value: "rnr-expo-uniwind" },
           { name: "Turbo Uniwind", value: "turbo-uniwind" },
-          {
-            name: "Antd Mobile + Tailwind (Vite)",
-            value: "antd-mobile-tailwind-vite-7",
-          },
         ],
       },
       {
@@ -118,12 +114,8 @@ export const generators = [
         choices: [
           { name: "Shadcn UI / Tailwind", value: "shadcn" },
           { name: "Tailwind CSS Only", value: "tailwind" },
-          { name: "Ant Design v6", value: "antd" },
           { name: "Hero UI", value: "heroui" },
         ],
-        // Logic to hide UI options for Expo/Turbo Uniwind is handled in the generator,
-        // but UI might want to replicate it or just pass all.
-        // For now, we list them all.
       },
       {
         type: "list",

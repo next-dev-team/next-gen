@@ -1,9 +1,8 @@
-import { ConfigProvider, Spin, theme } from "antd";
+import { Loader2 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import MainLayout from "./layouts/MainLayout";
 import { shadcnTokenKeys, usePuckStore } from "./stores/puckStore";
-import { darkTheme, lightTheme } from "./theme";
 import { Toaster } from "./components/ui/sonner";
 
 const GeneratorView = lazy(() => import("./views/GeneratorView"));
@@ -96,26 +95,13 @@ function App() {
   }, [designMode, isDarkMode]);
 
   return (
-    <ConfigProvider
-      theme={{
-        ...(isDarkMode ? darkTheme : lightTheme),
-        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
-      }}
-    >
+    <>
       <Toaster position="bottom-right" richColors />
       <HashRouter>
         <Suspense
           fallback={
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                height: "100vh",
-                background: "var(--color-bg-base)",
-              }}
-            >
-              <Spin size="large" />
+            <div className="flex h-screen items-center justify-center bg-[var(--color-bg-base)]">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           }
         >
@@ -138,16 +124,13 @@ function App() {
               <Route path="browser" element={<BrowserToolView />} />
               <Route path="scrum-board" element={<ScrumBoardView />} />
               <Route path="resources" element={<ResourcesView />} />
-              {/* <Route path="dev-tool" element={<DevToolView />} /> */}
               <Route path="settings" element={<SettingsView />} />
             </Route>
           </Routes>
         </Suspense>
       </HashRouter>
 
-      {/* Global Styles */}
       <style>{`
-        /* Custom scrollbar */
         ::-webkit-scrollbar {
           width: 8px;
           height: 8px;
@@ -163,7 +146,6 @@ function App() {
           background: var(--color-text-secondary);
         }
 
-        /* Card hover effects */
         .template-card:hover {
           transform: translateY(-2px);
           box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
@@ -174,57 +156,25 @@ function App() {
           box-shadow: 0 10px 25px rgba(99, 102, 241, 0.3);
         }
 
-        /* Cursor blink animation */
         .cursor-blink {
           animation: blink 1s step-end infinite;
         }
 
         @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0; }
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0;
+          }
         }
 
-        /* Smooth transitions */
-        .ant-steps-item-icon {
-          transition: all 0.3s ease;
-        }
-
-        .ant-btn {
-          transition: all 0.2s ease;
-        }
-
-        .ant-btn:hover:not(:disabled) {
-          transform: translateY(-1px);
-        }
-
-        /* Steps custom styling */
-        .ant-steps-item-finish .ant-steps-item-icon {
-          background: #22c55e !important;
-          border-color: #22c55e !important;
-        }
-
-        .ant-steps-item-process .ant-steps-item-icon {
-          background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%) !important;
-          border-color: #6366f1 !important;
-        }
-
-        .ant-steps-item-wait .ant-steps-item-icon {
-          background: var(--color-bg-elevated) !important;
-          border-color: var(--color-border) !important;
-        }
-
-        /* Input focus states */
-        input:focus, select:focus {
+        input:focus,
+        select:focus {
           box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
         }
-
-        /* Message customization */
-        .ant-message-notice-content {
-          background: var(--color-bg-elevated) !important;
-          color: var(--color-text-primary) !important;
-        }
       `}</style>
-    </ConfigProvider>
+    </>
   );
 }
 

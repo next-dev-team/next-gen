@@ -1,15 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  EyeOutlined,
-  PlayCircleOutlined,
-  RocketOutlined,
-  SettingOutlined,
-  HomeOutlined,
-  ArrowLeftOutlined,
-  ArrowRightOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
-import { Button, message, Steps, Space } from "antd";
+  ArrowLeft,
+  ArrowRight,
+  Eye,
+  Home,
+  PlayCircle,
+  RefreshCcw,
+  Rocket,
+  Settings,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "../components/ui/button";
 import {
   ConfigureOptions,
   GenerateStep,
@@ -22,22 +23,22 @@ import { templatePreviews, uiStackInfo } from "../theme";
 const steps = [
   {
     title: "Template",
-    icon: <RocketOutlined />,
+    icon: <Rocket className="h-4 w-4" />,
     description: "Choose template",
   },
   {
     title: "Configure",
-    icon: <SettingOutlined />,
+    icon: <Settings className="h-4 w-4" />,
     description: "Set options",
   },
   {
     title: "Preview",
-    icon: <EyeOutlined />,
+    icon: <Eye className="h-4 w-4" />,
     description: "Review settings",
   },
   {
     title: "Generate",
-    icon: <PlayCircleOutlined />,
+    icon: <PlayCircle className="h-4 w-4" />,
     description: "Create project",
   },
 ];
@@ -169,7 +170,7 @@ export default function GeneratorView() {
           });
         }
 
-        message.success("Project generated successfully!");
+        toast.success("Project generated successfully!");
       } else {
         throw new Error("Electron API not available");
       }
@@ -179,7 +180,7 @@ export default function GeneratorView() {
         { type: "error", message: `Error: ${err.message}` },
       ]);
       setError(err.message);
-      message.error("Generation failed. Check the logs for details.");
+      toast.error("Generation failed. Check the logs for details.");
     } finally {
       setLoading(false);
     }
@@ -187,7 +188,7 @@ export default function GeneratorView() {
 
   const nextStep = () => {
     if (currentStep === 0 && !selectedGenerator) {
-      message.warning("Please select a template first");
+      toast.warning("Please select a template first");
       return;
     }
     setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
@@ -263,52 +264,68 @@ export default function GeneratorView() {
           border: "1px solid var(--color-border)",
         }}
       >
-        <Steps
-          current={currentStep}
-          items={steps.map((step, index) => ({
-            title: (
-              <span
-                style={{
-                  color:
-                    index <= currentStep
-                      ? "var(--color-text-primary)"
-                      : "var(--color-text-disabled)",
-                }}
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          {steps.map((step, index) => {
+            const isActive = index === currentStep;
+            const isCompleted = index < currentStep;
+
+            return (
+              <div
+                key={step.title}
+                className="flex flex-1 items-center gap-3"
               >
-                {step.title}
-              </span>
-            ),
-            content: (
-              <span
-                style={{
-                  color:
-                    index === currentStep
-                      ? "#6366f1"
-                      : index < currentStep
-                      ? "#22c55e"
-                      : "var(--color-text-disabled)",
-                }}
-              >
-                {step.description}
-              </span>
-            ),
-            icon: (
-              <span
-                style={{
-                  color:
-                    index < currentStep
-                      ? "#22c55e"
-                      : index === currentStep
-                      ? "#6366f1"
-                      : "var(--color-text-disabled)",
-                }}
-              >
-                {step.icon}
-              </span>
-            ),
-          }))}
-          style={{ maxWidth: 800, margin: "0 auto" }}
-        />
+                <div
+                  className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-medium transition-colors ${
+                    isCompleted
+                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
+                      : isActive
+                      ? "border-indigo-500 bg-indigo-500/10 text-indigo-400"
+                      : "border-[var(--color-border)] bg-[var(--color-bg-base)] text-[var(--color-text-secondary)]"
+                  }`}
+                >
+                  {index + 1}
+                </div>
+                <div className="flex flex-col">
+                  <span
+                    className="text-sm font-medium"
+                    style={{
+                      color: isCompleted || isActive
+                        ? "var(--color-text-primary)"
+                        : "var(--color-text-disabled)",
+                    }}
+                  >
+                    {step.title}
+                  </span>
+                  <span
+                    className="text-xs"
+                    style={{
+                      color: isActive
+                        ? "#6366f1"
+                        : isCompleted
+                        ? "#22c55e"
+                        : "var(--color-text-disabled)",
+                    }}
+                  >
+                    {step.description}
+                  </span>
+                </div>
+                {index < steps.length - 1 && (
+                  <div className="hidden flex-1 md:block">
+                    <div
+                      className="h-px"
+                      style={{
+                        background:
+                          index < currentStep
+                            ? "linear-gradient(90deg,#22c55e,#22c55e)"
+                            : "var(--color-border)",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Step Content */}
@@ -325,7 +342,6 @@ export default function GeneratorView() {
         {renderStepContent()}
       </div>
 
-      {/* Navigation Buttons */}
       <div
         style={{
           display: "flex",
@@ -334,68 +350,50 @@ export default function GeneratorView() {
         }}
       >
         <Button
-          icon={<HomeOutlined />}
+          type="button"
+          variant="ghost"
           onClick={resetWizard}
-          style={{
-            background: "var(--color-bg-elevated)",
-            borderColor: "var(--color-border)",
-            color: "var(--color-text-secondary)",
-          }}
+          className="border border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-elevated)]/80"
         >
+          <Home className="mr-2 h-4 w-4" />
           Start Over
         </Button>
 
-        <Space size={12}>
+        <div className="flex items-center gap-3">
           <Button
-            icon={<ArrowLeftOutlined />}
+            type="button"
+            variant="outline"
             onClick={prevStep}
             disabled={currentStep === 0}
-            style={{
-              background:
-                currentStep === 0
-                  ? "var(--color-bg-container)"
-                  : "var(--color-bg-elevated)",
-              borderColor: "var(--color-border)",
-              color:
-                currentStep === 0
-                  ? "var(--color-text-disabled)"
-                  : "var(--color-text-primary)",
-            }}
+            className="border-[var(--color-border)] bg-[var(--color-bg-elevated)] text-[var(--color-text-primary)] disabled:bg-[var(--color-bg-container)] disabled:text-[var(--color-text-disabled)]"
           >
+            <ArrowLeft className="mr-2 h-4 w-4" />
             Previous
           </Button>
 
           {currentStep < steps.length - 1 ? (
             <Button
-              type="primary"
+              type="button"
               onClick={nextStep}
               disabled={currentStep === 0 && !selectedGenerator}
-              style={{
-                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-                border: "none",
-                boxShadow: "0 2px 8px rgba(99, 102, 241, 0.3)",
-              }}
+              className="bg-gradient-to-r from-indigo-600 to-indigo-500 text-white border-0 shadow-md disabled:from-indigo-600/40 disabled:to-indigo-500/40"
             >
               Next
-              <ArrowRightOutlined />
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
             isComplete && (
               <Button
-                type="primary"
-                icon={<ReloadOutlined />}
+                type="button"
                 onClick={resetWizard}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #059669 0%, #10b981 100%)",
-                  border: "none",
-                }}
+                className="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white border-0"
               >
+                <RefreshCcw className="mr-2 h-4 w-4" />
                 Create Another
               </Button>
             )
           )}
-        </Space>
+        </div>
       </div>
     </>
   );

@@ -10,9 +10,11 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: 1,
-  reporter: [['html', { open: 'never' }]],
+  reporter: [['dot']],
   use: {
     actionTimeout: 0,
-    trace: 'on-first-retry',
+    trace: 'off',
+    screenshot: 'off',
+    video: 'off',
   },
 })

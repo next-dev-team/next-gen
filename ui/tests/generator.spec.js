@@ -4,6 +4,12 @@ import path from "path";
 test.describe("Generator UI", () => {
   let electronApp;
 
+  async function goTo(window, hashPath) {
+    await window.evaluate((nextHash) => {
+      window.location.hash = nextHash;
+    }, hashPath);
+  }
+
   test.beforeAll(async () => {
     // Launch Electron app
     electronApp = await electron.launch({
@@ -30,6 +36,9 @@ test.describe("Generator UI", () => {
   test("should list generators", async () => {
     const window = await electronApp.firstWindow();
     await window.reload();
+
+    await goTo(window, "#/generator");
+
     // Check if generators are listed
     await expect(window.getByText("electron-float")).toBeVisible();
     await expect(window.getByText("tron-mini")).toBeVisible();
@@ -39,14 +48,55 @@ test.describe("Generator UI", () => {
 
   test("should select generator and show form", async () => {
     const window = await electronApp.firstWindow();
+    const consoleErrors = [];
+    window.on("pageerror", (err) => consoleErrors.push(String(err)));
+    window.on("console", (msg) => {
+      if (msg.type() === "error") consoleErrors.push(msg.text());
+    });
     await window.reload();
 
+    await goTo(window, "#/generator");
+
+    await expect(
+      window.getByRole("heading", { name: "Choose Your Template" }),
+    ).toBeVisible();
+
     // Click on electron-float generator
-    await window.getByText("electron-float").click();
-    await window.getByRole("button", { name: "Next" }).click();
+    const electronFloatButton = window
+      .getByRole("button", { name: /electron-float/i })
+      .first();
+    await electronFloatButton.click();
+    await expect(electronFloatButton).toHaveAttribute("aria-pressed", "true");
+
+    const wizardFooter = window
+      .getByRole("button", { name: "Start Over" })
+      .locator("..");
+    const nextButton = wizardFooter.getByRole("button", {
+      name: "Next",
+      exact: true,
+    });
+    await expect(nextButton).toBeEnabled();
+    await nextButton.click();
+
+    await window.waitForTimeout(250);
+    if (consoleErrors.length > 0) {
+      throw new Error(`Console errors:\n${consoleErrors.join("\n")}`);
+    }
 
     // Check if form appears
-    await expect(window.getByText("Configure electron-float")).toBeVisible();
+    await expect(
+      window.getByRole("heading", { name: "Configure electron-float" }),
+    ).toBeVisible({ timeout: 15000 });
+
+    const prevButton = wizardFooter.getByRole("button", {
+      name: "Previous",
+      exact: true,
+    });
+    await expect(prevButton).toBeEnabled();
+
+    if (consoleErrors.length > 0) {
+      throw new Error(`Console errors:\n${consoleErrors.join("\n")}`);
+    }
     await expect(window.getByText("Application name")).toBeVisible();
     await expect(window.getByText("Destination path")).toBeVisible();
   });
@@ -61,13 +111,13 @@ test.describe("Generator UI", () => {
       .getByText("Scrum Board", { exact: true })
       .click();
     await expect(
-      window.getByRole("heading", { name: "Kanban Board" })
+      window.getByRole("heading", { name: "Kanban Board" }),
     ).toBeVisible({ timeout: 15000 });
     await expect(
-      window.getByRole("button", { name: "New Board" })
+      window.getByRole("button", { name: "New Board" }),
     ).toBeVisible();
     await expect(
-      window.getByRole("button", { name: "Add Column" })
+      window.getByRole("button", { name: "Add Column" }),
     ).toBeVisible();
   });
 
@@ -164,7 +214,7 @@ test.describe("Generator UI", () => {
       .click();
 
     await expect(
-      window.getByRole("heading", { name: "Kanban Board" })
+      window.getByRole("heading", { name: "Kanban Board" }),
     ).toBeVisible({ timeout: 15000 });
 
     await expect
@@ -179,7 +229,7 @@ test.describe("Generator UI", () => {
             }
           });
         },
-        { timeout: 15000 }
+        { timeout: 15000 },
       )
       .toBe(true);
 
@@ -220,7 +270,7 @@ test.describe("Generator UI", () => {
       window.location.hash = "#/settings";
     });
     await expect(window.getByRole("heading", { name: "Settings" })).toBeVisible(
-      { timeout: 15000 }
+      { timeout: 15000 },
     );
 
     const startOnBootSwitch = window.getByRole("switch").first();
@@ -230,7 +280,7 @@ test.describe("Generator UI", () => {
     await startOnBootSwitch.click();
     await expect(startOnBootSwitch).toHaveAttribute(
       "aria-checked",
-      before === "true" ? "false" : "true"
+      before === "true" ? "false" : "true",
     );
   });
 
@@ -249,7 +299,7 @@ test.describe("Generator UI", () => {
       .getByText("UI", { exact: true })
       .click();
     await expect(
-      window.getByRole("heading", { name: "UI Builder" })
+      window.getByRole("heading", { name: "UI Builder" }),
     ).toBeVisible();
 
     const layoutModeButton = window.getByRole("button", { name: "Layout" });
@@ -258,7 +308,7 @@ test.describe("Generator UI", () => {
     }
 
     await expect(
-      window.getByPlaceholder("Search blocks & components...")
+      window.getByPlaceholder("Search blocks & components..."),
     ).toBeVisible({ timeout: 15000 });
 
     await window.getByRole("tab", { name: "Components" }).click();
@@ -283,18 +333,18 @@ test.describe("Generator UI", () => {
       .poll(
         async () => {
           const raw = await window.evaluate(() =>
-            localStorage.getItem("editor-store")
+            localStorage.getItem("editor-store"),
           );
           if (!raw) return 0;
           const parsed = JSON.parse(raw);
           return parsed?.state?.canvas?.elements?.length || 0;
         },
-        { timeout: 5000 }
+        { timeout: 5000 },
       )
       .toBeGreaterThan(0)
       .then(
         () => true,
-        () => false
+        () => false,
       );
 
     if (!dragSucceeded) {
@@ -303,13 +353,13 @@ test.describe("Generator UI", () => {
       if (sourceBox && targetBox) {
         await window.mouse.move(
           sourceBox.x + sourceBox.width / 2,
-          sourceBox.y + sourceBox.height / 2
+          sourceBox.y + sourceBox.height / 2,
         );
         await window.mouse.down();
         await window.mouse.move(
           targetBox.x + targetBox.width / 2,
           targetBox.y + Math.min(40, targetBox.height / 2),
-          { steps: 20 }
+          { steps: 20 },
         );
         await window.mouse.up();
       }
@@ -319,13 +369,13 @@ test.describe("Generator UI", () => {
       .poll(
         async () => {
           const raw = await window.evaluate(() =>
-            localStorage.getItem("editor-store")
+            localStorage.getItem("editor-store"),
           );
           if (!raw) return 0;
           const parsed = JSON.parse(raw);
           return parsed?.state?.canvas?.elements?.length || 0;
         },
-        { timeout: 15000 }
+        { timeout: 15000 },
       )
       .toBeGreaterThan(0);
 

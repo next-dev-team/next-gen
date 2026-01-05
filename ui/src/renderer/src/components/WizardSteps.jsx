@@ -1,30 +1,120 @@
 import React from "react";
 import {
-  Steps,
-  Card,
-  Typography,
-  Tag,
-  Button,
-  Row,
-  Col,
-  Tooltip,
-  Badge,
-  Space,
-} from "antd";
+  AppWindow,
+  CheckCircle2,
+  Code,
+  Eye,
+  Folder,
+  FolderOpen,
+  LayoutGrid,
+  PencilLine,
+  PlayCircle,
+  Rocket,
+  Settings as SettingsIcon,
+} from "lucide-react";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Card } from "./ui/card";
+import { Input } from "./ui/input";
 import {
-  RocketOutlined,
-  SettingOutlined,
-  EyeOutlined,
-  PlayCircleOutlined,
-  CheckCircleOutlined,
-  AppstoreOutlined,
-  FolderOutlined,
-  FolderOpenOutlined,
-  CodeOutlined,
-  EditOutlined,
-} from "@ant-design/icons";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "./ui/tooltip";
 
-const { Title, Text, Paragraph } = Typography;
+const Title = ({ level = 3, style, children }) => {
+  const Tag = `h${level}`;
+  return (
+    <Tag
+      style={{
+        margin: 0,
+        fontWeight: 600,
+        ...(style || {}),
+      }}
+    >
+      {children}
+    </Tag>
+  );
+};
+
+const Text = ({ type, style, children }) => {
+  const color =
+    type === "secondary"
+      ? "var(--color-text-secondary)"
+      : "var(--color-text-primary)";
+  return (
+    <span
+      style={{
+        color,
+        fontSize: 13,
+        ...(style || {}),
+      }}
+    >
+      {children}
+    </span>
+  );
+};
+
+const Paragraph = ({ style, children }) => {
+  return (
+    <p
+      style={{
+        margin: 0,
+        color: "var(--color-text-secondary)",
+        fontSize: 13,
+        lineHeight: 1.6,
+        ...(style || {}),
+      }}
+    >
+      {children}
+    </p>
+  );
+};
+
+const Tag = ({ color, style, children, ...props }) => {
+  let background = "var(--color-bg-elevated)";
+  let border = "1px solid var(--color-border)";
+  let text = "var(--color-text-secondary)";
+
+  if (color === "white") {
+    background = "#ffffff";
+    border = "1px solid rgba(148,163,184,0.4)";
+    text = "#4f46e5";
+  } else if (color === "blue") {
+    background = "rgba(59,130,246,0.12)";
+    border = "1px solid rgba(59,130,246,0.4)";
+    text = "#3b82f6";
+  } else if (color === "orange") {
+    background = "rgba(249,115,22,0.12)";
+    border = "1px solid rgba(249,115,22,0.4)";
+    text = "#f97316";
+  } else if (color === "purple") {
+    background = "rgba(168,85,247,0.12)";
+    border = "1px solid rgba(168,85,247,0.4)";
+    text = "#a855f7";
+  }
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "4px 8px",
+        borderRadius: 4,
+        fontSize: 12,
+        fontWeight: 500,
+        background,
+        border,
+        color: text,
+        ...(style || {}),
+      }}
+      {...props}
+    >
+      {children}
+    </span>
+  );
+};
 
 // Helper function to check if a field is a path field
 const isPathField = (name) => {
@@ -70,7 +160,7 @@ export const TemplateSelector = ({
           level={3}
           style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
         >
-          <RocketOutlined style={{ marginRight: 12, color: "#6366f1" }} />
+          <Rocket style={{ marginRight: 12, color: "#6366f1" }} />
           Choose Your Template
         </Title>
         <Text type="secondary">
@@ -78,43 +168,31 @@ export const TemplateSelector = ({
         </Text>
       </div>
 
-      <Row gutter={[16, 16]}>
-        {generators.map((gen) => (
-          <Col xs={24} sm={12} key={gen.name}>
-            <Card
-              hoverable
-              className={`template-card ${
-                selectedGenerator?.name === gen.name ? "selected" : ""
+      <div className="grid gap-4 md:grid-cols-2" style={{ WebkitAppRegion: "no-drag" }}>
+        {generators.map((gen) => {
+          const selected = selectedGenerator?.name === gen.name;
+          return (
+            <button
+              key={gen.name}
+              type="button"
+              aria-pressed={selected}
+              className={`template-card w-full text-left rounded-lg border transition-all ${
+                selected
+                  ? "border-indigo-400 bg-gradient-to-br from-indigo-600 to-indigo-500 shadow-lg"
+                  : "border-[var(--color-border)] bg-[var(--color-bg-container)] hover:border-indigo-400"
               }`}
               onClick={() => onSelect(gen)}
-              style={{
-                background:
-                  selectedGenerator?.name === gen.name
-                    ? "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)"
-                    : "var(--color-bg-container)",
-                borderColor:
-                  selectedGenerator?.name === gen.name
-                    ? "#818cf8"
-                    : "var(--color-border)",
-                cursor: "pointer",
-                transition: "all 0.3s ease",
-              }}
-              styles={{
-                body: { padding: 20 },
-              }}
+              style={{ padding: 20 }}
             >
-              <div
-                style={{ display: "flex", alignItems: "flex-start", gap: 16 }}
-              >
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
                 <div
                   style={{
                     width: 48,
                     height: 48,
                     borderRadius: 12,
-                    background:
-                      selectedGenerator?.name === gen.name
-                        ? "rgba(255,255,255,0.2)"
-                        : getCategoryColor(gen.name),
+                    background: selected
+                      ? "rgba(255,255,255,0.2)"
+                      : getCategoryColor(gen.name),
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -126,25 +204,21 @@ export const TemplateSelector = ({
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <Text
-                    strong
                     style={{
                       fontSize: 16,
-                      color:
-                        selectedGenerator?.name === gen.name
-                          ? "#fff"
-                          : "var(--color-text-primary)",
+                      color: selected ? "#fff" : "var(--color-text-primary)",
                       display: "block",
                       marginBottom: 4,
+                      fontWeight: 600,
                     }}
                   >
                     {gen.name}
                   </Text>
                   <Text
                     style={{
-                      color:
-                        selectedGenerator?.name === gen.name
-                          ? "rgba(255,255,255,0.8)"
-                          : "var(--color-text-secondary)",
+                      color: selected
+                        ? "rgba(255,255,255,0.8)"
+                        : "var(--color-text-secondary)",
                       fontSize: 13,
                     }}
                   >
@@ -152,23 +226,18 @@ export const TemplateSelector = ({
                   </Text>
                   <div style={{ marginTop: 8 }}>
                     <Tag
-                      color={
-                        selectedGenerator?.name === gen.name ? "white" : "blue"
-                      }
+                      color={selected ? "white" : "blue"}
                       style={{
                         borderRadius: 4,
-                        color:
-                          selectedGenerator?.name === gen.name
-                            ? "#4f46e5"
-                            : undefined,
+                        color: selected ? "#4f46e5" : undefined,
                       }}
                     >
                       {gen.prompts.length} options
                     </Tag>
                   </div>
                 </div>
-                {selectedGenerator?.name === gen.name && (
-                  <CheckCircleOutlined
+                {selected && (
+                  <CheckCircle2
                     style={{
                       fontSize: 24,
                       color: "#fff",
@@ -177,10 +246,10 @@ export const TemplateSelector = ({
                   />
                 )}
               </div>
-            </Card>
-          </Col>
-        ))}
-      </Row>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -214,30 +283,29 @@ export const ConfigureOptions = ({
           level={3}
           style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
         >
-          <SettingOutlined style={{ marginRight: 12, color: "#6366f1" }} />
+          <SettingsIcon style={{ marginRight: 12, color: "#6366f1" }} />
           Configure {selectedGenerator.name}
         </Title>
         <Text type="secondary">Customize your project settings</Text>
       </div>
 
-      <Row gutter={[24, 0]}>
-        <Col xs={24} lg={24}>
-          <Card
-            style={{
-              background: "var(--color-bg-container)",
-              borderColor: "var(--color-border)",
-            }}
-            styles={{ body: { padding: 24 } }}
-          >
-            <Row gutter={[16, 24]}>
-              {selectedGenerator.prompts.map((prompt, index) => {
+      <Card
+        style={{
+          background: "var(--color-bg-container)",
+          borderColor: "var(--color-border)",
+          padding: 24,
+        }}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          {selectedGenerator.prompts.map((prompt) => {
                 const isPath = isPathField(prompt.name);
 
                 return (
-                  <Col
-                    xs={24}
-                    sm={prompt.type === "checkbox" ? 24 : 12}
+                  <div
                     key={prompt.name}
+                    className={
+                      prompt.type === "checkbox" ? "md:col-span-2" : ""
+                    }
                   >
                     <div className="form-field">
                       <label
@@ -251,15 +319,15 @@ export const ConfigureOptions = ({
                         }}
                       >
                         {prompt.type === "input" && (
-                          <FolderOutlined
+                          <Folder
                             style={{ color: isPath ? "#f59e0b" : "#6366f1" }}
                           />
                         )}
                         {prompt.type === "list" && (
-                          <AppstoreOutlined style={{ color: "#10b981" }} />
+                          <LayoutGrid style={{ color: "#10b981" }} />
                         )}
                         {prompt.type === "checkbox" && (
-                          <CheckCircleOutlined style={{ color: "#f59e0b" }} />
+                          <CheckCircle2 style={{ color: "#f59e0b" }} />
                         )}
                         {prompt.message}
                         {isPath && (
@@ -274,8 +342,7 @@ export const ConfigureOptions = ({
 
                       {prompt.type === "input" && (
                         <div style={{ display: "flex", gap: 8 }}>
-                          <input
-                            type="text"
+                          <Input
                             value={answers[prompt.name] || ""}
                             onChange={(e) =>
                               onInputChange(prompt.name, e.target.value)
@@ -283,43 +350,25 @@ export const ConfigureOptions = ({
                             placeholder={
                               prompt.default || `Enter ${prompt.name}`
                             }
-                            style={{
-                              flex: 1,
-                              padding: "10px 14px",
-                              background: "var(--color-bg-base)",
-                              border: "1px solid var(--color-border)",
-                              borderRadius: 8,
-                              color: "var(--color-text-primary)",
-                              fontSize: 14,
-                              outline: "none",
-                              transition: "border-color 0.2s",
-                            }}
-                            onFocus={(e) =>
-                              (e.target.style.borderColor = "#6366f1")
-                            }
-                            onBlur={(e) =>
-                              (e.target.style.borderColor =
-                                "var(--color-border)")
-                            }
                           />
                           {isPath && (
-                            <Tooltip title="Browse folder">
-                              <Button
-                                icon={<FolderOpenOutlined />}
-                                onClick={() =>
-                                  handleBrowseFolder(
-                                    prompt.name,
-                                    answers[prompt.name]
-                                  )
-                                }
-                                style={{
-                                  background: "var(--color-bg-elevated)",
-                                  borderColor: "var(--color-border)",
-                                  color: "var(--color-text-primary)",
-                                  height: 42,
-                                  width: 42,
-                                }}
-                              />
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() =>
+                                    handleBrowseFolder(
+                                      prompt.name,
+                                      answers[prompt.name]
+                                    )
+                                  }
+                                >
+                                  <FolderOpen className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Browse folder</TooltipContent>
                             </Tooltip>
                           )}
                         </div>
@@ -391,7 +440,7 @@ export const ConfigureOptions = ({
                                 }}
                               >
                                 {isChecked && (
-                                  <CheckCircleOutlined
+                                  <CheckCircle2
                                     style={{ marginRight: 4 }}
                                   />
                                 )}
@@ -402,13 +451,11 @@ export const ConfigureOptions = ({
                         </div>
                       )}
                     </div>
-                  </Col>
+                  </div>
                 );
               })}
-            </Row>
-          </Card>
-        </Col>
-      </Row>
+        </div>
+      </Card>
     </div>
   );
 };
@@ -431,7 +478,7 @@ export const PreviewStep = ({
           level={3}
           style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
         >
-          <EyeOutlined style={{ marginRight: 12, color: "#6366f1" }} />
+          <Eye style={{ marginRight: 12, color: "#6366f1" }} />
           Preview Your Project
         </Title>
         <Text type="secondary">
@@ -439,32 +486,32 @@ export const PreviewStep = ({
         </Text>
       </div>
 
-      <Row gutter={[24, 24]}>
-        {/* Template Preview Card */}
-        <Col xs={24} lg={12}>
-          <Card
-            title={
-              <span style={{ color: "var(--color-text-primary)" }}>
-                <CodeOutlined style={{ marginRight: 8 }} />
-                Template Preview
-              </span>
-            }
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card
+          style={{
+            background: "var(--color-bg-container)",
+            borderColor: "var(--color-border)",
+            height: "100%",
+            padding: 0,
+          }}
+        >
+          <div
             style={{
+              padding: "12px 16px",
+              borderBottom: "1px solid var(--color-border)",
               background: "var(--color-bg-container)",
-              borderColor: "var(--color-border)",
-              height: "100%",
-            }}
-            styles={{
-              header: {
-                borderBottom: "1px solid var(--color-border)",
-                background: "var(--color-bg-container)",
-              },
-              body: { padding: 0 },
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}
           >
+            <Code style={{ marginRight: 4 }} />
+            <span style={{ color: "var(--color-text-primary)" }}>
+              Template Preview
+            </span>
+          </div>
             {preview ? (
               <div>
-                {/* Preview Image Placeholder */}
                 <div
                   style={{
                     height: 200,
@@ -520,11 +567,8 @@ export const PreviewStep = ({
                   >
                     {preview.name}
                   </Title>
-                  <Paragraph
-                    style={{
-                      color: "var(--color-text-secondary)",
-                      marginBottom: 16,
-                    }}
+                    <Paragraph
+                    style={{ marginBottom: 16 }}
                   >
                     {preview.description}
                   </Paragraph>
@@ -552,38 +596,39 @@ export const PreviewStep = ({
                 }}
               >
                 <div style={{ textAlign: "center" }}>
-                  <AppstoreOutlined
+                  <AppWindow
                     style={{ fontSize: 48, marginBottom: 16, opacity: 0.5 }}
                   />
                   <div>Select a frontend framework to see preview</div>
                 </div>
               </div>
             )}
-          </Card>
-        </Col>
+        </Card>
 
-        {/* Configuration Summary */}
-        <Col xs={24} lg={12}>
-          <Card
-            title={
-              <span style={{ color: "var(--color-text-primary)" }}>
-                <SettingOutlined style={{ marginRight: 8 }} />
-                Configuration Summary
-              </span>
-            }
+        <Card
+          style={{
+            background: "var(--color-bg-container)",
+            borderColor: "var(--color-border)",
+            height: "100%",
+            padding: 0,
+          }}
+        >
+          <div
             style={{
+              padding: "12px 16px",
+              borderBottom: "1px solid var(--color-border)",
               background: "var(--color-bg-container)",
-              borderColor: "var(--color-border)",
-              height: "100%",
-            }}
-            styles={{
-              header: {
-                borderBottom: "1px solid var(--color-border)",
-                background: "var(--color-bg-container)",
-              },
-              body: { padding: 20 },
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
             }}
           >
+            <SettingsIcon style={{ marginRight: 4 }} />
+            <span style={{ color: "var(--color-text-primary)" }}>
+              Configuration Summary
+            </span>
+          </div>
+          <div style={{ padding: 20 }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {Object.entries(answers).map(([key, value]) => (
                 <div
@@ -665,9 +710,9 @@ export const PreviewStep = ({
                 </div>
               )}
             </div>
-          </Card>
-        </Col>
-      </Row>
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
@@ -697,7 +742,7 @@ export const GenerateStep = ({
           level={3}
           style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
         >
-          <PlayCircleOutlined style={{ marginRight: 12, color: "#6366f1" }} />
+          <PlayCircle style={{ marginRight: 12, color: "#6366f1" }} />
           Generate Project
         </Title>
         <Text type="secondary">
@@ -714,10 +759,9 @@ export const GenerateStep = ({
           background: "var(--color-bg-container)",
           borderColor: "var(--color-border)",
           marginBottom: 24,
+          padding: 0,
         }}
-        styles={{ body: { padding: 0 } }}
       >
-        {/* Terminal Header */}
         <div
           style={{
             padding: "12px 16px",
@@ -764,31 +808,19 @@ export const GenerateStep = ({
             Terminal Output
           </Text>
           {loading && (
-            <Badge
-              status="processing"
-              text={
-                <span style={{ color: "#22c55e", fontSize: 12 }}>Running</span>
-              }
-              style={{ marginLeft: "auto" }}
-            />
+            <Badge className="ml-auto bg-emerald-500/10 text-emerald-400 border-emerald-500/40">
+              Running
+            </Badge>
           )}
           {isComplete && !error && (
-            <Badge
-              status="success"
-              text={
-                <span style={{ color: "#22c55e", fontSize: 12 }}>Complete</span>
-              }
-              style={{ marginLeft: "auto" }}
-            />
+            <Badge className="ml-auto bg-emerald-500/10 text-emerald-400 border-emerald-500/40">
+              Complete
+            </Badge>
           )}
           {error && (
-            <Badge
-              status="error"
-              text={
-                <span style={{ color: "#ef4444", fontSize: 12 }}>Error</span>
-              }
-              style={{ marginLeft: "auto" }}
-            />
+            <Badge className="ml-auto bg-red-500/10 text-red-400 border-red-500/40">
+              Error
+            </Badge>
           )}
         </div>
 
@@ -811,9 +843,7 @@ export const GenerateStep = ({
                 paddingTop: 100,
               }}
             >
-              <CodeOutlined
-                style={{ fontSize: 32, marginBottom: 16, opacity: 0.5 }}
-              />
+              <Code style={{ width: 32, height: 32, marginBottom: 16, opacity: 0.5 }} />
               <div>Click "Generate" to start the process</div>
             </div>
           ) : (
@@ -848,19 +878,12 @@ export const GenerateStep = ({
       {!loading && !isComplete && (
         <div style={{ textAlign: "center" }}>
           <Button
-            type="primary"
-            size="large"
-            icon={<RocketOutlined />}
+            type="button"
+            size="lg"
             onClick={onGenerate}
-            style={{
-              height: 48,
-              paddingInline: 48,
-              fontSize: 16,
-              background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-              border: "none",
-              boxShadow: "0 4px 15px rgba(99, 102, 241, 0.4)",
-            }}
+            className="h-12 px-12 text-base font-medium text-white shadow-lg border-0 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400"
           >
+            <Rocket className="mr-2 h-4 w-4" />
             Generate Project
           </Button>
         </div>
@@ -876,7 +899,7 @@ export const GenerateStep = ({
               border: "1px solid rgba(34, 197, 94, 0.3)",
             }}
           >
-            <CheckCircleOutlined
+            <CheckCircle2
               style={{ fontSize: 48, color: "#22c55e", marginBottom: 16 }}
             />
             <Title level={4} style={{ color: "#22c55e", marginBottom: 16 }}>
@@ -901,19 +924,16 @@ export const GenerateStep = ({
               </div>
             )}
 
-            <Space size={12}>
+            <div className="flex items-center justify-center gap-3">
               <Button
-                type="primary"
-                icon={<FolderOpenOutlined />}
+                type="button"
                 onClick={handleOpenFolder}
-                style={{
-                  background: "#22c55e",
-                  borderColor: "#22c55e",
-                }}
+                className="bg-emerald-500 hover:bg-emerald-600 border-emerald-500 text-white"
               >
+                <FolderOpen className="mr-2 h-4 w-4" />
                 Open Output Folder
               </Button>
-            </Space>
+            </div>
           </div>
         </div>
       )}
