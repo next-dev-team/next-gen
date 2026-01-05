@@ -5,6 +5,21 @@ the next generation of template
 ![Screenshot](./assets/generator.png)
 ![Kanban](./assets/kanban.png)
 
+## Roadmap
+
+- [ ] Add launchpad Raycast or apple spotlight style
+- [ ] OCR capture
+- [ ] Plugin like Raycast
+- [ ] Browser device responsive + mockup device frame
+- [ ] Browser extension, Proxy, ads block etc
+- [ ] well Agent flow for all flow
+- [ ] projects mgt with @nut-tree/nut-js for user logic many accounts or other tasks
+- [ ] install MCP to target project
+- [ ] Chat llm \_ Chat MCP
+- [ ] Add more generators
+- [ ] Add more templates
+- [ ] Add more documentation
+
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
 ## Path dir
@@ -153,23 +168,6 @@ npm link
 cd ../your-monorepo
 npm link turbo-generators
 ```
-
-## Roadmap
-
-[ ] Add launchpad Raycast or apple spotlight style
-[ ] OCR capture
-[ ] Plugin like Raycast
-[ ] Browser device responsive + mockup device frame
-[ ] Browser extension, Proxy, ads block etc
-[ ] well Agent flow for all flow
-[ ] projects mgt with @nut-tree/nut-js for user logic many accounts or other tasks
-[ ] install MCP to target project
-[ ] Chat llm \_ Chat MCP
-[ ] Add more generators
-[ ] Add more templates
-[ ] Add more documentation
-
-The main issue was the missing `turbo/generators/` folder structure. Turborepo looks specifically for that path! 🎯
 
 ## Useful links
 
