@@ -1,15 +1,15 @@
+import { Segmented } from "antd";
 import {
   AppWindow,
   Camera,
-  Globe,
   Github,
+  Globe,
   LayoutGrid,
   Rocket,
   Settings,
   Table,
 } from "lucide-react";
 import React from "react";
-import { Segmented } from "antd";
 import { useLocation, useNavigate, useOutlet } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
@@ -88,6 +88,8 @@ export default function MainLayout({
       window.electronAPI?.appCapture?.captureRegion &&
       window.electronAPI?.clipboardWriteImageDataUrl
     );
+
+  const canOpenExternal = Boolean(window.electronAPI?.openExternal);
 
   const addScreenshot = useResourceStore((s) => s.addScreenshot);
 
@@ -250,22 +252,29 @@ export default function MainLayout({
             className="flex flex-1 items-center justify-end gap-2"
             style={{ WebkitAppRegion: "no-drag" }}
           >
-            {canAppCapture ? (
-              <DropdownMenu>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <DropdownMenuTrigger asChild disabled={!canAppCapture}>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="text-muted-foreground"
+                        disabled={!canAppCapture}
                       >
                         <Camera className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>Capture screenshot</TooltipContent>
-                </Tooltip>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {canAppCapture
+                    ? "Capture screenshot"
+                    : "Screenshot capture is not available"}
+                </TooltipContent>
+              </Tooltip>
+              {canAppCapture && (
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => startAreaCapture()}>
                     Area (default)
@@ -276,27 +285,34 @@ export default function MainLayout({
                     Full
                   </DropdownMenuItem>
                 </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+              )}
+            </DropdownMenu>
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground"
-                  onClick={() => {
-                    if (window.electronAPI?.openExternal) {
-                      window.electronAPI.openExternal(
-                        "https://github.com/next-dev-team/next-gen"
-                      );
-                    }
-                  }}
-                >
-                  <Github className="h-4 w-4" />
-                </Button>
+                <span className="inline-block">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground"
+                    disabled={!canOpenExternal}
+                    onClick={() => {
+                      if (window.electronAPI?.openExternal) {
+                        window.electronAPI.openExternal(
+                          "https://github.com/next-dev-team/next-gen"
+                        );
+                      }
+                    }}
+                  >
+                    <Github className="h-4 w-4" />
+                  </Button>
+                </span>
               </TooltipTrigger>
-              <TooltipContent>View on GitHub</TooltipContent>
+              <TooltipContent>
+                {canOpenExternal
+                  ? "View on GitHub"
+                  : "External links are not available"}
+              </TooltipContent>
             </Tooltip>
 
             <DropdownMenu>
