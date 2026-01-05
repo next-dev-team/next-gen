@@ -3,9 +3,9 @@ import {
   ArrowRight,
   Book,
   Calendar,
+  Check,
   CheckCircle,
   CheckCircle2,
-  Check,
   ChevronDown,
   Circle,
   Clock,
@@ -1927,8 +1927,8 @@ const SprintTrackingView = ({
         total > 0
           ? Math.round((done / total) * 100)
           : totalStories > 0
-          ? Math.round((doneStories / totalStories) * 100)
-          : 0,
+            ? Math.round((doneStories / totalStories) * 100)
+            : 0,
     };
   }, [sprintCards]);
 
@@ -2209,12 +2209,13 @@ const McpToolsUsage = ({ activeBoard, projectRoot }) => {
         </div>
       </div>
 
-      <div
-        className="mt-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words cursor-pointer hover:bg-background/80 transition-colors"
+      <button
+        type="button"
+        className="mt-3 rounded-lg border border-border/50 bg-background/60 px-3 py-2 font-mono text-xs whitespace-pre-wrap break-words cursor-pointer text-left hover:bg-background/80 transition-colors"
         onClick={() => handleCopyUsage()}
       >
         {usageText}
-      </div>
+      </button>
     </div>
   );
 };
@@ -2490,7 +2491,8 @@ const ListColumn = ({
 
   return (
     <div
-      role="presentation"
+      role="application"
+      aria-label={`List: ${String(list.name || "")}`}
       className={cn(
         "relative w-[320px] rounded-xl border bg-background/50 backdrop-blur-sm flex flex-col h-full min-h-0",
         "border-border/50 hover:border-border transition-all duration-300",
@@ -2518,7 +2520,8 @@ const ListColumn = ({
           borderTopRightRadius: 12,
         }}
       >
-        <div
+        <button
+          type="button"
           draggable={!isEditingName && !disableDnd}
           className={cn(
             "shrink-0 rounded p-1 -ml-1 text-muted-foreground",
@@ -2531,7 +2534,7 @@ const ListColumn = ({
           onClick={(e) => e.stopPropagation()}
         >
           <GripVertical className="h-4 w-4" />
-        </div>
+        </button>
 
         <StatusIcon
           className="h-4 w-4 shrink-0"
@@ -3082,8 +3085,8 @@ const SettingsDialog = ({ open, onOpenChange }) => {
                           log.type === "error"
                             ? "text-red-400"
                             : log.type === "success"
-                            ? "text-green-400"
-                            : "text-gray-300"
+                              ? "text-green-400"
+                              : "text-gray-300"
                         )}
                       >
                         {log.message}
@@ -4222,7 +4225,8 @@ const AgentAssistDialog = ({
                         const completion = phaseCompletion[phase.id];
                         const isActive = currentPhase === phase.id;
                         return (
-                          <div
+                          <button
+                            type="button"
                             key={phase.id}
                             className={cn(
                               "rounded-lg border p-2 cursor-pointer transition-all",
@@ -4248,7 +4252,7 @@ const AgentAssistDialog = ({
                             <div className="text-[9px] text-muted-foreground">
                               {phase.required ? "Required" : "Optional"}
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -4328,19 +4332,20 @@ const AgentAssistDialog = ({
                             const command = `@${wf.agent} *${wf.id}`;
                             return (
                               <div className="mt-3 p-2 rounded border border-border/30 bg-black/50">
-                                <div
-                                  className="flex items-center justify-between gap-2 mb-1"
+                                <button
+                                  type="button"
+                                  className="flex w-full items-center justify-between gap-2 mb-1 text-left"
                                   onClick={() =>
                                     copyText(`wf-${wf.id}`, command)
                                   }
                                 >
-                                  <div className="text-[10px] text-muted-foreground">
+                                  <span className="text-[10px] text-muted-foreground">
                                     {wf.description}{" "}
                                     <Copy className="h-3 w-3" />
                                     {copiedKey === `wf-${wf.id}`
                                       ? "Copied!"
                                       : "Copy"}
-                                  </div>
+                                  </span>
                                   {/* <Button
                                     type="button"
                                     size="sm"
@@ -4355,7 +4360,7 @@ const AgentAssistDialog = ({
                                       ? "Copied!"
                                       : "Copy"}
                                   </Button> */}
-                                </div>
+                                </button>
                                 <code className="text-xs text-green-400 font-mono">
                                   {command}
                                 </code>
@@ -4775,8 +4780,8 @@ const AgentAssistDialog = ({
                                     {workflowPreviewContent
                                       ? workflowPreviewContent
                                       : hasProjectRoot
-                                      ? "No preview loaded"
-                                      : "Select a project root first"}
+                                        ? "No preview loaded"
+                                        : "Select a project root first"}
                                   </pre>
                                 </ScrollArea>
                               </div>
@@ -4790,8 +4795,8 @@ const AgentAssistDialog = ({
                                   {workflowRunBusy
                                     ? "Workflow running"
                                     : workflowRunLogs.length
-                                    ? "Last workflow run output"
-                                    : "No workflow run yet"}
+                                      ? "Last workflow run output"
+                                      : "No workflow run yet"}
                                 </div>
                                 <Button
                                   type="button"
@@ -4832,16 +4837,16 @@ const AgentAssistDialog = ({
                           connected
                             ? "bg-green-500 animate-pulse"
                             : serverRunning
-                            ? "bg-amber-500"
-                            : "bg-destructive"
+                              ? "bg-amber-500"
+                              : "bg-destructive"
                         )}
                       />
                       <div className="text-sm font-medium">
                         {connected
                           ? "Connected (Live)"
                           : serverRunning
-                          ? "Server running, reconnect needed"
-                          : "Server stopped"}
+                            ? "Server running, reconnect needed"
+                            : "Server stopped"}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -6689,26 +6694,6 @@ export default function ScrumBoardView() {
             Agent Assist
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setEpicManagerOpen(true)}
-          >
-            <GitBranch className="h-4 w-4" />
-            Epics
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setSprintManagerOpen(true)}
-          >
-            <Calendar className="h-4 w-4" />
-            Sprints
-          </Button>
-
           {activeBoard && (
             <Button
               variant="destructive"
@@ -6736,10 +6721,38 @@ export default function ScrumBoardView() {
           onValueChange={setOverviewTab}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="mcp">MCP Tool</TabsTrigger>
-            <TabsTrigger value="sprints">Sprints</TabsTrigger>
-            <TabsTrigger value="stats">Stats</TabsTrigger>
+          <TabsList className="flex w-full items-center gap-1">
+            <TabsTrigger value="mcp" className="flex-1">
+              MCP Tool
+            </TabsTrigger>
+            <TabsTrigger value="sprints" className="flex-1">
+              Scrum
+            </TabsTrigger>
+            <TabsTrigger value="stats" className="flex-1">
+              Stats
+            </TabsTrigger>
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => setEpicManagerOpen(true)}
+              >
+                <GitBranch className="h-3.5 w-3.5 mr-1" />
+                Epics
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={() => setSprintManagerOpen(true)}
+              >
+                <Calendar className="h-3.5 w-3.5 mr-1" />
+                Sprints
+              </Button>
+            </div>
           </TabsList>
 
           <TabsContent value="mcp" className="mt-3">
@@ -6764,7 +6777,8 @@ export default function ScrumBoardView() {
                         Sprints
                       </div>
                       <div className="flex flex-wrap gap-2">
-                        <div
+                        <button
+                          type="button"
                           data-testid="sprint-drop-none"
                           className={cn(
                             "px-3 py-2 rounded-lg border text-sm bg-background/50",
@@ -6786,10 +6800,11 @@ export default function ScrumBoardView() {
                                 (sprintItemCounts["__none__"]?.epics || 0)}
                             </Badge>
                           </div>
-                        </div>
+                        </button>
 
                         {sprintOptions.map((s) => (
-                          <div
+                          <button
+                            type="button"
                             key={s.id}
                             data-testid={`sprint-drop-${s.id}`}
                             className={cn(
@@ -6811,7 +6826,7 @@ export default function ScrumBoardView() {
                                   (sprintItemCounts[s.id]?.epics || 0)}
                               </Badge>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     </div>

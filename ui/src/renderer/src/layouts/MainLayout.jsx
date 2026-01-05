@@ -1,6 +1,7 @@
 import {
   AppWindow,
   Camera,
+  Folder,
   Github,
   Globe,
   LayoutGrid,
@@ -527,7 +528,9 @@ export default function MainLayout({
   const tabOptions = React.useMemo(
     () => [
       { key: "generator", label: "Generator", icon: Rocket },
+
       { key: "projects", label: "Projects", icon: AppWindow },
+      { key: "resources", label: "Resources", icon: Folder },
       { key: "launchpad", label: "Launchpad", icon: Search },
       { key: "ui", label: "UI", icon: LayoutGrid },
       { key: "scrum-board", label: "Scrum Board", icon: Table },
@@ -792,9 +795,6 @@ export default function MainLayout({
                 <TooltipContent>Settings</TooltipContent>
               </Tooltip>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => navigate("/resources")}>
-                  Resources
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/settings")}>
                   Settings
                 </DropdownMenuItem>
