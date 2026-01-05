@@ -2,6 +2,7 @@ import {
   AppstoreOutlined,
   BugOutlined,
   CameraOutlined,
+  DatabaseOutlined,
   GlobalOutlined,
   GithubOutlined,
   LayoutOutlined,
@@ -9,9 +10,18 @@ import {
   SettingOutlined,
   TableOutlined,
 } from "@ant-design/icons";
-import { Button, Dropdown, Layout, Segmented, Tooltip, Typography, message } from "antd";
+import {
+  Button,
+  Dropdown,
+  Layout,
+  Segmented,
+  Tooltip,
+  Typography,
+  message,
+} from "antd";
 import React from "react";
 import { useLocation, useNavigate, useOutlet } from "react-router-dom";
+import { useResourceStore } from "../stores/resourceStore";
 
 const { Header, Content, Footer } = Layout;
 const { Title, Text } = Typography;
@@ -74,9 +84,11 @@ export default function MainLayout({
     !isWeb &&
     Boolean(
       window.electronAPI?.appCapture?.capturePage &&
-        window.electronAPI?.appCapture?.captureRegion &&
-        window.electronAPI?.clipboardWriteImageDataUrl
+      window.electronAPI?.appCapture?.captureRegion &&
+      window.electronAPI?.clipboardWriteImageDataUrl
     );
+
+  const addScreenshot = useResourceStore((s) => s.addScreenshot);
 
   const [captureOverlayOpen, setCaptureOverlayOpen] = React.useState(false);
   const [captureRect, setCaptureRect] = React.useState(null);
@@ -108,6 +120,18 @@ export default function MainLayout({
           return;
         }
 
+        const ts = new Date().toISOString().replaceAll(":", "-");
+        addScreenshot({
+          name: `app-${mode}-${ts}.png`,
+          source: "app",
+          mode,
+          dataUrl: String(res.dataUrl),
+          mimeType: String(res?.mimeType || "image/png"),
+          byteLength: Number(res?.byteLength) || 0,
+          meta: rect ? { rect } : null,
+          originId: `${mode}::${ts}`,
+        });
+
         const ok = await window.electronAPI.clipboardWriteImageDataUrl(
           res.dataUrl
         );
@@ -120,7 +144,7 @@ export default function MainLayout({
         message.error(String(err?.message || err || "Capture failed"));
       }
     },
-    [canAppCapture]
+    [addScreenshot, canAppCapture]
   );
 
   const startAreaCapture = React.useCallback(() => {
@@ -203,7 +227,11 @@ export default function MainLayout({
             level={4}
             style={{ color: "var(--color-text-primary)", margin: 0 }}
           >
-            {activeTab === "ui" ? "UI Builder" : "Next Gen"}
+            {activeTab === "ui"
+              ? "UI Builder"
+              : activeTab === "resources"
+                ? "Resources"
+                : "Next Gen"}
           </Title>
           <Text
             style={{
@@ -310,6 +338,22 @@ export default function MainLayout({
                   </div>
                 ),
                 value: "browser",
+              },
+              {
+                label: (
+                  <div
+                    style={{
+                      padding: "2px 4px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <DatabaseOutlined />
+                    <span>Resources</span>
+                  </div>
+                ),
+                value: "resources",
               },
               // {
               //   label: (

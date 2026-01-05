@@ -60,6 +60,7 @@ import {
 import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
 import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
+import { useResourceStore } from "../stores/resourceStore";
 
 const createId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -1962,6 +1963,8 @@ export default function BrowserToolView() {
   const iframeRef = useRef(null);
   const lastProcessedUrlRef = useRef(null);
 
+  const addScreenshot = useResourceStore((s) => s.addScreenshot);
+
   const resolvedActiveTabId = tabs.some((t) => t.id === activeTabId)
     ? activeTabId
     : tabs[0]?.id;
@@ -2061,6 +2064,21 @@ export default function BrowserToolView() {
                   dataUrl: String(res.dataUrl),
                 },
               ]);
+
+              addScreenshot({
+                name: filename,
+                source: "browser",
+                mode,
+                dataUrl: String(res.dataUrl),
+                mimeType: String(res?.mimeType || "image/png"),
+                byteLength: Number(res?.byteLength) || 0,
+                meta: {
+                  tabId: payload.tabId,
+                  selector,
+                  rect,
+                },
+                originId: captureKey,
+              });
             } else if (res?.ok === false && res?.error) {
               toast.error("Auto-capture failed", {
                 description: String(res.error),
@@ -2089,6 +2107,7 @@ export default function BrowserToolView() {
     resolvedActiveTabId,
     captureMode,
     addInspectorAttachments,
+    addScreenshot,
     setInspectorEnabled,
     setInspectorHover,
     setInspectorSelection,

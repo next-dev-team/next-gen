@@ -11,6 +11,7 @@ const ProjectsView = lazy(() => import("./views/ProjectsView"));
 const UIView = lazy(() => import("./views/UIView"));
 const BrowserToolView = lazy(() => import("./views/BrowserToolView"));
 const ScrumBoardView = lazy(() => import("./views/ScrumBoardView"));
+const ResourcesView = lazy(() => import("./views/ResourcesView"));
 // const DevToolView = lazy(() => import("./views/DevToolView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
 
@@ -136,6 +137,7 @@ function App() {
               <Route path="ui" element={<UIView />} />
               <Route path="browser" element={<BrowserToolView />} />
               <Route path="scrum-board" element={<ScrumBoardView />} />
+              <Route path="resources" element={<ResourcesView />} />
               {/* <Route path="dev-tool" element={<DevToolView />} /> */}
               <Route path="settings" element={<SettingsView />} />
             </Route>
