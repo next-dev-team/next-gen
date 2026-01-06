@@ -235,7 +235,7 @@ export const useKanbanStore = create((set, get) => ({
       set({ eventSource: null });
 
       if (reconnectAttempts < maxReconnectAttempts) {
-        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        const delay = Math.min(1000 * 2 ** reconnectAttempts, 30000);
         setTimeout(() => {
           set({ reconnectAttempts: reconnectAttempts + 1 });
           get().connect();
@@ -652,7 +652,17 @@ export const useKanbanStore = create((set, get) => ({
   // Card operations
   addCard: async (boardId, listId, cardData) => {
     const { apiCall, connected, state } = get();
-    const newId = createId();
+
+    // Simple numeric ID based on max existing ID
+    const allCards = (state?.boards || []).flatMap((b) =>
+      b.lists.flatMap((l) => l.cards)
+    );
+    const maxId = allCards.reduce((max, c) => {
+      const numericId = parseInt(c.id, 10);
+      return !isNaN(numericId) ? Math.max(max, numericId) : max;
+    }, 0);
+    const newId = String(maxId + 1);
+
     const newCard = {
       id: newId,
       title: cardData.title || "New Story",
@@ -663,6 +673,10 @@ export const useKanbanStore = create((set, get) => ({
       epicId: cardData.epicId || null,
       sprintId: cardData.sprintId || null,
       labels: cardData.labels || [],
+      attachments: (cardData.attachments || []).map((a, idx) => ({
+        ...a,
+        id: `${newId}-${idx + 1}`,
+      })),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -741,9 +755,18 @@ export const useKanbanStore = create((set, get) => ({
                 updatedAt: new Date().toISOString(),
                 cards: l.cards.map((c) => {
                   if (c.id !== cardId) return c;
+                  const updatedAttachments = (
+                    patch.attachments ||
+                    c.attachments ||
+                    []
+                  ).map((a, idx) => ({
+                    ...a,
+                    id: `${cardId}-${idx + 1}`,
+                  }));
                   return {
                     ...c,
                     ...patch,
+                    attachments: updatedAttachments,
                     updatedAt: new Date().toISOString(),
                   };
                 }),
@@ -862,8 +885,8 @@ export const useKanbanStore = create((set, get) => ({
             const completedAt = movingToDone
               ? card.completedAt || new Date().toISOString()
               : movingFromDone
-              ? null
-              : card.completedAt;
+                ? null
+                : card.completedAt;
 
             const nextCard = {
               ...card,

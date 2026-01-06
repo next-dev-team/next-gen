@@ -13,9 +13,11 @@ import {
   Filter,
   GitBranch,
   GripVertical,
+  Image,
   Layout,
   LayoutGrid,
   Lock,
+  Paperclip,
   PauseCircle,
   Pencil,
   PlayCircle,
@@ -958,6 +960,19 @@ const CardEditorDialog = ({
   isLocked = false,
   lockInfo = null,
 }) => {
+  const { state } = useKanbanStore();
+  const nextId = React.useMemo(() => {
+    if (initial?.id) return initial.id;
+    const allCards = (state?.boards || []).flatMap((b) =>
+      b.lists.flatMap((l) => l.cards)
+    );
+    const maxId = allCards.reduce((max, c) => {
+      const numericId = parseInt(c.id, 10);
+      return !isNaN(numericId) ? Math.max(max, numericId) : max;
+    }, 0);
+    return String(maxId + 1);
+  }, [initial?.id, state]);
+
   const [title, setTitle] = React.useState(initial?.title || "");
   const [description, setDescription] = React.useState(
     initial?.description || ""
@@ -972,6 +987,10 @@ const CardEditorDialog = ({
   const [priority, setPriority] = React.useState(initial?.priority || "medium");
   const [epicId, setEpicId] = React.useState(initial?.epicId || "");
   const [sprintId, setSprintId] = React.useState(initial?.sprintId || "");
+  const [attachments, setAttachments] = React.useState(
+    Array.isArray(initial?.attachments) ? initial.attachments : []
+  );
+  const [previewAttachment, setPreviewAttachment] = React.useState(null);
 
   React.useEffect(() => {
     setTitle(initial?.title || "");
@@ -984,13 +1003,89 @@ const CardEditorDialog = ({
     setPriority(initial?.priority || "medium");
     setEpicId(initial?.epicId || "");
     setSprintId(initial?.sprintId || "");
+    setAttachments(
+      Array.isArray(initial?.attachments) ? initial.attachments : []
+    );
   }, [initial]);
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const newAttachments = await Promise.all(
+      files.map(async (file, idx) => {
+        const reader = new FileReader();
+        return new Promise((resolve) => {
+          reader.onload = (ev) => {
+            // Use current attachment count + 1 for the sequence
+            const sequence = attachments.length + idx + 1;
+            resolve({
+              id: `${nextId}-${sequence}`,
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: ev.target.result,
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      })
+    );
+
+    setAttachments((prev) => [...prev, ...newAttachments]);
+  };
+
+  const handlePaste = async (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const pastedFiles = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === "file") {
+        const file = items[i].getAsFile();
+        if (file) {
+          pastedFiles.push(file);
+        }
+      }
+    }
+
+    if (pastedFiles.length > 0) {
+      const newAttachments = await Promise.all(
+        pastedFiles.map(async (file, idx) => {
+          const reader = new FileReader();
+          return new Promise((resolve) => {
+            reader.onload = (ev) => {
+              const sequence = attachments.length + idx + 1;
+              resolve({
+                id: `${nextId}-${sequence}`,
+                name:
+                  file.name ||
+                  `pasted-image-${Date.now()}.${file.type.split("/")[1] || "png"}`,
+                type: file.type,
+                size: file.size,
+                data: ev.target.result,
+              });
+            };
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    }
+  };
+
+  const removeAttachment = (id) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  };
 
   const canSave = title.trim().length > 0 && !isLocked;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px] bg-background/95 backdrop-blur-lg border-border/50">
+      <DialogContent
+        className="sm:max-w-[500px] bg-background/95 backdrop-blur-lg border-border/50"
+        onPaste={handlePaste}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {initial?.id ? (
@@ -1017,10 +1112,15 @@ const CardEditorDialog = ({
 
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label className="flex items-center gap-2">
-              <Target className="h-4 w-4 text-muted-foreground" />
-              Title
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-muted-foreground" />
+                Title
+              </Label>
+              <Badge variant="outline" className="text-[10px] tabular-nums">
+                Story ID: #{nextId}
+              </Badge>
+            </div>
             <Input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -1175,7 +1275,156 @@ const CardEditorDialog = ({
               disabled={isLocked}
             />
           </div>
+
+          <div className="grid gap-2">
+            <Label className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Paperclip className="h-4 w-4 text-muted-foreground" />
+                Attachments
+              </div>
+              {!isLocked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => document.getElementById("file-upload").click()}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Upload
+                </Button>
+              )}
+            </Label>
+            <input
+              id="file-upload"
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFileUpload}
+              disabled={isLocked}
+            />
+            <div className="flex flex-wrap gap-2 mt-1">
+              {attachments.map((file) => (
+                <div
+                  key={file.id}
+                  className="group relative flex items-center bg-background/50 border border-border/50 rounded-lg text-xs hover:bg-background/80 transition-colors"
+                >
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 p-2 pr-8 w-full text-left rounded-lg"
+                    onClick={() => setPreviewAttachment(file)}
+                  >
+                    {file.type?.startsWith("image/") ? (
+                      <div className="relative h-12 w-12 rounded border border-border/50 overflow-hidden bg-muted/30 shrink-0 group/editor-img">
+                        <img
+                          src={file.data}
+                          alt={file.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const text = `story img id: ${file.id}`;
+                            navigator.clipboard.writeText(text);
+                            toast.success(`Copied image ID: ${file.id}`);
+                          }}
+                          className="absolute top-0.5 right-0.5 bg-background/90 backdrop-blur-sm border border-border/50 rounded-full px-1 py-0 text-[8px] font-mono text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all shadow-sm z-10"
+                          title={`Copy ID: ${file.id}`}
+                        >
+                          {file.id}
+                        </button>
+                      </div>
+                    ) : (
+                      <Paperclip className="h-5 w-5 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="max-w-[120px] truncate" title={file.name}>
+                      {file.name}
+                    </span>
+                  </button>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeAttachment(file.id);
+                      }}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-destructive/10 text-destructive hover:bg-destructive hover:text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all"
+                      title="Remove attachment"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {attachments.length === 0 && (
+                <div className="text-[11px] text-muted-foreground italic py-1 px-1">
+                  No files attached. Paste images or upload files.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+
+        {/* Attachment Preview Dialog */}
+        <Dialog
+          open={!!previewAttachment}
+          onOpenChange={() => setPreviewAttachment(null)}
+        >
+          <DialogContent className="sm:max-w-[800px] max-h-[90vh] p-0 overflow-hidden bg-background/95 backdrop-blur-xl border-border/50">
+            <DialogHeader className="p-4 border-b border-border/50">
+              <div className="flex items-center justify-between pr-8">
+                <DialogTitle className="text-sm font-medium flex items-center gap-2">
+                  {previewAttachment?.type?.startsWith("image/") ? (
+                    <Image className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Paperclip className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  {previewAttachment?.name}
+                </DialogTitle>
+                {previewAttachment && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs"
+                    asChild
+                  >
+                    <a
+                      href={previewAttachment.data}
+                      download={previewAttachment.name}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Download
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </DialogHeader>
+            <div className="flex items-center justify-center bg-black/5 dark:bg-white/5 min-h-[300px] max-h-[calc(90vh-120px)] overflow-auto p-4">
+              {previewAttachment?.type?.startsWith("image/") ? (
+                <img
+                  src={previewAttachment.data}
+                  alt={previewAttachment.name}
+                  className="max-w-full h-auto rounded shadow-lg"
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-4 text-muted-foreground">
+                  <Paperclip className="h-16 w-16 opacity-20" />
+                  <div className="text-center">
+                    <p className="text-sm font-medium">
+                      {previewAttachment?.name}
+                    </p>
+                    <p className="text-xs opacity-60">
+                      {(previewAttachment?.size / 1024).toFixed(1)} KB •{" "}
+                      {previewAttachment?.type}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <DialogFooter className="gap-2">
           {initial?.id && !isLocked && (
@@ -1218,6 +1467,7 @@ const CardEditorDialog = ({
                 priority,
                 epicId: epicId || null,
                 sprintId: sprintId || null,
+                attachments: attachments,
               });
             }}
             className="bg-primary hover:bg-primary/90"
@@ -2255,6 +2505,14 @@ const ScrumCard = ({
     [storyKey]
   );
 
+  const coverImage = card.attachments?.find((a) =>
+    a.type?.startsWith("image/")
+  );
+  const otherImages =
+    card.attachments?.filter(
+      (a) => a.type?.startsWith("image/") && a.id !== coverImage?.id
+    ) || [];
+
   return (
     <Card
       draggable={!isLocked && draggableEnabled}
@@ -2263,12 +2521,35 @@ const ScrumCard = ({
       className={cn(
         "cursor-grab active:cursor-grabbing transition-all duration-300 ease-in-out group",
         "hover:shadow-lg hover:shadow-primary/5 hover:border-primary/30",
-        "bg-card/50 backdrop-blur-sm border-border/50",
+        "bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden",
         isLocked && "opacity-60 cursor-not-allowed ring-2 ring-amber-500/50",
         isDragging &&
           "opacity-20 scale-95 border-primary/40 grayscale shadow-none"
       )}
     >
+      {coverImage && (
+        <div className="relative w-full h-32 overflow-hidden border-b border-border/30 group/cover">
+          <img
+            src={coverImage.data}
+            alt={coverImage.name}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover/cover:scale-105"
+          />
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const text = `story img id: ${coverImage.id}`;
+              navigator.clipboard.writeText(text);
+              toast.success(`Copied image ID: ${coverImage.id}`);
+            }}
+            className="absolute top-2 right-2 bg-background/80 backdrop-blur-sm border border-border/50 rounded-full px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all shadow-sm z-10 opacity-0 group-hover/cover:opacity-100"
+            title={`Copy ID: ${coverImage.id}`}
+          >
+            {coverImage.id}
+          </button>
+        </div>
+      )}
       <CardContent className="p-3">
         <div className="flex items-start gap-2">
           <button
@@ -2300,6 +2581,41 @@ const ScrumCard = ({
             {card.description && (
               <div className="text-xs text-muted-foreground line-clamp-2 mt-1.5 pl-3.5">
                 {card.description}
+              </div>
+            )}
+            {otherImages.length > 0 && (
+              <div className="mt-2 pl-3.5 flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                {otherImages.slice(0, 4).map((img) => (
+                  <div
+                    key={img.id}
+                    className="relative w-20 h-20 shrink-0 rounded-md border border-border/30 overflow-hidden bg-muted/50 group/img"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const text = `story img id: ${img.id}`;
+                        navigator.clipboard.writeText(text);
+                        toast.success(`Copied image ID: ${img.id}`);
+                      }}
+                      className="absolute top-1 right-1 bg-background/80 backdrop-blur-sm border border-border/50 rounded-full px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-all shadow-sm z-10"
+                      title={`Copy ID: ${img.id}`}
+                    >
+                      {img.id}
+                    </button>
+                    <img
+                      src={img.data}
+                      alt={img.name}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-110"
+                    />
+                  </div>
+                ))}
+                {otherImages.length > 4 && (
+                  <div className="w-20 h-20 shrink-0 rounded-md border border-border/30 bg-muted/30 flex items-center justify-center text-[10px] text-muted-foreground font-medium">
+                    +{otherImages.length - 4}
+                  </div>
+                )}
               </div>
             )}
           </button>
@@ -2352,7 +2668,8 @@ const ScrumCard = ({
         {(card.assignee ||
           card.points !== null ||
           (card.labels && card.labels.length) ||
-          card.priority) && (
+          card.priority ||
+          (card.attachments && card.attachments.length > 0)) && (
           <div className="mt-2.5 pt-2.5 border-t border-border/30 flex flex-wrap items-center gap-1.5">
             {sprintName ? (
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">
@@ -2383,6 +2700,12 @@ const ScrumCard = ({
               <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                 <User className="h-2.5 w-2.5 mr-1" />
                 {card.assignee}
+              </Badge>
+            )}
+            {card.attachments && card.attachments.length > 0 && (
+              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                <Paperclip className="h-2.5 w-2.5 mr-1" />
+                {card.attachments.length}
               </Badge>
             )}
             {Array.isArray(card.labels) &&

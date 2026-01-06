@@ -303,8 +303,8 @@ const runCli = async ({ cwd, command, args, timeoutMs, autoInput }) => {
       autoInput === true
         ? { enabled: true }
         : autoInput && typeof autoInput === "object"
-        ? autoInput
-        : { enabled: false };
+          ? autoInput
+          : { enabled: false };
 
     const autoEnabled = Boolean(auto.enabled);
     const autoIdleMs =
@@ -1461,6 +1461,7 @@ async function handleAddCard(data) {
     epicId,
     sprintId,
     priority,
+    attachments,
   } = data;
   const trimmed = String(title || "").trim();
   if (!trimmed) throw new Error("title is required");
@@ -1469,8 +1470,16 @@ async function handleAddCard(data) {
   const board = findBoard(state, boardId);
   const list = board?.lists.find((l) => l.id === listId);
 
+  // Simple numeric ID: find max numeric ID across all cards and increment
+  const allCards = state.boards.flatMap((b) => b.lists.flatMap((l) => l.cards));
+  const maxId = allCards.reduce((max, c) => {
+    const numericId = parseInt(c.id, 10);
+    return !isNaN(numericId) ? Math.max(max, numericId) : max;
+  }, 0);
+  const cardId = String(maxId + 1);
+
   const card = {
-    id: createId(),
+    id: cardId,
     title: trimmed,
     description: String(description || "").trim(),
     assignee: String(assignee || "").trim(),
@@ -1480,6 +1489,12 @@ async function handleAddCard(data) {
     sprintId: sprintId || null,
     priority: priority || "medium",
     status: list?.statusId || "backlog",
+    attachments: Array.isArray(attachments)
+      ? attachments.map((a, idx) => ({
+          ...a,
+          id: `${cardId}-${idx + 1}`,
+        }))
+      : [],
     createdAt: nowIso(),
     updatedAt: nowIso(),
   };
@@ -1528,9 +1543,19 @@ async function handleUpdateCard(data, userId, clientStateVersion) {
         if (l.id !== listId) return l;
         return {
           ...l,
-          cards: l.cards.map((c) =>
-            c.id === cardId ? { ...c, ...patch, updatedAt: nowIso() } : c
-          ),
+          cards: l.cards.map((c) => {
+            if (c.id !== cardId) return c;
+            const updatedCard = { ...c, ...patch, updatedAt: nowIso() };
+            if (Array.isArray(updatedCard.attachments)) {
+              updatedCard.attachments = updatedCard.attachments.map(
+                (a, idx) => ({
+                  ...a,
+                  id: `${cardId}-${idx + 1}`,
+                })
+              );
+            }
+            return updatedCard;
+          }),
           updatedAt: nowIso(),
         };
       }),
@@ -1670,26 +1695,26 @@ async function handleUpdateSprint(data) {
 
     const nextStartDate =
       patch.startDate === undefined
-        ? s.startDate ?? null
+        ? (s.startDate ?? null)
         : String(patch.startDate || "").trim() || null;
     const nextEndDate =
       patch.endDate === undefined
-        ? s.endDate ?? null
+        ? (s.endDate ?? null)
         : String(patch.endDate || "").trim() || null;
 
     const nextCapacity =
       patch.capacityPoints === undefined
-        ? s.capacityPoints ?? null
+        ? (s.capacityPoints ?? null)
         : typeof patch.capacityPoints === "number"
-        ? patch.capacityPoints
-        : null;
+          ? patch.capacityPoints
+          : null;
 
     const nextStatus =
       patch.status === undefined
         ? s.status || "planned"
         : ["planned", "active", "completed"].includes(patch.status)
-        ? patch.status
-        : s.status || "planned";
+          ? patch.status
+          : s.status || "planned";
 
     return {
       ...s,
@@ -2007,6 +2032,20 @@ const main = async (enableStdio = true, logger = console) => {
         epicId: z.string().optional(),
         sprintId: z.string().nullable().optional(),
         priority: z.enum(["low", "medium", "high", "critical"]).optional(),
+        attachments: z
+          .array(
+            z.object({
+              id: z.string().optional(),
+              name: z.string().optional(),
+              type: z.string().optional(),
+              size: z.number().optional(),
+              data: z.string().describe("Base64 encoded file data"),
+            })
+          )
+          .optional()
+          .describe(
+            "Attachments for the card. If the user provides an image or file in chat, you can include it here with its base64 data."
+          ),
       },
       outputSchema: { state: z.any(), cardId: z.string() },
     },
@@ -3511,12 +3550,12 @@ const start = async (port = SSE_PORT, logCallback = null, enableStdio) => {
     typeof enableStdio === "boolean"
       ? enableStdio
       : process.env.MCP_STDIO === "1"
-      ? true
-      : process.env.MCP_STDIO === "0"
-      ? false
-      : process.versions && process.versions.electron
-      ? false
-      : true;
+        ? true
+        : process.env.MCP_STDIO === "0"
+          ? false
+          : process.versions && process.versions.electron
+            ? false
+            : true;
 
   return new Promise((resolve, reject) => {
     const onListen = () => {
