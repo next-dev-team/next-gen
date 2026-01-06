@@ -1,9 +1,12 @@
 {
-  "name": "next-gen",
+  "name": "nde",
   "version": "1.0.0",
   "description": "",
   "private": true,
   "packageManager": "pnpm@10.19.0",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "main": "index.js",
   "exports": {
     ".": "./turbo/generators/config.ts"
@@ -12,7 +15,8 @@
     "dev": "turbo dev",
     "build": "turbo build",
     "test": "turbo test",
-    "ui": "turbo dev --filter=float-devtools-app",
+    "ui": "turbo dev --filter=@nde/next-gen-tools",
+    "ui:build:win": "turbo -F @nde/next-gen-tools build:win",
     "gen": "turbo gen",
     "gen:workspace": "turbo gen workspace",
     "gen:turbo": "npx create-turbo@latest --example basic"

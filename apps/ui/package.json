@@ -1,10 +1,13 @@
 {
-  "name": "float-devtools-app",
+  "name": "@nde/next-gen-tools",
   "version": "1.0.0",
   "description": "Electron app with floating DevTools",
   "main": "./out/main/index.js",
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "start": "node ../../node_modules/electron-vite/bin/electron-vite.js preview",
     "dev": "node ../../node_modules/electron-vite/bin/electron-vite.js dev",
@@ -31,16 +34,16 @@
     "@tailwindcss/cli": "^4.1.17",
     "@tailwindcss/postcss": "^4.1.17",
     "@tailwindcss/vite": "^4.1.17",
-    "@vitejs/plugin-react": "^5.1.1",
+    "@vitejs/plugin-react": "^5.1.2",
     "code-inspector-plugin": "^1.3.4",
     "concurrently": "^9.2.1",
     "electron": "28.3.3",
     "electron-builder": "^24.9.1",
-    "electron-vite": "^2.3.0",
+    "electron-vite": "^5.0.0",
     "postcss": "^8.5.6",
     "prettier": "^3.7.4",
     "tailwindcss": "^4.1.17",
-    "vite": "^5.0.0"
+    "vite": "^7.3.0"
   },
   "dependencies": {
     "@ant-design/cssinjs": "^2.0.1",
@@ -71,8 +74,8 @@
     "electron-store": "^8.1.0",
     "lucide-react": "^0.562.0",
     "node-pty": "^1.1.0",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-router-dom": "^7.11.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
@@ -83,7 +86,7 @@
   },
   "build": {
     "appId": "com.float-devtools-app.app",
-    "productName": "Float Devtools App",
+    "productName": "next-gen-tools",
     "directories": {
       "output": "dist"
     },

@@ -26,7 +26,7 @@ test.describe("Generator UI", () => {
 
   // test("should load the app and show title", async () => {
   //   const window = await electronApp.firstWindow();
-  //   await expect(window).toHaveTitle("Float Devtools App");
+  //   await expect(window).toHaveTitle("Next Gen Tools");
   //   await expect(
   //     window.getByRole("heading", { name: "Next Gen" })
   //   ).toBeVisible();
@@ -58,7 +58,7 @@ test.describe("Generator UI", () => {
     await goTo(window, "#/generator");
 
     await expect(
-      window.getByRole("heading", { name: "Choose Your Template" }),
+      window.getByRole("heading", { name: "Choose Your Template" })
     ).toBeVisible();
 
     // Click on electron-float generator
@@ -85,7 +85,7 @@ test.describe("Generator UI", () => {
 
     // Check if form appears
     await expect(
-      window.getByRole("heading", { name: "Configure electron-float" }),
+      window.getByRole("heading", { name: "Configure electron-float" })
     ).toBeVisible({ timeout: 15000 });
 
     const prevButton = wizardFooter.getByRole("button", {
@@ -110,13 +110,13 @@ test.describe("Generator UI", () => {
     ).toBeVisible({ timeout: 15000 });
     await window.getByRole("tab", { name: "Scrum Board", exact: true }).click();
     await expect(
-      window.getByRole("heading", { name: "Kanban Board" }),
+      window.getByRole("heading", { name: "Kanban Board" })
     ).toBeVisible({ timeout: 15000 });
     await expect(
-      window.getByRole("button", { name: "New Board" }),
+      window.getByRole("button", { name: "New Board" })
     ).toBeVisible();
     await expect(
-      window.getByRole("button", { name: "Add Column" }),
+      window.getByRole("button", { name: "Add Column" })
     ).toBeVisible();
   });
 
@@ -212,7 +212,7 @@ test.describe("Generator UI", () => {
     await window.getByRole("tab", { name: "Scrum Board", exact: true }).click();
 
     await expect(
-      window.getByRole("heading", { name: "Kanban Board" }),
+      window.getByRole("heading", { name: "Kanban Board" })
     ).toBeVisible({ timeout: 15000 });
 
     await expect
@@ -227,7 +227,7 @@ test.describe("Generator UI", () => {
             }
           });
         },
-        { timeout: 15000 },
+        { timeout: 15000 }
       )
       .toBe(true);
 
@@ -269,7 +269,7 @@ test.describe("Generator UI", () => {
       window.location.hash = "#/settings";
     });
     await expect(window.getByRole("heading", { name: "Settings" })).toBeVisible(
-      { timeout: 15000 },
+      { timeout: 15000 }
     );
 
     const startOnBootSwitch = window.getByRole("switch").first();
@@ -279,7 +279,7 @@ test.describe("Generator UI", () => {
     await startOnBootSwitch.click();
     await expect(startOnBootSwitch).toHaveAttribute(
       "aria-checked",
-      before === "true" ? "false" : "true",
+      before === "true" ? "false" : "true"
     );
   });
 
@@ -292,12 +292,14 @@ test.describe("Generator UI", () => {
     });
     await window.reload();
 
-    await expect(window.getByRole("tab", { name: "UI", exact: true })).toBeVisible({
+    await expect(
+      window.getByRole("tab", { name: "UI", exact: true })
+    ).toBeVisible({
       timeout: 15000,
     });
     await window.getByRole("tab", { name: "UI", exact: true }).click();
     await expect(
-      window.getByRole("heading", { name: "UI Builder" }),
+      window.getByRole("heading", { name: "UI Builder" })
     ).toBeVisible();
 
     const layoutModeButton = window.getByRole("button", { name: "Layout" });
@@ -306,7 +308,7 @@ test.describe("Generator UI", () => {
     }
 
     await expect(
-      window.getByPlaceholder("Search blocks & components..."),
+      window.getByPlaceholder("Search blocks & components...")
     ).toBeVisible({ timeout: 15000 });
 
     await window.getByRole("tab", { name: "Components" }).click();
@@ -331,18 +333,18 @@ test.describe("Generator UI", () => {
       .poll(
         async () => {
           const raw = await window.evaluate(() =>
-            localStorage.getItem("editor-store"),
+            localStorage.getItem("editor-store")
           );
           if (!raw) return 0;
           const parsed = JSON.parse(raw);
           return parsed?.state?.canvas?.elements?.length || 0;
         },
-        { timeout: 5000 },
+        { timeout: 5000 }
       )
       .toBeGreaterThan(0)
       .then(
         () => true,
-        () => false,
+        () => false
       );
 
     if (!dragSucceeded) {
@@ -351,13 +353,13 @@ test.describe("Generator UI", () => {
       if (sourceBox && targetBox) {
         await window.mouse.move(
           sourceBox.x + sourceBox.width / 2,
-          sourceBox.y + sourceBox.height / 2,
+          sourceBox.y + sourceBox.height / 2
         );
         await window.mouse.down();
         await window.mouse.move(
           targetBox.x + targetBox.width / 2,
           targetBox.y + Math.min(40, targetBox.height / 2),
-          { steps: 20 },
+          { steps: 20 }
         );
         await window.mouse.up();
       }
@@ -367,13 +369,13 @@ test.describe("Generator UI", () => {
       .poll(
         async () => {
           const raw = await window.evaluate(() =>
-            localStorage.getItem("editor-store"),
+            localStorage.getItem("editor-store")
           );
           if (!raw) return 0;
           const parsed = JSON.parse(raw);
           return parsed?.state?.canvas?.elements?.length || 0;
         },
-        { timeout: 15000 },
+        { timeout: 15000 }
       )
       .toBeGreaterThan(0);
 

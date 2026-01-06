@@ -10,6 +10,9 @@
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"]
     },
+    "build:win": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
     "test": {
       "dependsOn": ["^test"],
       "cache": false
@@ -22,4 +25,3 @@
     }
   }
 }
-

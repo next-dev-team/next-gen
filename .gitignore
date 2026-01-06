@@ -16,3 +16,4 @@ dist-web/
 apps/ui/dist-web/
 dist*
 gen
+.turbo
