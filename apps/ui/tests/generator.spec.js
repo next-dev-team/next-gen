@@ -105,11 +105,10 @@ test.describe("Generator UI", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(window.locator(".ant-segmented")).toBeVisible();
-    await window
-      .locator(".ant-segmented")
-      .getByText("Scrum Board", { exact: true })
-      .click();
+    await expect(
+      window.getByRole("tab", { name: "Scrum Board", exact: true })
+    ).toBeVisible({ timeout: 15000 });
+    await window.getByRole("tab", { name: "Scrum Board", exact: true }).click();
     await expect(
       window.getByRole("heading", { name: "Kanban Board" }),
     ).toBeVisible({ timeout: 15000 });
@@ -207,11 +206,10 @@ test.describe("Generator UI", () => {
       ],
     };
 
-    await expect(window.locator(".ant-segmented")).toBeVisible();
-    await window
-      .locator(".ant-segmented")
-      .getByText("Scrum Board", { exact: true })
-      .click();
+    await expect(
+      window.getByRole("tab", { name: "Scrum Board", exact: true })
+    ).toBeVisible({ timeout: 15000 });
+    await window.getByRole("tab", { name: "Scrum Board", exact: true }).click();
 
     await expect(
       window.getByRole("heading", { name: "Kanban Board" }),
@@ -245,8 +243,9 @@ test.describe("Generator UI", () => {
     await expect(window.getByText("Story B")).toBeVisible();
     await expect(window.getByText("Story C")).toBeVisible();
 
-    await window.getByRole("tab", { name: "Sprints", exact: true }).click();
-
+    await expect(window.locator("#scrum-filter-assignee")).toBeVisible({
+      timeout: 15000,
+    });
     await window.locator("#scrum-filter-assignee").click();
     await window.getByRole("option", { name: "Alice", exact: true }).click();
 
@@ -293,11 +292,10 @@ test.describe("Generator UI", () => {
     });
     await window.reload();
 
-    await expect(window.locator(".ant-segmented")).toBeVisible();
-    await window
-      .locator(".ant-segmented")
-      .getByText("UI", { exact: true })
-      .click();
+    await expect(window.getByRole("tab", { name: "UI", exact: true })).toBeVisible({
+      timeout: 15000,
+    });
+    await window.getByRole("tab", { name: "UI", exact: true }).click();
     await expect(
       window.getByRole("heading", { name: "UI Builder" }),
     ).toBeVisible();

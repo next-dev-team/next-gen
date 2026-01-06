@@ -1,0 +1,9 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - electron
+  - esbuild
+  - node-pty

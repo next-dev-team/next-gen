@@ -7,14 +7,12 @@ test-**
 my-app
 out
 playwright-report
-apps/
-packages/
 my-turborepo
 .DS_Store
 # ui/src/renderer/src/output.css
 _bmad
 .claude
 dist-web/
-ui/dist-web/
+apps/ui/dist-web/
 dist*
 gen

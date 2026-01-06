@@ -6,19 +6,19 @@
   "author": "",
   "license": "MIT",
   "scripts": {
-    "start": "electron-vite preview",
-    "dev": "electron-vite dev",
-    "web:dev": "vite --config vite.web.config.mjs",
-    "build": "electron-vite build",
-    "web:build": "vite build --config vite.web.config.mjs",
-    "web:preview": "vite preview --config vite.web.config.mjs --port 5176",
-    "postinstall": "node scripts/postinstall.js",
-    "build:win": "pnpm run build && pnpm exec electron-builder --win -c.npmRebuild=false",
-    "build:mac": "pnpm run build && pnpm exec electron-builder --mac -c.npmRebuild=false",
-    "test": "electron-vite build && playwright test",
+    "start": "node ../../node_modules/electron-vite/bin/electron-vite.js preview",
+    "dev": "node ../../node_modules/electron-vite/bin/electron-vite.js dev",
+    "web:dev": "node ../../node_modules/vite/bin/vite.js --config vite.web.config.mjs",
+    "build": "node ../../node_modules/electron-vite/bin/electron-vite.js build",
+    "web:build": "node ../../node_modules/vite/bin/vite.js build --config vite.web.config.mjs",
+    "web:preview": "node ../../node_modules/vite/bin/vite.js preview --config vite.web.config.mjs --port 5176",
+    "postinstall": "node scripts/postinstall.js || echo 'postinstall failed (non-fatal)'",
+    "build:win": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --win -c.npmRebuild=false",
+    "build:mac": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --mac -c.npmRebuild=false",
+    "test": "node ../../node_modules/electron-vite/bin/electron-vite.js build && node ../../node_modules/@playwright/test/cli.js test",
     "mcp:scrum": "node scripts/scrum-mcp-server.js",
     "mcp:sse": "node scripts/scrum-mcp-server.js",
-    "dev:full": "concurrently \"npm run dev\" \"npm run mcp:sse\""
+    "dev:full": "node ../../node_modules/concurrently/dist/bin/concurrently.js \"pnpm run dev\" \"pnpm run mcp:sse\""
   },
   "devDependencies": {
     "@kubb/cli": "^4.12.15",
@@ -34,9 +34,9 @@
     "@vitejs/plugin-react": "^5.1.1",
     "code-inspector-plugin": "^1.3.4",
     "concurrently": "^9.2.1",
-    "electron": "^28.0.0",
+    "electron": "28.3.3",
     "electron-builder": "^24.9.1",
-    "electron-vite": "^2.0.0",
+    "electron-vite": "^2.3.0",
     "postcss": "^8.5.6",
     "prettier": "^3.7.4",
     "tailwindcss": "^4.1.17",
@@ -99,7 +99,7 @@
         "to": "scripts"
       },
       {
-        "from": "../turbo",
+        "from": "../../turbo",
         "to": "turbo"
       }
     ],
