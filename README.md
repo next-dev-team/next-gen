@@ -19,6 +19,8 @@ the next generation of template
 - [ ] Add more generators
 - [ ] Add more templates
 - [ ] Add more documentation
+- [ ] Wallpapers
+- [ ] setting manage menu and hide/show
 
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
