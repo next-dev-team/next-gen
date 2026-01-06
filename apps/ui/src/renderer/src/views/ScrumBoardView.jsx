@@ -2299,13 +2299,13 @@ const SprintTrackingView = ({
   }, [burndown]);
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-xl border border-border/50 bg-background/40 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-[30%_1fr] gap-6">
+    <div className="flex flex-col gap-3">
+      <div className="rounded-xl border border-border/50 bg-background/40 p-3">
+        <div className="grid grid-cols-1 gap-3">
           {sprintSelector && (
-            <div className="flex flex-col gap-3">{sprintSelector}</div>
+            <div className="flex flex-col gap-3 w-full">{sprintSelector}</div>
           )}
-          <div className="flex flex-col gap-3">{filters}</div>
+          <div className="flex flex-col gap-3 w-full">{filters}</div>
         </div>
       </div>
     </div>
@@ -6913,7 +6913,7 @@ export default function ScrumBoardView() {
   }
 
   return (
-    <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 h-full min-h-0 flex flex-col gap-4">
+    <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm p-4 h-full min-h-0 flex flex-col gap-2">
       {/* Error Banner */}
       {error && (
         <div className="flex items-center gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-destructive">
@@ -6925,117 +6925,101 @@ export default function ScrumBoardView() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
-            <LayoutGrid className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-foreground">
-              Kanban Board
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              BMAD-Method Workflow
-            </p>
-          </div>
-        </div>
+      {/* Header Controls */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9"
+          onClick={() => setSettingsOpen(true)}
+        >
+          <Settings className="h-5 w-5 text-muted-foreground" />
+        </Button>
 
-        <div className="flex-1" />
+        <Select
+          value={String(agentSetup.projectRoot || "").trim() || ""}
+          onValueChange={(next) => {
+            if (next === "__browse__") {
+              handleBrowseProjectRoot();
+              return;
+            }
+            setAgentSetup((s) => ({ ...s, projectRoot: next }));
+          }}
+        >
+          <SelectTrigger className="w-[180px] bg-background/50 h-8 text-xs">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__browse__">
+              {window.electronAPI?.selectFolder
+                ? "Browse..."
+                : "Add project..."}
+            </SelectItem>
+            {projectOptions.map((root) => (
+              <SelectItem key={root} value={root}>
+                {`${getProjectLabel(root)} — ${root}`}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-        <div className="flex flex-wrap gap-2 items-center">
+        <Select value={activeBoardId || ""} onValueChange={setActiveBoard}>
+          <SelectTrigger className="w-[160px] bg-background/50 h-8 text-xs">
+            <SelectValue placeholder="Board" />
+          </SelectTrigger>
+          <SelectContent>
+            {state?.boards?.map((b) => (
+              <SelectItem key={b.id} value={b.id}>
+                <div className="flex items-center gap-2">
+                  {b.type === "bmad" && (
+                    <Sparkles className="h-3 w-3 text-primary" />
+                  )}
+                  {b.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setCreateBoardOpen(true)}
+          className="gap-2 h-8 text-xs"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          New
+        </Button>
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 h-8 text-xs"
+          onClick={() => setAgentAssistOpen(true)}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+          Assist
+        </Button>
+
+        {activeBoard && (
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => setSettingsOpen(true)}
-          >
-            <Settings className="h-5 w-5 text-muted-foreground" />
-          </Button>
-
-          <Select
-            value={String(agentSetup.projectRoot || "").trim() || ""}
-            onValueChange={(next) => {
-              if (next === "__browse__") {
-                handleBrowseProjectRoot();
-                return;
-              }
-              setAgentSetup((s) => ({ ...s, projectRoot: next }));
+            variant="destructive"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => {
+              openConfirm({
+                title: "Delete board?",
+                description: "This action cannot be undone.",
+                confirmText: "Delete",
+                onConfirm: async () => {
+                  await deleteBoard(activeBoard.id);
+                },
+              });
             }}
           >
-            <SelectTrigger className="w-[220px] bg-background/50">
-              <SelectValue placeholder="Select project" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__browse__">
-                {window.electronAPI?.selectFolder
-                  ? "Browse..."
-                  : "Add project..."}
-              </SelectItem>
-              {projectOptions.map((root) => (
-                <SelectItem key={root} value={root}>
-                  {`${getProjectLabel(root)} — ${root}`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={activeBoardId || ""} onValueChange={setActiveBoard}>
-            <SelectTrigger className="w-[200px] bg-background/50">
-              <SelectValue placeholder="Select board" />
-            </SelectTrigger>
-            <SelectContent>
-              {state?.boards?.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  <div className="flex items-center gap-2">
-                    {b.type === "bmad" && (
-                      <Sparkles className="h-3 w-3 text-primary" />
-                    )}
-                    {b.name}
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Button
-            variant="outline"
-            onClick={() => setCreateBoardOpen(true)}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Board
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setAgentAssistOpen(true)}
-          >
-            <Sparkles className="h-4 w-4" />
-            Agent Assist
-          </Button>
-
-          {activeBoard && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                openConfirm({
-                  title: "Delete board?",
-                  description: "This action cannot be undone.",
-                  confirmText: "Delete",
-                  onConfirm: async () => {
-                    await deleteBoard(activeBoard.id);
-                  },
-                });
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        )}
       </div>
 
       {activeBoard && (
@@ -7044,38 +7028,36 @@ export default function ScrumBoardView() {
           onValueChange={setOverviewTab}
           className="w-full"
         >
-          <TabsList className="flex w-full items-center gap-1">
+          <TabsList className="flex w-full items-center gap-1 h-10">
             <TabsTrigger value="mcp" className="flex-1">
               MCP Tool
             </TabsTrigger>
             <TabsTrigger value="sprints" className="flex-1">
               Scrum
             </TabsTrigger>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="flex-1 h-8 px-2 text-sm font-medium hover:bg-background/50"
+              onClick={() => setEpicManagerOpen(true)}
+            >
+              <GitBranch className="h-3.5 w-3.5 mr-1" />
+              Epics
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="flex-1 h-8 px-2 text-sm font-medium hover:bg-background/50"
+              onClick={() => setSprintManagerOpen(true)}
+            >
+              <Calendar className="h-3.5 w-3.5 mr-1" />
+              Sprints
+            </Button>
             <TabsTrigger value="stats" className="flex-1">
               Stats
             </TabsTrigger>
-            <div className="ml-auto flex items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                onClick={() => setEpicManagerOpen(true)}
-              >
-                <GitBranch className="h-3.5 w-3.5 mr-1" />
-                Epics
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                onClick={() => setSprintManagerOpen(true)}
-              >
-                <Calendar className="h-3.5 w-3.5 mr-1" />
-                Sprints
-              </Button>
-            </div>
           </TabsList>
 
           <TabsContent value="mcp" className="mt-3">
@@ -7156,93 +7138,84 @@ export default function ScrumBoardView() {
                   )
                 }
                 filters={
-                  <>
-                    <div className="flex items-center justify-between text-sm font-medium">
-                      <div className="flex items-center gap-2">
-                        <Filter className="h-4 w-4 text-muted-foreground" />
-                        Filters
-                      </div>
+                  <div className="mt-1 grid grid-cols-3 gap-2">
+                    <div className="grid gap-2">
+                      <Label htmlFor="scrum-filter-assignee">Assignee</Label>
+                      <Select
+                        value={assigneeFilter}
+                        onValueChange={(value) =>
+                          setAssigneeFilter(value === "__all__" ? "" : value)
+                        }
+                      >
+                        <SelectTrigger
+                          id="scrum-filter-assignee"
+                          className="bg-background/50"
+                        >
+                          <SelectValue placeholder="Select Assignee" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All</SelectItem>
+                          {assigneeOptions.map((name) => (
+                            <SelectItem key={name} value={name}>
+                              {name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                      <div className="grid gap-2">
-                        <Label htmlFor="scrum-filter-assignee">Assignee</Label>
-                        <Select
-                          value={assigneeFilter}
-                          onValueChange={(value) =>
-                            setAssigneeFilter(value === "__all__" ? "" : value)
-                          }
+                    <div className="grid gap-2">
+                      <Label htmlFor="scrum-filter-epic">Epic</Label>
+                      <Select
+                        value={epicFilter}
+                        onValueChange={(value) =>
+                          setEpicFilter(value === "__all__" ? "" : value)
+                        }
+                      >
+                        <SelectTrigger
+                          id="scrum-filter-epic"
+                          className="bg-background/50"
                         >
-                          <SelectTrigger
-                            id="scrum-filter-assignee"
-                            className="bg-background/50"
-                          >
-                            <SelectValue placeholder="Select Assignee" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__all__">All</SelectItem>
-                            {assigneeOptions.map((name) => (
-                              <SelectItem key={name} value={name}>
-                                {name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="scrum-filter-epic">Epic</Label>
-                        <Select
-                          value={epicFilter}
-                          onValueChange={(value) =>
-                            setEpicFilter(value === "__all__" ? "" : value)
-                          }
-                        >
-                          <SelectTrigger
-                            id="scrum-filter-epic"
-                            className="bg-background/50"
-                          >
-                            <SelectValue placeholder="Select Epic" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__all__">All</SelectItem>
-                            <SelectItem value="__none__">No Epic</SelectItem>
-                            {epicOptions.map((epic) => (
-                              <SelectItem key={epic.id} value={epic.id}>
-                                {epic.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="grid gap-2">
-                        <Label htmlFor="scrum-filter-sprint">Sprint</Label>
-                        <Select
-                          value={sprintFilter}
-                          onValueChange={(value) =>
-                            setSprintFilter(value === "__all__" ? "" : value)
-                          }
-                        >
-                          <SelectTrigger
-                            id="scrum-filter-sprint"
-                            className="bg-background/50"
-                          >
-                            <SelectValue placeholder="Select Sprint" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__all__">All</SelectItem>
-                            <SelectItem value="__none__">No Sprint</SelectItem>
-                            {sprintOptions.map((sprint) => (
-                              <SelectItem key={sprint.id} value={sprint.id}>
-                                {sprint.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                          <SelectValue placeholder="Select Epic" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All</SelectItem>
+                          <SelectItem value="__none__">No Epic</SelectItem>
+                          {epicOptions.map((epic) => (
+                            <SelectItem key={epic.id} value={epic.id}>
+                              {epic.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                  </>
+
+                    <div className="grid gap-2">
+                      <Label htmlFor="scrum-filter-sprint">Sprint</Label>
+                      <Select
+                        value={sprintFilter}
+                        onValueChange={(value) =>
+                          setSprintFilter(value === "__all__" ? "" : value)
+                        }
+                      >
+                        <SelectTrigger
+                          id="scrum-filter-sprint"
+                          className="bg-background/50"
+                        >
+                          <SelectValue placeholder="Select Sprint" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__all__">All</SelectItem>
+                          <SelectItem value="__none__">No Sprint</SelectItem>
+                          {sprintOptions.map((sprint) => (
+                            <SelectItem key={sprint.id} value={sprint.id}>
+                              {sprint.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 }
               />
             </div>
