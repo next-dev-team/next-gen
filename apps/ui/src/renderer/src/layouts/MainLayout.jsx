@@ -603,6 +603,133 @@ export default function MainLayout({
     [navigate]
   );
 
+  const loadRecentDockActions = React.useCallback(() => {
+    try {
+      const raw = localStorage.getItem("dockRecentActions");
+      const parsed = JSON.parse(raw || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((it) => it && typeof it === "object")
+        .map((it) => ({
+          key: String(it.key || "").trim(),
+          label: String(it.label || "").trim(),
+          iconName: String(it.iconName || "search").trim(),
+          actionKey: String(it.actionKey || "").trim(),
+          gradient: String(it.gradient || "").trim(),
+        }))
+        .filter((it) => it.key && it.label && it.actionKey)
+        .slice(0, 6);
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const [recentDockActions, setRecentDockActions] = React.useState(() =>
+    loadRecentDockActions()
+  );
+
+  React.useEffect(() => {
+    const onUpdate = () => setRecentDockActions(loadRecentDockActions());
+    window.addEventListener("dock:recentActionsUpdated", onUpdate);
+    return () =>
+      window.removeEventListener("dock:recentActionsUpdated", onUpdate);
+  }, [loadRecentDockActions]);
+
+  const dockActionIconByName = React.useMemo(
+    () => ({
+      search: Search,
+      rocket: Rocket,
+      app: AppWindow,
+      folder: Folder,
+      grid: LayoutGrid,
+      table: Table,
+      globe: Globe,
+      test: TestTube,
+      settings: Settings,
+      camera: Camera,
+    }),
+    []
+  );
+
+  const runLaunchpadAction = React.useCallback(
+    async (actionKey, payload) => {
+      const key = String(actionKey || "").trim();
+      if (!key) return;
+
+      if (key.startsWith("nav:")) {
+        const dest = key.slice("nav:".length);
+        if (!dest) return;
+        navigate(`/${dest}`);
+        return;
+      }
+
+      if (key === "openExternal:github") {
+        if (!window.electronAPI?.openExternal) {
+          toast.error("External links are not available");
+          return;
+        }
+        try {
+          await window.electronAPI.openExternal(
+            "https://github.com/next-dev-team/next-gen"
+          );
+        } catch (err) {
+          toast.error(String(err?.message || err || "Failed to open"));
+        }
+        return;
+      }
+
+      if (key === "capture:app:full") {
+        await captureAndCopy({ mode: "full" });
+        return;
+      }
+
+      if (key === "capture:app:area") {
+        startAreaCapture();
+        return;
+      }
+
+      if (key === "capture:screen:full") {
+        await captureExternalFull();
+        return;
+      }
+
+      if (key === "capture:screen:area") {
+        await startExternalAreaCapture();
+        return;
+      }
+
+      if (key === "dock:toggleAutoHide") {
+        setDockSettings((prev) => ({ ...prev, autoHide: !prev.autoHide }));
+        return;
+      }
+
+      if (key === "dock:setPosition") {
+        const pos = String(payload?.position || "");
+        if (!pos) return;
+        if (pos !== "left" && pos !== "bottom" && pos !== "right") return;
+        setDockSettings((prev) => ({ ...prev, position: pos }));
+        return;
+      }
+    },
+    [
+      captureAndCopy,
+      captureExternalFull,
+      navigate,
+      setDockSettings,
+      startAreaCapture,
+      startExternalAreaCapture,
+    ]
+  );
+
+  React.useEffect(() => {
+    const handler = (e) => {
+      const detail = e?.detail && typeof e.detail === "object" ? e.detail : {};
+      runLaunchpadAction(detail.actionKey, detail.payload).catch(() => {});
+    };
+    window.addEventListener("launchpad:run", handler);
+    return () => window.removeEventListener("launchpad:run", handler);
+  }, [runLaunchpadAction]);
+
   const tabOptions = React.useMemo(
     () => [
       { key: "generator", label: "Generator", icon: Rocket },
@@ -941,7 +1068,10 @@ export default function MainLayout({
         </div>
 
         <div
-          className="flex flex-1 flex-col overflow-hidden p-12"
+          className={
+            "flex flex-1 flex-col overflow-hidden " +
+            (activeTab === "launchpad" ? "p-0" : "p-12")
+          }
           style={{ WebkitAppRegion: "no-drag" }}
         >
           <KeepAliveOutlet
@@ -1085,6 +1215,121 @@ export default function MainLayout({
                     </TooltipContent>
                   </Tooltip>
                 </React.Fragment>
+              );
+            })}
+
+            {recentDockActions.length ? (
+              <div
+                className={`mx-1 rounded bg-white/10 ${
+                  dockSettings.position === "bottom" ? "h-9 w-px" : "h-px w-9"
+                }`}
+              />
+            ) : null}
+
+            {recentDockActions.map((action, actionIdx) => {
+              const Icon =
+                dockActionIconByName[action.iconName] ||
+                dockActionIconByName.search;
+              const idx =
+                dockApps.pinned.length + dockApps.recents.length + actionIdx;
+              const scale = getDockItemScale(idx);
+
+              const isActive =
+                action.actionKey.startsWith("nav:") &&
+                activeTab === action.actionKey.slice("nav:".length);
+
+              return (
+                <Tooltip key={action.key}>
+                  <TooltipTrigger asChild>
+                    <button
+                      ref={(el) => {
+                        dockItemRefs.current[idx] = el;
+                      }}
+                      type="button"
+                      onClick={() => {
+                        runLaunchpadAction(action.actionKey).catch(() => {});
+                        try {
+                          const raw = localStorage.getItem("dockRecentActions");
+                          const parsed = JSON.parse(raw || "[]");
+                          const arr = Array.isArray(parsed) ? parsed : [];
+                          const next = [
+                            {
+                              key: action.key,
+                              label: action.label,
+                              iconName: action.iconName,
+                              actionKey: action.actionKey,
+                              gradient: action.gradient,
+                            },
+                            ...arr.filter((it) => it?.key !== action.key),
+                          ].slice(0, 6);
+                          localStorage.setItem(
+                            "dockRecentActions",
+                            JSON.stringify(next)
+                          );
+                          window.dispatchEvent(
+                            new Event("dock:recentActionsUpdated")
+                          );
+                        } catch {}
+                      }}
+                      className="relative flex h-14 w-14 items-center justify-center focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.55)]"
+                      style={{ transform: `scale(${scale})` }}
+                    >
+                      <span
+                        className={
+                          "relative flex h-12 w-12 items-center justify-center rounded-2xl border bg-[radial-gradient(85%_85%_at_32%_22%,rgba(255,255,255,0.28)_0%,rgba(255,255,255,0.11)_38%,rgba(0,0,0,0.32)_100%)] shadow-[0_18px_34px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.20)] transition-transform duration-100 ease-out " +
+                          (isActive
+                            ? "border-white/20"
+                            : "border-white/10 hover:border-white/16")
+                        }
+                      >
+                        {action.gradient ? (
+                          <span
+                            className={
+                              "pointer-events-none absolute inset-0 rounded-2xl opacity-90 " +
+                              action.gradient
+                            }
+                          />
+                        ) : null}
+                        <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.34)_0%,transparent_70%)]" />
+                        <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
+                        <Icon
+                          className={
+                            "h-6 w-6 " +
+                            (isActive
+                              ? "text-[var(--color-text-primary)]"
+                              : "text-[var(--color-text-secondary)]")
+                          }
+                          aria-hidden="true"
+                        />
+                      </span>
+
+                      <span
+                        className={
+                          "absolute rounded-full transition-opacity " +
+                          (isActive
+                            ? "bg-white/70 opacity-100 "
+                            : "opacity-0 ") +
+                          (dockSettings.position === "bottom"
+                            ? "bottom-0 h-1 w-1"
+                            : dockSettings.position === "left"
+                              ? "left-0 h-1 w-1"
+                              : "right-0 h-1 w-1")
+                        }
+                      />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent
+                    side={
+                      dockSettings.position === "bottom"
+                        ? "top"
+                        : dockSettings.position === "left"
+                          ? "right"
+                          : "left"
+                    }
+                  >
+                    {action.label}
+                  </TooltipContent>
+                </Tooltip>
               );
             })}
 
