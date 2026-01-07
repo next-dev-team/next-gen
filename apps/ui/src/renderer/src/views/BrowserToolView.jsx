@@ -18,6 +18,8 @@ import {
   Plus,
   RotateCw,
   Search,
+  Shield,
+  ShieldOff,
   Star,
   Trash2,
   Upload,
@@ -34,6 +36,7 @@ import React, {
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ComponentRenderer } from "../components/editor/canvas/ComponentRenderer";
+import { ProfileSelector } from "../components/ProfileSelector";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
@@ -59,11 +62,16 @@ import {
   TabsList,
   TabsTrigger,
 } from "../components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../components/ui/tooltip";
 import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
 import { useResourceStore } from "../stores/resourceStore";
 import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
-import { ProfileSelector } from "../components/ProfileSelector";
 
 const createId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -2015,6 +2023,37 @@ export default function BrowserToolView() {
     location.pathname === "/browser" ||
     location.pathname.startsWith("/browser/");
 
+  const [adblockEnabled, setAdblockEnabled] = useState(true);
+
+  useEffect(() => {
+    if (!hasElectronView) return;
+    if (!window.electronAPI?.browserView?.getAdblockEnabled) return;
+
+    let mounted = true;
+    window.electronAPI.browserView
+      .getAdblockEnabled()
+      .then((enabled) => {
+        if (!mounted) return;
+        setAdblockEnabled(Boolean(enabled));
+      })
+      .catch(() => {});
+
+    let off = null;
+    if (window.electronAPI?.browserView?.onAdblockState) {
+      off = window.electronAPI.browserView.onAdblockState((payload) => {
+        if (!mounted) return;
+        if (payload && typeof payload === "object") {
+          setAdblockEnabled(Boolean(payload.enabled));
+        }
+      });
+    }
+
+    return () => {
+      mounted = false;
+      if (typeof off === "function") off();
+    };
+  }, [hasElectronView]);
+
   const captureModeByTabId = inspector?.captureModeByTabId || {};
   const captureMode = captureModeByTabId?.[resolvedActiveTabId] || "area";
 
@@ -2598,15 +2637,53 @@ export default function BrowserToolView() {
               )}
             />
           </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant={adblockEnabled ? "secondary" : "outline"}
+                  disabled={!hasElectronView || !activeIsBrowser}
+                  onClick={async () => {
+                    if (!window.electronAPI?.browserView?.setAdblockEnabled)
+                      return;
+                    const next = !adblockEnabled;
+                    setAdblockEnabled(next);
+                    try {
+                      const res =
+                        await window.electronAPI.browserView.setAdblockEnabled(
+                          next
+                        );
+                      setAdblockEnabled(Boolean(res));
+                    } catch {
+                      setAdblockEnabled(!next);
+                    }
+                  }}
+                  aria-label={
+                    adblockEnabled ? "Disable ad blocker" : "Enable ad blocker"
+                  }
+                >
+                  {adblockEnabled && hasElectronView ? (
+                    <Shield className="h-4 w-4" />
+                  ) : (
+                    <ShieldOff className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {!hasElectronView && (
+                <TooltipContent>
+                  <p>Ad blocker is not available in this environment</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Anti-Detection Profile Selector */}
-        {hasElectronView && (
-          <ProfileSelector
-            tabId={resolvedActiveTabId}
-            disabled={!activeIsBrowser}
-          />
-        )}
+        <ProfileSelector
+          tabId={resolvedActiveTabId}
+          disabled={!hasElectronView || !activeIsBrowser}
+        />
       </div>
 
       <div className="flex min-h-0 flex-1">

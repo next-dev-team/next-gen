@@ -157,6 +157,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.on("browserview-state", handler);
       return () => ipcRenderer.removeListener("browserview-state", handler);
     },
+    getAdblockEnabled: () => ipcRenderer.invoke("adblock-get-enabled"),
+    setAdblockEnabled: (enabled) => ipcRenderer.invoke("adblock-set-enabled", enabled),
+    onAdblockState: (callback) => {
+      const handler = (event, payload) => callback(payload);
+      ipcRenderer.on("adblock-state", handler);
+      return () => ipcRenderer.removeListener("adblock-state", handler);
+    },
+    getPopupStats: (tabId) =>
+      ipcRenderer.invoke("browserview-get-popup-stats", { tabId }),
+    clearPopupStats: (tabId) =>
+      ipcRenderer.invoke("browserview-clear-popup-stats", { tabId }),
   },
 
   // ======= ANTI-DETECTION / FINGERPRINTING PROTECTION =======

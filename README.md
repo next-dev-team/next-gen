@@ -22,6 +22,8 @@ the next generation of template
 - [ ] Wallpapers
 - [ ] setting manage menu and hide/show
 - [ ] Release VirusTotal scan results for security verification.
+- [ ] Auto update
+- [ ] Https for mcp
 
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
@@ -176,4 +178,4 @@ npm link turbo-generators
 
 <https://github.com/olliethedev/ui-builder>
 <https://github.com/AndyMik90/Auto-Claude/>
-https://github.com/ShareX/ShareX
+<https://github.com/ShareX/ShareX>

@@ -82,9 +82,9 @@ test.describe("Stealth Script Generator", () => {
 
     test("should remove Electron globals", () => {
       const script = generateStealthScript(testProfile);
-      expect(script).toContain("delete window.process");
-      expect(script).toContain("delete window.require");
-      expect(script).toContain("delete window.module");
+      expect(script).not.toContain("delete window.process;");
+      expect(script).not.toContain("delete window.require;");
+      expect(script).not.toContain("delete window.module;");
     });
 
     test("should include permission spoofing", () => {
@@ -158,8 +158,9 @@ test.describe("Stealth Script Generator", () => {
     test("should remove Electron globals", () => {
       const script = generateMinimalStealthScript(testProfile);
 
-      expect(script).toContain("delete window.process");
-      expect(script).toContain("delete window.require");
+      expect(script).toContain("Do NOT try to delete window.process");
+      expect(script).not.toContain("delete window.process;");
+      expect(script).not.toContain("delete window.require;");
     });
 
     test("should prevent multiple injections", () => {

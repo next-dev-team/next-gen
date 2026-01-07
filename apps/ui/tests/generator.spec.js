@@ -110,14 +110,11 @@ test.describe("Generator UI", () => {
     ).toBeVisible({ timeout: 15000 });
     await window.getByRole("tab", { name: "Scrum Board", exact: true }).click();
     await expect(
-      window.getByRole("heading", { name: "Kanban Board" })
-    ).toBeVisible({ timeout: 15000 });
-    await expect(
-      window.getByRole("button", { name: "New Board" })
-    ).toBeVisible();
-    await expect(
       window.getByRole("button", { name: "Add Column" })
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15000 });
+    await expect(window.getByRole("button", { name: "New", exact: true })).toBeVisible({
+      timeout: 15000,
+    });
   });
 
   test("should filter scrum stories by assignee and epic", async () => {
@@ -212,7 +209,7 @@ test.describe("Generator UI", () => {
     await window.getByRole("tab", { name: "Scrum Board", exact: true }).click();
 
     await expect(
-      window.getByRole("heading", { name: "Kanban Board" })
+      window.getByRole("button", { name: "Add Column" })
     ).toBeVisible({ timeout: 15000 });
 
     await expect

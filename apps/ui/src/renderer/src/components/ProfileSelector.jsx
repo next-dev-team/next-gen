@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Shield,
   ShieldCheck,
+  ShieldOff,
   Smartphone,
   User,
 } from "lucide-react";
@@ -170,14 +171,37 @@ export function ProfileSelector({ tabId, disabled = false }) {
     [tabId]
   );
 
-  if (!hasAntiDetection) {
-    return null;
-  }
-
   const desktopProfiles = profiles.filter((p) => p.category === "desktop");
   const mobileProfiles = profiles.filter((p) => p.category === "mobile");
   const browserType = getBrowserType(activeProfile?.id);
   const browserColor = BROWSER_COLORS[browserType] || "text-muted-foreground";
+
+  if (!hasAntiDetection) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={true}
+                className="h-9 gap-1.5 px-2 opacity-50"
+              >
+                <ShieldOff className="h-4 w-4 text-muted-foreground" />
+                <span className="hidden sm:inline text-xs truncate max-w-[100px]">
+                  Anti-Detection
+                </span>
+              </Button>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Anti-detection is not available in this environment</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   return (
     <TooltipProvider>

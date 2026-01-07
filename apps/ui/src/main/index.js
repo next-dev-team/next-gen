@@ -101,6 +101,112 @@ const DEFAULT_QUICK_TOGGLE_SHORTCUT = "CommandOrControl+Shift+Space";
 const browserViews = new Map();
 let activeBrowserTabId = null;
 const browserBoundsCache = new Map();
+const browserPopupStatsByTabId = new Map();
+
+let adblockEnabledCache = null;
+let adblockerPromise = null;
+
+async function ensureAdblocker() {
+  if (adblockerPromise) return adblockerPromise;
+  adblockerPromise = (async () => {
+    if (!app.isReady()) {
+      try {
+        await app.whenReady();
+      } catch {}
+    }
+
+    const mod = await import("@ghostery/adblocker-electron");
+    const ElectronBlocker = mod?.ElectronBlocker;
+    if (!ElectronBlocker) throw new Error("ElectronBlocker not available");
+
+    const fetchImpl = (() => {
+      const f = globalThis.fetch;
+      return typeof f === "function" ? f.bind(globalThis) : null;
+    })();
+
+    const resolvedFetch =
+      fetchImpl ||
+      (await import("cross-fetch")).default ||
+      (await import("cross-fetch")).fetch;
+
+    const enginePath = path.join(
+      app.getPath("userData"),
+      "adblocker-engine.bin"
+    );
+    const fsPromises = fs.promises;
+
+    return await ElectronBlocker.fromPrebuiltAdsAndTracking(resolvedFetch, {
+      path: enginePath,
+      read: fsPromises.readFile,
+      write: fsPromises.writeFile,
+    });
+  })();
+  return adblockerPromise;
+}
+
+async function getAdblockEnabled() {
+  if (adblockEnabledCache != null) return Boolean(adblockEnabledCache);
+  const currentStore = await getStore();
+  adblockEnabledCache = currentStore.get("adblockEnabled", true);
+  return Boolean(adblockEnabledCache);
+}
+
+function sendAdblockState(enabled) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("adblock-state", { enabled: Boolean(enabled) });
+  }
+}
+
+async function applyAdblockToSession(ses) {
+  if (!ses) return;
+  const enabled = await getAdblockEnabled();
+
+  if (!enabled) {
+    if (!adblockerPromise) return;
+    try {
+      const blocker = await adblockerPromise;
+      if (blocker?.isBlockingEnabled?.(ses)) {
+        blocker.disableBlockingInSession(ses);
+      }
+    } catch {}
+    return;
+  }
+
+  try {
+    const blocker = await ensureAdblocker();
+    if (!blocker?.isBlockingEnabled?.(ses)) {
+      blocker.enableBlockingInSession(ses);
+    }
+  } catch {}
+}
+
+async function setAdblockEnabled(enabled) {
+  const next = Boolean(enabled);
+  adblockEnabledCache = next;
+  const currentStore = await getStore();
+  currentStore.set("adblockEnabled", next);
+
+  if (next) {
+    for (const view of browserViews.values()) {
+      try {
+        if (!view || view.webContents.isDestroyed()) continue;
+        await applyAdblockToSession(view.webContents.session);
+      } catch {}
+    }
+  } else {
+    if (adblockerPromise) {
+      for (const view of browserViews.values()) {
+        try {
+          if (!view || view.webContents.isDestroyed()) continue;
+          await applyAdblockToSession(view.webContents.session);
+        } catch {}
+      }
+    }
+  }
+
+  sendAdblockState(next);
+  return next;
+}
 
 // Log buffering
 const mcpLogBuffer = [];
@@ -753,6 +859,8 @@ function ensureBrowserView(tabId, options = {}) {
 
   const view = new BrowserView({ webPreferences });
 
+  applyAdblockToSession(view.webContents.session).catch(() => {});
+
   try {
     view.webContents.setBackgroundColor("#ffffff");
   } catch {}
@@ -910,8 +1018,18 @@ function ensureBrowserView(tabId, options = {}) {
         return { action: "deny" };
       }
 
-      // Open in external browser
-      shell.openExternal(url).catch(() => {});
+      const prev = browserPopupStatsByTabId.get(tabId) || {
+        count: 0,
+        lastUrl: "",
+      };
+      browserPopupStatsByTabId.set(tabId, {
+        count: Number(prev.count || 0) + 1,
+        lastUrl: String(url || ""),
+      });
+
+      if (!adblockEnabledCache) {
+        shell.openExternal(url).catch(() => {});
+      }
       return { action: "deny" };
     } catch {
       return { action: "deny" };
@@ -1057,6 +1175,7 @@ function destroyBrowserView(tabId) {
   if (!view) return;
   browserViews.delete(tabId);
   browserBoundsCache.delete(tabId);
+  browserPopupStatsByTabId.delete(tabId);
   if (activeBrowserTabId === tabId) activeBrowserTabId = null;
 
   detachBrowserView(view);
@@ -1229,6 +1348,30 @@ ipcMain.handle("browserview-capture-page", async (event, { tabId }) => {
   } catch (err) {
     return { ok: false, error: String(err?.message || err) };
   }
+});
+
+ipcMain.handle("adblock-get-enabled", async () => {
+  return await getAdblockEnabled();
+});
+
+ipcMain.handle("adblock-set-enabled", async (event, enabled) => {
+  return await setAdblockEnabled(enabled);
+});
+
+ipcMain.handle("browserview-get-popup-stats", async (event, { tabId }) => {
+  const id = tabId != null ? String(tabId) : "";
+  const stats = browserPopupStatsByTabId.get(id) || { count: 0, lastUrl: "" };
+  return {
+    tabId: id,
+    count: Number(stats.count || 0),
+    lastUrl: String(stats.lastUrl || ""),
+  };
+});
+
+ipcMain.handle("browserview-clear-popup-stats", async (event, { tabId }) => {
+  const id = tabId != null ? String(tabId) : "";
+  browserPopupStatsByTabId.set(id, { count: 0, lastUrl: "" });
+  return true;
 });
 
 ipcMain.handle("app-capture-region", async (event, { rect }) => {
@@ -2052,12 +2195,16 @@ ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
           const macOptions = [
             'open -a "Visual Studio Code"',
             'open -a "Visual Studio Code - Insiders"',
-            'open -b com.microsoft.VSCode',
+            "open -b com.microsoft.VSCode",
           ];
 
           const tryMacOptions = (index) => {
             if (index >= macOptions.length) {
-              return reject(new Error(`Could not find VS Code. Please install the 'code' command in your PATH.`));
+              return reject(
+                new Error(
+                  `Could not find VS Code. Please install the 'code' command in your PATH.`
+                )
+              );
             }
 
             exec(`${macOptions[index]} "${absolutePath}"`, (err) => {
@@ -2088,13 +2235,19 @@ ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
           console.error(`[IDE] Error: ${error.message}`);
           // Try with .cmd extension on Windows
           if (isWindows) {
-            exec(`${command}.cmd "${absolutePath}"`, { shell: true }, (err2) => {
-              if (err2) {
-                reject(new Error(`Failed to open in ${ide}: ${error.message}`));
-              } else {
-                resolve({ success: true });
+            exec(
+              `${command}.cmd "${absolutePath}"`,
+              { shell: true },
+              (err2) => {
+                if (err2) {
+                  reject(
+                    new Error(`Failed to open in ${ide}: ${error.message}`)
+                  );
+                } else {
+                  resolve({ success: true });
+                }
               }
-            });
+            );
           } else {
             reject(new Error(`Failed to open in ${ide}: ${error.message}`));
           }
@@ -3229,6 +3382,14 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
 app.whenReady().then(async () => {
   const currentStore = await getStore();
   const backgroundLaunch = process.argv.includes("--background");
+
+  try {
+    adblockEnabledCache = currentStore.get("adblockEnabled", true);
+    sendAdblockState(Boolean(adblockEnabledCache));
+    if (adblockEnabledCache) {
+      ensureAdblocker().catch(() => {});
+    }
+  } catch {}
 
   // Initialize anti-detection IPC handlers
   antiDetection.initAntiDetectionIPC();

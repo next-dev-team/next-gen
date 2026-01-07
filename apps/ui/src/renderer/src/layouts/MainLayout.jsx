@@ -536,7 +536,7 @@ export default function MainLayout({
       { key: "ui", label: "UI", icon: LayoutGrid },
       { key: "scrum-board", label: "Scrum Board", icon: Table },
       { key: "browser", label: "Browser", icon: Globe },
-      { key: "tests", label: "Tests", icon: TestTube },
+      // { key: "tests", label: "Tests", icon: TestTube },
     ],
     []
   );
