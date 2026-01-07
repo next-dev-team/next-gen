@@ -568,16 +568,16 @@ export default function LaunchpadView() {
                     >
                       <span
                         className={cn(
-                          "relative flex h-[74px] w-[74px] items-center justify-center overflow-hidden rounded-[22px] border border-white/12 shadow-[0_24px_52px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.26)] transition-transform duration-150 ease-out group-hover:scale-[1.06] group-active:scale-[0.98]",
+                          "relative flex h-[89px] w-[89px] items-center justify-center overflow-hidden rounded-[26px] border border-white/12 shadow-[0_24px_52px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.26)] transition-transform duration-150 ease-out group-hover:scale-[1.06] group-active:scale-[0.98]",
                           a.gradient
                         )}
                       >
                         <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.42)_0%,transparent_70%)]" />
                         <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
-                        <Icon className="relative h-7 w-7 text-white/95 drop-shadow" />
+                        <Icon className="relative h-8 w-8 text-white/95 drop-shadow" />
                       </span>
 
-                      <span className="max-w-[92px] truncate text-center text-xs font-medium text-white/90">
+                      <span className="w-full max-w-[132px] line-clamp-2 text-center text-[11px] leading-tight font-medium text-white/90">
                         {a.title}
                       </span>
                     </button>

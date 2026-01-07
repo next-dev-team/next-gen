@@ -537,15 +537,63 @@ export default function MainLayout({
 
   const appOptions = React.useMemo(
     () => [
-      { key: "launchpad", label: "Launchpad", icon: Search },
-      { key: "generator", label: "Generator", icon: Rocket },
-      { key: "projects", label: "Projects", icon: AppWindow },
-      { key: "resources", label: "Resources", icon: Folder },
-      { key: "ui", label: "UI Builder", icon: LayoutGrid },
-      { key: "scrum-board", label: "Scrum Board", icon: Table },
-      { key: "browser", label: "Browser", icon: Globe },
-      { key: "tests", label: "Tests", icon: TestTube },
-      { key: "settings", label: "Settings", icon: Settings },
+      {
+        key: "launchpad",
+        label: "Launchpad",
+        icon: Search,
+        gradient:
+          "bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500",
+      },
+      {
+        key: "generator",
+        label: "Generator",
+        icon: Rocket,
+        gradient:
+          "bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500",
+      },
+      {
+        key: "projects",
+        label: "Projects",
+        icon: AppWindow,
+        gradient: "bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-600",
+      },
+      {
+        key: "resources",
+        label: "Resources",
+        icon: Folder,
+        gradient: "bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500",
+      },
+      {
+        key: "ui",
+        label: "UI Builder",
+        icon: LayoutGrid,
+        gradient: "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600",
+      },
+      {
+        key: "scrum-board",
+        label: "Scrum Board",
+        icon: Table,
+        gradient: "bg-gradient-to-br from-fuchsia-500 via-pink-500 to-rose-600",
+      },
+      {
+        key: "browser",
+        label: "Browser",
+        icon: Globe,
+        gradient: "bg-gradient-to-br from-blue-500 via-cyan-500 to-emerald-500",
+      },
+      {
+        key: "tests",
+        label: "Tests",
+        icon: TestTube,
+        gradient:
+          "bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-700",
+      },
+      {
+        key: "settings",
+        label: "Settings",
+        icon: Settings,
+        gradient: "bg-gradient-to-br from-zinc-500 via-slate-600 to-stone-700",
+      },
     ],
     []
   );
@@ -1174,14 +1222,20 @@ export default function MainLayout({
                               : "border-white/10 hover:border-white/16")
                           }
                         >
+                          {app.gradient ? (
+                            <span
+                              className={
+                                "pointer-events-none absolute inset-0 rounded-2xl opacity-90 " +
+                                app.gradient
+                              }
+                            />
+                          ) : null}
                           <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.34)_0%,transparent_70%)]" />
                           <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
                           <Icon
                             className={
-                              "h-6 w-6 " +
-                              (isActive
-                                ? "text-[var(--color-text-primary)]"
-                                : "text-[var(--color-text-secondary)]")
+                              "relative h-6 w-6 " +
+                              (isActive ? "text-white" : "text-white/85")
                             }
                             aria-hidden="true"
                           />
@@ -1294,10 +1348,8 @@ export default function MainLayout({
                         <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
                         <Icon
                           className={
-                            "h-6 w-6 " +
-                            (isActive
-                              ? "text-[var(--color-text-primary)]"
-                              : "text-[var(--color-text-secondary)]")
+                            "relative h-6 w-6 " +
+                            (isActive ? "text-white" : "text-white/85")
                           }
                           aria-hidden="true"
                         />
