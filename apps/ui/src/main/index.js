@@ -742,19 +742,26 @@ function ensureBrowserView(tabId, options = {}) {
   // Inject anti-detection stealth script after page load
   view.webContents.on("did-finish-load", async () => {
     notifyBrowserState(tabId);
+    // Check if webContents is still valid before injecting
+    if (view.webContents.isDestroyed()) return;
     // Inject stealth script to mask automation signals
     try {
       await antiDetection.injectStealthScript(view.webContents, tabId);
     } catch (err) {
-      console.warn(
-        "[Anti-Detection] Failed to inject stealth script:",
-        err.message
-      );
+      // Only log if it's not a destroyed webContents error
+      if (!String(err?.message || "").includes("destroyed")) {
+        console.warn(
+          "[Anti-Detection] Failed to inject stealth script:",
+          err.message
+        );
+      }
     }
   });
 
   // Also inject on DOM ready for earlier protection
   view.webContents.on("dom-ready", async () => {
+    // Check if webContents is still valid before injecting
+    if (view.webContents.isDestroyed()) return;
     try {
       await antiDetection.injectStealthScript(view.webContents, tabId, true); // minimal script first
     } catch (err) {
@@ -913,8 +920,12 @@ ipcMain.handle("browserview-create", async (event, { tabId, url }) => {
   return true;
 });
 
-ipcMain.handle("browserview-show", async (event, { tabId }) => {
-  showBrowserView(tabId);
+ipcMain.handle("browserview-show", async (event, { tabId, visible = true }) => {
+  if (visible) {
+    showBrowserView(tabId);
+  } else {
+    hideBrowserView(tabId);
+  }
   return true;
 });
 

@@ -152,6 +152,24 @@ export function ProfileSelector({ tabId, disabled = false }) {
   // Check if anti-detection API is available
   const hasAntiDetection = Boolean(window.electronAPI?.antiDetection);
 
+  // Handle dropdown open/close - hide BrowserView when open
+  const handleOpenChange = useCallback(
+    (open) => {
+      setIsOpen(open);
+      // Hide BrowserView when dropdown is open to prevent z-index issues
+      if (tabId && window.electronAPI?.browserView?.show) {
+        if (open) {
+          // Hide the browser view
+          window.electronAPI.browserView.show(tabId, false).catch(() => {});
+        } else {
+          // Show the browser view
+          window.electronAPI.browserView.show(tabId, true).catch(() => {});
+        }
+      }
+    },
+    [tabId]
+  );
+
   if (!hasAntiDetection) {
     return null;
   }
@@ -164,7 +182,7 @@ export function ProfileSelector({ tabId, disabled = false }) {
   return (
     <TooltipProvider>
       <div className="flex items-center gap-1">
-        <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+        <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>

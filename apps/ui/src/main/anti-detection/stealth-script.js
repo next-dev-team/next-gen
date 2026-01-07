@@ -341,23 +341,29 @@ function generateStealthScript(profile) {
   // 10. MediaDevices Spoofing
   // ============================================
   
-  if (PROFILE.mediaDevices && navigator.mediaDevices) {
-    const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices;
+  if (PROFILE.mediaDevices && navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+    const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
     navigator.mediaDevices.enumerateDevices = async function() {
       const fakeDevices = [];
-      const deviceTypes = ['audioinput', 'audiooutput', 'videoinput'];
       
-      deviceTypes.forEach(kind => {
-        const count = PROFILE.mediaDevices[kind] || 0;
+      // Map profile keys to device kinds
+      const deviceMapping = {
+        'audioInputs': 'audioinput',
+        'audioOutputs': 'audiooutput', 
+        'videoInputs': 'videoinput'
+      };
+      
+      for (const [profileKey, deviceKind] of Object.entries(deviceMapping)) {
+        const count = PROFILE.mediaDevices[profileKey] || 0;
         for (let i = 0; i < count; i++) {
           fakeDevices.push({
-            deviceId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 16),
-            kind: kind,
-            label: '',  // Empty for privacy (mimics real behavior without permission)
-            groupId: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substr(2, 16)
+            deviceId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substr(2, 16),
+            kind: deviceKind,
+            label: '',
+            groupId: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substr(2, 16)
           });
         }
-      });
+      }
       
       return fakeDevices;
     };

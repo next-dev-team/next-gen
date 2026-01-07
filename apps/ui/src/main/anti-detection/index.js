@@ -177,9 +177,14 @@ function getPlatformHint(profile) {
  * @param {boolean} minimal - Use minimal script for better performance
  */
 async function injectStealthScript(webContents, tabId, minimal = false) {
+  // Check if webContents is still valid
+  if (!webContents || webContents.isDestroyed()) {
+    return;
+  }
+
   const profile = activeProfiles.get(tabId);
   if (!profile) {
-    console.warn(`No profile found for tab ${tabId}`);
+    // Don't warn for missing profile - it may not have been created yet
     return;
   }
 
@@ -188,9 +193,19 @@ async function injectStealthScript(webContents, tabId, minimal = false) {
     : generateStealthScript(profile);
 
   try {
+    // Double-check before executing
+    if (webContents.isDestroyed()) return;
     await webContents.executeJavaScript(script);
   } catch (error) {
-    console.error("Failed to inject stealth script:", error.message);
+    // Only log if it's not a navigation/destroyed error
+    const msg = String(error?.message || "");
+    if (
+      !msg.includes("destroyed") &&
+      !msg.includes("disposed") &&
+      !msg.includes("navigation")
+    ) {
+      console.error("Failed to inject stealth script:", error.message);
+    }
   }
 }
 

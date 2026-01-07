@@ -117,7 +117,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   browserView: {
     create: (tabId, url) =>
       ipcRenderer.invoke("browserview-create", { tabId, url }),
-    show: (tabId) => ipcRenderer.invoke("browserview-show", { tabId }),
+    show: (tabId, visible = true) =>
+      ipcRenderer.invoke("browserview-show", { tabId, visible }),
     hideAll: () => ipcRenderer.invoke("browserview-hide-all"),
     destroy: (tabId) => ipcRenderer.invoke("browserview-destroy", { tabId }),
     setBounds: (tabId, bounds) =>
