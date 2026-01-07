@@ -71,6 +71,14 @@
   border-color: hsla(0, 0%, 100%, 0.1);
 }
 
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Base styles */
 :root {
   /* Shadcn Light Theme - v4 Compatible (Raw HSL) */

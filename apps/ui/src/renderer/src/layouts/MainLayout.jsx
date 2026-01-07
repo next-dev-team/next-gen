@@ -853,6 +853,19 @@ export default function MainLayout({
     });
   }, []);
 
+  const dockRef = React.useRef(null);
+
+  const onDockWheel = React.useCallback(
+    (e) => {
+      if (dockSettings.position === "bottom" && dockRef.current) {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          dockRef.current.scrollLeft += e.deltaY;
+        }
+      }
+    },
+    [dockSettings.position]
+  );
+
   const onDockMouseMove = React.useCallback(
     (e) => {
       dockPointerRef.current = { x: e.clientX, y: e.clientY };
@@ -1170,13 +1183,15 @@ export default function MainLayout({
           }`}
         >
           <div
+            ref={dockRef}
             role="toolbar"
             aria-label="Dock"
             className={`pointer-events-auto flex gap-2 rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_100%)] shadow-[0_26px_70px_rgba(0,0,0,0.38)] backdrop-blur-2xl transition-all duration-300 ${
               dockSettings.position === "bottom"
-                ? "items-center px-3 py-2"
-                : "flex-col items-center justify-center px-2 py-3"
+                ? "items-center px-3 py-2 max-w-[90vw] overflow-x-auto scrollbar-hide"
+                : "flex-col items-center justify-center px-2 py-3 max-h-[90vh] overflow-y-auto scrollbar-hide"
             }`}
+            onWheel={onDockWheel}
             onMouseMove={onDockMouseMove}
             onMouseLeave={(e) => {
               onDockMouseLeave(e);
@@ -1185,15 +1200,106 @@ export default function MainLayout({
             style={{ WebkitAppRegion: "no-drag" }}
           >
             {/* Dock Items */}
-            {[...dockApps.pinned, ...dockApps.recents].map((app, idx) => {
-              const isRecent = idx >= dockApps.pinned.length;
-              const Icon = app.icon;
-              const isActive = activeTab === app.key;
-              const scale = getDockItemScale(idx);
+            {(() => {
+              const allApps = [...dockApps.pinned, ...dockApps.recents];
+              const maxItems = 20;
+              const displayedApps = allApps.slice(0, maxItems);
+              const remainingSlots = maxItems - displayedApps.length;
+              const displayedActions = recentDockActions.slice(
+                0,
+                remainingSlots
+              );
 
               return (
-                <React.Fragment key={app.key}>
-                  {isRecent && idx === dockApps.pinned.length ? (
+                <>
+                  {displayedApps.map((app, idx) => {
+                    const isRecent = idx >= dockApps.pinned.length;
+                    const Icon = app.icon;
+                    const isActive = activeTab === app.key;
+                    const scale = getDockItemScale(idx);
+
+                    return (
+                      <React.Fragment key={app.key}>
+                        {isRecent && idx === dockApps.pinned.length ? (
+                          <div
+                            className={`mx-1 rounded bg-white/10 ${
+                              dockSettings.position === "bottom"
+                                ? "h-9 w-px"
+                                : "h-px w-9"
+                            }`}
+                          />
+                        ) : null}
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              ref={(el) => {
+                                dockItemRefs.current[idx] = el;
+                              }}
+                              type="button"
+                              onClick={() => openApp(app.key)}
+                              className="relative flex h-14 w-14 items-center justify-center focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.55)]"
+                              style={{ transform: `scale(${scale})` }}
+                            >
+                              <span
+                                className={
+                                  "relative flex h-12 w-12 items-center justify-center rounded-2xl border bg-[radial-gradient(85%_85%_at_32%_22%,rgba(255,255,255,0.28)_0%,rgba(255,255,255,0.11)_38%,rgba(0,0,0,0.32)_100%)] shadow-[0_18px_34px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.20)] transition-transform duration-100 ease-out " +
+                                  (isActive
+                                    ? "border-white/20"
+                                    : "border-white/10 hover:border-white/16")
+                                }
+                              >
+                                {app.gradient ? (
+                                  <span
+                                    className={
+                                      "pointer-events-none absolute inset-0 rounded-2xl opacity-90 " +
+                                      app.gradient
+                                    }
+                                  />
+                                ) : null}
+                                <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.34)_0%,transparent_70%)]" />
+                                <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
+                                <Icon
+                                  className={
+                                    "relative h-6 w-6 " +
+                                    (isActive ? "text-white" : "text-white/85")
+                                  }
+                                  aria-hidden="true"
+                                />
+                              </span>
+
+                              <span
+                                className={
+                                  "absolute rounded-full transition-opacity " +
+                                  (isActive
+                                    ? "bg-white/70 opacity-100 "
+                                    : "opacity-0 ") +
+                                  (dockSettings.position === "bottom"
+                                    ? "bottom-0 h-1 w-1"
+                                    : dockSettings.position === "left"
+                                      ? "left-0 h-1 w-1"
+                                      : "right-0 h-1 w-1")
+                                }
+                              />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side={
+                              dockSettings.position === "bottom"
+                                ? "top"
+                                : dockSettings.position === "left"
+                                  ? "right"
+                                  : "left"
+                            }
+                          >
+                            {app.label}
+                          </TooltipContent>
+                        </Tooltip>
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {displayedActions.length ? (
                     <div
                       className={`mx-1 rounded bg-white/10 ${
                         dockSettings.position === "bottom"
@@ -1203,187 +1309,115 @@ export default function MainLayout({
                     />
                   ) : null}
 
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        ref={(el) => {
-                          dockItemRefs.current[idx] = el;
-                        }}
-                        type="button"
-                        onClick={() => openApp(app.key)}
-                        className="relative flex h-14 w-14 items-center justify-center focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.55)]"
-                        style={{ transform: `scale(${scale})` }}
-                      >
-                        <span
-                          className={
-                            "relative flex h-12 w-12 items-center justify-center rounded-2xl border bg-[radial-gradient(85%_85%_at_32%_22%,rgba(255,255,255,0.28)_0%,rgba(255,255,255,0.11)_38%,rgba(0,0,0,0.32)_100%)] shadow-[0_18px_34px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.20)] transition-transform duration-100 ease-out " +
-                            (isActive
-                              ? "border-white/20"
-                              : "border-white/10 hover:border-white/16")
-                          }
-                        >
-                          {app.gradient ? (
+                  {displayedActions.map((action, actionIdx) => {
+                    const Icon =
+                      dockActionIconByName[action.iconName] ||
+                      dockActionIconByName.search;
+                    const idx = displayedApps.length + actionIdx;
+                    const scale = getDockItemScale(idx);
+
+                    const isActive =
+                      action.actionKey.startsWith("nav:") &&
+                      activeTab === action.actionKey.slice("nav:".length);
+
+                    return (
+                      <Tooltip key={action.key}>
+                        <TooltipTrigger asChild>
+                          <button
+                            ref={(el) => {
+                              dockItemRefs.current[idx] = el;
+                            }}
+                            type="button"
+                            onClick={() => {
+                              runLaunchpadAction(action.actionKey).catch(
+                                () => {}
+                              );
+                              try {
+                                const raw =
+                                  localStorage.getItem("dockRecentActions");
+                                const parsed = JSON.parse(raw || "[]");
+                                const arr = Array.isArray(parsed) ? parsed : [];
+                                const next = [
+                                  {
+                                    key: action.key,
+                                    label: action.label,
+                                    iconName: action.iconName,
+                                    actionKey: action.actionKey,
+                                    gradient: action.gradient,
+                                  },
+                                  ...arr.filter((it) => it?.key !== action.key),
+                                ].slice(0, 6);
+                                localStorage.setItem(
+                                  "dockRecentActions",
+                                  JSON.stringify(next)
+                                );
+                                window.dispatchEvent(
+                                  new Event("dock:recentActionsUpdated")
+                                );
+                              } catch {}
+                            }}
+                            className="relative flex h-14 w-14 items-center justify-center focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.55)]"
+                            style={{ transform: `scale(${scale})` }}
+                          >
                             <span
                               className={
-                                "pointer-events-none absolute inset-0 rounded-2xl opacity-90 " +
-                                app.gradient
+                                "relative flex h-12 w-12 items-center justify-center rounded-2xl border bg-[radial-gradient(85%_85%_at_32%_22%,rgba(255,255,255,0.28)_0%,rgba(255,255,255,0.11)_38%,rgba(0,0,0,0.32)_100%)] shadow-[0_18px_34px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.20)] transition-transform duration-100 ease-out " +
+                                (isActive
+                                  ? "border-white/20"
+                                  : "border-white/10 hover:border-white/16")
+                              }
+                            >
+                              {action.gradient ? (
+                                <span
+                                  className={
+                                    "pointer-events-none absolute inset-0 rounded-2xl opacity-90 " +
+                                    action.gradient
+                                  }
+                                />
+                              ) : null}
+                              <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.34)_0%,transparent_70%)]" />
+                              <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
+                              <Icon
+                                className={
+                                  "relative h-6 w-6 " +
+                                  (isActive ? "text-white" : "text-white/85")
+                                }
+                                aria-hidden="true"
+                              />
+                            </span>
+
+                            <span
+                              className={
+                                "absolute rounded-full transition-opacity " +
+                                (isActive
+                                  ? "bg-white/70 opacity-100 "
+                                  : "opacity-0 ") +
+                                (dockSettings.position === "bottom"
+                                  ? "bottom-0 h-1 w-1"
+                                  : dockSettings.position === "left"
+                                    ? "left-0 h-1 w-1"
+                                    : "right-0 h-1 w-1")
                               }
                             />
-                          ) : null}
-                          <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.34)_0%,transparent_70%)]" />
-                          <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
-                          <Icon
-                            className={
-                              "relative h-6 w-6 " +
-                              (isActive ? "text-white" : "text-white/85")
-                            }
-                            aria-hidden="true"
-                          />
-                        </span>
-
-                        <span
-                          className={
-                            "absolute rounded-full transition-opacity " +
-                            (isActive
-                              ? "bg-white/70 opacity-100 "
-                              : "opacity-0 ") +
-                            (dockSettings.position === "bottom"
-                              ? "bottom-0 h-1 w-1"
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side={
+                            dockSettings.position === "bottom"
+                              ? "top"
                               : dockSettings.position === "left"
-                                ? "left-0 h-1 w-1"
-                                : "right-0 h-1 w-1")
+                                ? "right"
+                                : "left"
                           }
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side={
-                        dockSettings.position === "bottom"
-                          ? "top"
-                          : dockSettings.position === "left"
-                            ? "right"
-                            : "left"
-                      }
-                    >
-                      {app.label}
-                    </TooltipContent>
-                  </Tooltip>
-                </React.Fragment>
+                        >
+                          {action.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
+                </>
               );
-            })}
-
-            {recentDockActions.length ? (
-              <div
-                className={`mx-1 rounded bg-white/10 ${
-                  dockSettings.position === "bottom" ? "h-9 w-px" : "h-px w-9"
-                }`}
-              />
-            ) : null}
-
-            {recentDockActions.map((action, actionIdx) => {
-              const Icon =
-                dockActionIconByName[action.iconName] ||
-                dockActionIconByName.search;
-              const idx =
-                dockApps.pinned.length + dockApps.recents.length + actionIdx;
-              const scale = getDockItemScale(idx);
-
-              const isActive =
-                action.actionKey.startsWith("nav:") &&
-                activeTab === action.actionKey.slice("nav:".length);
-
-              return (
-                <Tooltip key={action.key}>
-                  <TooltipTrigger asChild>
-                    <button
-                      ref={(el) => {
-                        dockItemRefs.current[idx] = el;
-                      }}
-                      type="button"
-                      onClick={() => {
-                        runLaunchpadAction(action.actionKey).catch(() => {});
-                        try {
-                          const raw = localStorage.getItem("dockRecentActions");
-                          const parsed = JSON.parse(raw || "[]");
-                          const arr = Array.isArray(parsed) ? parsed : [];
-                          const next = [
-                            {
-                              key: action.key,
-                              label: action.label,
-                              iconName: action.iconName,
-                              actionKey: action.actionKey,
-                              gradient: action.gradient,
-                            },
-                            ...arr.filter((it) => it?.key !== action.key),
-                          ].slice(0, 6);
-                          localStorage.setItem(
-                            "dockRecentActions",
-                            JSON.stringify(next)
-                          );
-                          window.dispatchEvent(
-                            new Event("dock:recentActionsUpdated")
-                          );
-                        } catch {}
-                      }}
-                      className="relative flex h-14 w-14 items-center justify-center focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.55)]"
-                      style={{ transform: `scale(${scale})` }}
-                    >
-                      <span
-                        className={
-                          "relative flex h-12 w-12 items-center justify-center rounded-2xl border bg-[radial-gradient(85%_85%_at_32%_22%,rgba(255,255,255,0.28)_0%,rgba(255,255,255,0.11)_38%,rgba(0,0,0,0.32)_100%)] shadow-[0_18px_34px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.20)] transition-transform duration-100 ease-out " +
-                          (isActive
-                            ? "border-white/20"
-                            : "border-white/10 hover:border-white/16")
-                        }
-                      >
-                        {action.gradient ? (
-                          <span
-                            className={
-                              "pointer-events-none absolute inset-0 rounded-2xl opacity-90 " +
-                              action.gradient
-                            }
-                          />
-                        ) : null}
-                        <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.34)_0%,transparent_70%)]" />
-                        <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
-                        <Icon
-                          className={
-                            "relative h-6 w-6 " +
-                            (isActive ? "text-white" : "text-white/85")
-                          }
-                          aria-hidden="true"
-                        />
-                      </span>
-
-                      <span
-                        className={
-                          "absolute rounded-full transition-opacity " +
-                          (isActive
-                            ? "bg-white/70 opacity-100 "
-                            : "opacity-0 ") +
-                          (dockSettings.position === "bottom"
-                            ? "bottom-0 h-1 w-1"
-                            : dockSettings.position === "left"
-                              ? "left-0 h-1 w-1"
-                              : "right-0 h-1 w-1")
-                        }
-                      />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side={
-                      dockSettings.position === "bottom"
-                        ? "top"
-                        : dockSettings.position === "left"
-                          ? "right"
-                          : "left"
-                    }
-                  >
-                    {action.label}
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })}
+            })()}
 
             {/* Settings Toggle */}
             <div
