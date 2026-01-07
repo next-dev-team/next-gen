@@ -14,6 +14,7 @@ const ScrumBoardView = lazy(() => import("./views/ScrumBoardView"));
 const ResourcesView = lazy(() => import("./views/ResourcesView"));
 // const DevToolView = lazy(() => import("./views/DevToolView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
+const TestManagementView = lazy(() => import("./views/TestManagementView"));
 
 const normalizeCssTokenValue = (key, value) => {
   if (key === "radius") return String(value);
@@ -127,6 +128,7 @@ function App() {
               <Route path="scrum-board" element={<ScrumBoardView />} />
               <Route path="resources" element={<ResourcesView />} />
               <Route path="settings" element={<SettingsView />} />
+              <Route path="tests" element={<TestManagementView />} />
             </Route>
           </Routes>
         </Suspense>

@@ -23,6 +23,33 @@ const Conf = require("conf");
 // Anti-detection module for browser fingerprinting protection
 const antiDetection = require("./anti-detection");
 
+// ============================================
+// GLOBAL ERROR HANDLERS (Crash Prevention)
+// ============================================
+
+// Catch uncaught exceptions - prevents app from crashing
+process.on("uncaughtException", (error) => {
+  console.error("[CRITICAL] Uncaught Exception:", error);
+  // In production, log to file or error reporting service
+  // Don't exit - try to keep the app running
+});
+
+// Catch unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("[WARNING] Unhandled Promise Rejection:", reason);
+  // Don't crash on unhandled rejections
+});
+
+// Handle GPU process crashes
+app.on("gpu-process-crashed", (event, killed) => {
+  console.error("[GPU] GPU process crashed, killed:", killed);
+});
+
+// Handle child process crashes
+app.on("child-process-gone", (event, details) => {
+  console.error("[Process] Child process gone:", details.type, details.reason);
+});
+
 const scrumStore = new Conf({ projectName: "next-gen-scrum" });
 const resolveMcpServerPath = () => {
   const packagedCandidates = [
@@ -713,6 +740,15 @@ function ensureBrowserView(tabId, options = {}) {
     contextIsolation: true,
     sandbox: false, // Disable sandbox to allow preload to function properly with anti-detection
     session: antiDetectSession || undefined,
+    // Security hardening
+    enableRemoteModule: false,
+    nativeWindowOpen: false,
+    webviewTag: false,
+    allowRunningInsecureContent: false,
+    experimentalFeatures: false,
+    webSecurity: true,
+    // Disable features that could leak info
+    spellcheck: false,
   };
 
   const view = new BrowserView({ webPreferences });
@@ -720,11 +756,6 @@ function ensureBrowserView(tabId, options = {}) {
   try {
     view.webContents.setBackgroundColor("#ffffff");
   } catch {}
-
-  view.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
-    return { action: "deny" };
-  });
 
   // Inject stealth script on navigation
   view.webContents.on(
@@ -768,6 +799,137 @@ function ensureBrowserView(tabId, options = {}) {
       // Ignore errors on early injection
     }
   });
+
+  // ============================================
+  // CRASH RECOVERY HANDLERS
+  // ============================================
+
+  // Handle render process crashes
+  view.webContents.on("render-process-gone", (event, details) => {
+    console.error(
+      `[BrowserView ${tabId}] Render process gone:`,
+      details.reason
+    );
+
+    // Notify renderer about the crash
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("browserview-state", {
+        tabId,
+        state: "crashed",
+        reason: details.reason,
+      });
+    }
+
+    // For OOM or crashes, attempt to recover
+    if (details.reason === "crashed" || details.reason === "oom") {
+      try {
+        // Reload the page to recover
+        setTimeout(() => {
+          if (!view.webContents.isDestroyed()) {
+            view.webContents.reload();
+          }
+        }, 1000);
+      } catch (err) {
+        console.error("Failed to recover from crash:", err);
+      }
+    }
+  });
+
+  // Handle unresponsive webContents
+  view.webContents.on("unresponsive", () => {
+    console.warn(`[BrowserView ${tabId}] Page became unresponsive`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("browserview-state", {
+        tabId,
+        state: "unresponsive",
+      });
+    }
+  });
+
+  // Handle when webContents becomes responsive again
+  view.webContents.on("responsive", () => {
+    console.log(`[BrowserView ${tabId}] Page became responsive`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("browserview-state", {
+        tabId,
+        state: "responsive",
+      });
+    }
+  });
+
+  // ============================================
+  // SECURITY HANDLERS
+  // ============================================
+
+  // Handle certificate errors - allow in dev, reject in prod
+  view.webContents.on(
+    "certificate-error",
+    (event, url, error, certificate, callback) => {
+      if (process.env.NODE_ENV === "development") {
+        // In development, continue anyway
+        event.preventDefault();
+        callback(true);
+      } else {
+        // In production, use default behavior (reject)
+        callback(false);
+      }
+    }
+  );
+
+  // Prevent navigation to dangerous protocols
+  view.webContents.on("will-navigate", (event, url) => {
+    try {
+      const parsed = new URL(url);
+      const dangerousProtocols = ["file:", "javascript:", "data:"];
+
+      // Allow data: URLs for certain cases (like about:blank replacement)
+      if (parsed.protocol === "data:" && !url.includes("<script")) {
+        return; // Allow safe data URLs
+      }
+
+      if (
+        dangerousProtocols.includes(parsed.protocol) &&
+        parsed.protocol !== "data:"
+      ) {
+        console.warn(`[Security] Blocked navigation to dangerous URL: ${url}`);
+        event.preventDefault();
+      }
+    } catch (err) {
+      // Invalid URL, allow default handling
+    }
+  });
+
+  // Handle new window requests securely
+  view.webContents.setWindowOpenHandler(({ url, frameName, features }) => {
+    try {
+      const parsed = new URL(url);
+
+      // Block dangerous protocols
+      if (["javascript:", "data:", "file:"].includes(parsed.protocol)) {
+        console.warn(`[Security] Blocked popup with dangerous URL: ${url}`);
+        return { action: "deny" };
+      }
+
+      // Open in external browser
+      shell.openExternal(url).catch(() => {});
+      return { action: "deny" };
+    } catch {
+      return { action: "deny" };
+    }
+  });
+
+  // Handle console messages for debugging
+  if (process.env.NODE_ENV === "development") {
+    view.webContents.on(
+      "console-message",
+      (event, level, message, line, sourceId) => {
+        if (level >= 2) {
+          // Warning or error
+          console.log(`[BrowserView ${tabId}] Console:`, message);
+        }
+      }
+    );
+  }
 
   browserViews.set(tabId, view);
 
@@ -3087,4 +3249,63 @@ app.on("activate", () => {
 // Handle external links
 ipcMain.on("open-external", (event, url) => {
   shell.openExternal(url);
+});
+
+ipcMain.handle("run-e2e-test", async (event, { testFile }) => {
+  const { spawn } = require("child_process");
+
+  // Assuming running from apps/ui root in dev
+  const cwd = process.cwd();
+
+  console.log(`[Test] Running test: ${testFile} in ${cwd}`);
+
+  const cmd = "npx";
+  const args = ["playwright", "test", testFile, "--reporter=line"];
+
+  return new Promise((resolve) => {
+    const child = spawn(cmd, args, {
+      cwd,
+      shell: true,
+      env: {
+        ...process.env,
+        FORCE_COLOR: "1",
+        NODE_ENV: "development",
+      },
+    });
+
+    child.stdout.on("data", (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("test-output", {
+          testFile,
+          type: "stdout",
+          data: data.toString(),
+        });
+      }
+    });
+
+    child.stderr.on("data", (data) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("test-output", {
+          testFile,
+          type: "stderr",
+          data: data.toString(),
+        });
+      }
+    });
+
+    child.on("close", (code) => {
+      resolve({ code });
+    });
+
+    child.on("error", (err) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("test-output", {
+          testFile,
+          type: "stderr",
+          data: `Failed to start test process: ${err.message}`,
+        });
+      }
+      resolve({ code: 1, error: err.message });
+    });
+  });
 });

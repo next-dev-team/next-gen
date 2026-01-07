@@ -294,16 +294,17 @@ function generateStealthScript(profile) {
   } catch (e) {}
   
   // Remove chrome automation flags
-  if (window.chrome) {
-    window.chrome.runtime = undefined;
-  }
+  try {
+    if (window.chrome && window.chrome.runtime) {
+      // Don't completely remove, just make it look normal
+      // window.chrome.runtime = undefined;
+    }
+  } catch (e) {}
   
-  // Remove Electron-specific properties
-  delete window.process;
-  delete window.require;
-  delete window.module;
-  delete window.__dirname;
-  delete window.__filename;
+  // NOTE: We intentionally do NOT try to delete window.process, window.require, etc.
+  // In Electron BrowserView with contextIsolation, these properties are non-configurable
+  // and attempting to delete them throws an error that crashes the render process.
+  // The other anti-detection measures (UA spoofing, WebGL, etc.) are sufficient.
   
   // ============================================
   // 8. Permission API Spoofing
@@ -440,13 +441,12 @@ function generateMinimalStealthScript(profile) {
   const ua = ${JSON.stringify(profile.userAgent)};
   const platform = ${JSON.stringify(profile.platform)};
   
-  Object.defineProperty(navigator, 'userAgent', { get: () => ua });
-  Object.defineProperty(navigator, 'platform', { get: () => platform });
-  Object.defineProperty(navigator, 'webdriver', { get: () => false });
+  try { Object.defineProperty(navigator, 'userAgent', { get: () => ua }); } catch(e) {}
+  try { Object.defineProperty(navigator, 'platform', { get: () => platform }); } catch(e) {}
+  try { Object.defineProperty(navigator, 'webdriver', { get: () => false }); } catch(e) {}
   
-  delete window.process;
-  delete window.require;
-  delete window.module;
+  // NOTE: Do NOT try to delete window.process, window.require, etc.
+  // These are non-configurable in Electron BrowserView and cause crashes.
 })();
 `;
 }

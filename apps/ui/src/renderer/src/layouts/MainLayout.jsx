@@ -9,6 +9,7 @@ import {
   Search,
   Settings,
   Table,
+  TestTube,
 } from "lucide-react";
 import React from "react";
 import { useLocation, useNavigate, useOutlet } from "react-router-dom";
@@ -535,6 +536,7 @@ export default function MainLayout({
       { key: "ui", label: "UI", icon: LayoutGrid },
       { key: "scrum-board", label: "Scrum Board", icon: Table },
       { key: "browser", label: "Browser", icon: Globe },
+      { key: "tests", label: "Tests", icon: TestTube },
     ],
     []
   );

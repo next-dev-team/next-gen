@@ -213,6 +213,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readProjectFile: (payload) =>
     ipcRenderer.invoke("read-project-file", payload),
 
+  // E2E Tests
+  tests: {
+    run: (testFile) => ipcRenderer.invoke("run-e2e-test", { testFile }),
+    onOutput: (callback) => {
+      const handler = (event, payload) => callback(payload);
+      ipcRenderer.on("test-output", handler);
+      return () => ipcRenderer.removeListener("test-output", handler);
+    },
+  },
+
   // External links
   openExternal: (url) => {
     shell.openExternal(url);
