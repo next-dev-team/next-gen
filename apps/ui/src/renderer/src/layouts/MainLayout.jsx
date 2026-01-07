@@ -994,10 +994,10 @@ export default function MainLayout({
           <div
             role="toolbar"
             aria-label="Dock"
-            className={`pointer-events-auto flex gap-2 rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.11)_0%,rgba(255,255,255,0.04)_100%)] shadow-[0_26px_70px_rgba(0,0,0,0.38)] backdrop-blur-xl transition-all duration-300 ${
+            className={`pointer-events-auto flex gap-2 rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_100%)] shadow-[0_26px_70px_rgba(0,0,0,0.38)] backdrop-blur-2xl transition-all duration-300 ${
               dockSettings.position === "bottom"
                 ? "items-center px-3 py-2"
-                : "flex-col justify-center px-2 py-3"
+                : "flex-col items-center justify-center px-2 py-3"
             }`}
             onMouseMove={onDockMouseMove}
             onMouseLeave={(e) => {
