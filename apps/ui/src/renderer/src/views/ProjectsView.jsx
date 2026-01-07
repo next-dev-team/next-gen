@@ -6,8 +6,8 @@ export default function ProjectsView() {
   const navigate = useNavigate();
 
   return (
-    <ProjectLauncher
-      onNavigateToGenerator={() => navigate("/generator")}
-    />
+    <div className="h-full w-full overflow-auto p-6">
+      <ProjectLauncher onNavigateToGenerator={() => navigate("/generator")} />
+    </div>
   );
 }

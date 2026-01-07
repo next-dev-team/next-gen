@@ -1,9 +1,10 @@
 {
   "name": "@nde/next-gen-tools",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Electron app with floating DevTools",
   "main": "./out/main/index.js",
-  "author": "",
+  "author": "Next Dev Team <info@next-dev.team>",
+  "homepage": "https://github.com/next-dev-team/next-gen#readme",
   "license": "MIT",
   "engines": {
     "node": ">=20.19.0"
@@ -19,6 +20,7 @@
     "postinstall": "node scripts/postinstall.js || echo 'postinstall failed (non-fatal)'",
     "build:win": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --win -c.npmRebuild=false",
     "build:mac": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --mac -c.npmRebuild=false",
+    "build:linux": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --linux -c.npmRebuild=false",
     "test": "node ../../node_modules/electron-vite/bin/electron-vite.js build && node ../../node_modules/@playwright/test/cli.js test",
     "mcp:scrum": "node scripts/scrum-mcp-server.js",
     "mcp:sse": "node scripts/scrum-mcp-server.js",
@@ -112,12 +114,23 @@
         "dmg",
         "zip"
       ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "maintainer": "Next Dev Team <info@next-dev.team>",
+      "category": "Development"
     },
     "win": {
       "target": [
         "nsis"
       ],
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "signAndEditExecutable": false
     }
   }

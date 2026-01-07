@@ -17,6 +17,8 @@
     "test": "turbo test",
     "ui": "turbo dev --filter=@nde/next-gen-tools",
     "ui:build:win": "turbo -F @nde/next-gen-tools build:win",
+    "ui:build:mac": "turbo -F @nde/next-gen-tools build:mac",
+    "ui:build:linux": "turbo -F @nde/next-gen-tools build:linux",
     "gen": "turbo gen",
     "gen:workspace": "turbo gen workspace",
     "gen:turbo": "npx create-turbo@latest --example basic"

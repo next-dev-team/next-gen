@@ -13,6 +13,12 @@
     "build:win": {
       "inputs": ["$TURBO_DEFAULT$", ".env*"]
     },
+    "build:mac": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
+    "build:linux": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"]
+    },
     "test": {
       "dependsOn": ["^test"],
       "cache": false
