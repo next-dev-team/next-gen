@@ -17,6 +17,7 @@ import {
   Tabs,
   Tag,
   Typography,
+  theme,
 } from "antd";
 import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
@@ -25,8 +26,15 @@ import { keyboardShortcuts } from "../components/editor/hooks/useKeyboardShortcu
 const { Title, Text } = Typography;
 
 export default function SettingsView() {
-  const { isDarkMode, setIsDarkMode, designMode, setDesignMode } =
-    useOutletContext();
+  const { token } = theme.useToken();
+  const {
+    isDarkMode,
+    setIsDarkMode,
+    designMode,
+    setDesignMode,
+    dockSettings,
+    setDockSettings,
+  } = useOutletContext();
   const [startOnBoot, setStartOnBoot] = useState(false);
   const [runInBackground, setRunInBackground] = useState(true);
   const [keyboardControlsEnabled, setKeyboardControlsEnabled] = useState(true);
@@ -117,7 +125,8 @@ export default function SettingsView() {
           if (key === "runInBackground") setRunInBackground(Boolean(value));
           if (key === "keyboardControlsEnabled")
             setKeyboardControlsEnabled(Boolean(value));
-          if (key === "quickToggleEnabled") setQuickToggleEnabled(Boolean(value));
+          if (key === "quickToggleEnabled")
+            setQuickToggleEnabled(Boolean(value));
         }
       );
     }
@@ -181,11 +190,11 @@ export default function SettingsView() {
       .join(" + ");
   };
 
-  const renderShortcutKeys = (keys) => {
+  const renderShortcutKeys = (keys, shortcut) => {
     return (
       <Space size={4} wrap>
         {keys.map((key, i) => (
-          <React.Fragment key={`${key}-${i}`}>
+          <React.Fragment key={`${key}-${shortcut.description}-${i}`}>
             <Text code>{key === "Ctrl" ? "Ctrl/Cmd" : key}</Text>
             {i < keys.length - 1 && <Text type="secondary">+</Text>}
           </React.Fragment>
@@ -415,7 +424,7 @@ export default function SettingsView() {
                           <Text style={{ fontSize: 13 }}>
                             {shortcut.description}
                           </Text>
-                          {renderShortcutKeys(shortcut.keys)}
+                          {renderShortcutKeys(shortcut.keys, shortcut)}
                         </div>
                       ))}
                     </Space>
@@ -438,71 +447,127 @@ export default function SettingsView() {
         </span>
       ),
       children: (
-        <Card title="Theme" variant="outlined">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <Space direction="vertical" size={0}>
-              <Text strong>Theme Mode</Text>
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Switch between light, dark, or system-wide theme.
-              </Text>
-            </Space>
-            <Segmented
-              value={designMode}
-              onChange={(value) => setDesignMode(value)}
-              options={[
-                {
-                  label: (
-                    <div style={{ padding: "0 8px" }}>
-                      <DesktopOutlined
-                        style={{
-                          marginRight: 6,
-                          color:
-                            designMode === "system" ? "#10b981" : undefined,
-                        }}
-                      />
-                      System
-                    </div>
-                  ),
-                  value: "system",
-                },
-                {
-                  label: (
-                    <div style={{ padding: "0 8px" }}>
-                      <SunOutlined
-                        style={{
-                          marginRight: 6,
-                          color: designMode === "light" ? "#faad14" : undefined,
-                        }}
-                      />
-                      Light
-                    </div>
-                  ),
-                  value: "light",
-                },
-                {
-                  label: (
-                    <div style={{ padding: "0 8px" }}>
-                      <MoonOutlined
-                        style={{
-                          marginRight: 6,
-                          color: designMode === "dark" ? "#6366f1" : undefined,
-                        }}
-                      />
-                      Dark
-                    </div>
-                  ),
-                  value: "dark",
-                },
-              ]}
-            />
-          </div>
-        </Card>
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Card title="Theme" variant="outlined">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Space direction="vertical" size={0}>
+                <Text strong>Theme Mode</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Switch between light, dark, or system-wide theme.
+                </Text>
+              </Space>
+              <Segmented
+                value={designMode}
+                onChange={(value) => setDesignMode(value)}
+                options={[
+                  {
+                    label: (
+                      <div style={{ padding: "0 8px" }}>
+                        <DesktopOutlined
+                          style={{
+                            marginRight: 6,
+                            color:
+                              designMode === "system" ? "#10b981" : undefined,
+                          }}
+                        />
+                        System
+                      </div>
+                    ),
+                    value: "system",
+                  },
+                  {
+                    label: (
+                      <div style={{ padding: "0 8px" }}>
+                        <SunOutlined
+                          style={{
+                            marginRight: 6,
+                            color:
+                              designMode === "light" ? "#faad14" : undefined,
+                          }}
+                        />
+                        Light
+                      </div>
+                    ),
+                    value: "light",
+                  },
+                  {
+                    label: (
+                      <div style={{ padding: "0 8px" }}>
+                        <MoonOutlined
+                          style={{
+                            marginRight: 6,
+                            color:
+                              designMode === "dark" ? "#6366f1" : undefined,
+                          }}
+                        />
+                        Dark
+                      </div>
+                    ),
+                    value: "dark",
+                  },
+                ]}
+              />
+            </div>
+          </Card>
+
+          <Card title="Dock" variant="outlined">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Space direction="vertical" size={0}>
+                <Text strong>Position on screen</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Choose where the Dock appears on your screen.
+                </Text>
+              </Space>
+              <Segmented
+                value={dockSettings.position}
+                onChange={(value) =>
+                  setDockSettings((prev) => ({ ...prev, position: value }))
+                }
+                options={[
+                  { label: "Left", value: "left" },
+                  { label: "Bottom", value: "bottom" },
+                  { label: "Right", value: "right" },
+                ]}
+              />
+            </div>
+
+            <Divider style={{ margin: "12px 0" }} />
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <Space direction="vertical" size={0}>
+                <Text strong>Auto-hide Dock</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Automatically hide and show the Dock.
+                </Text>
+              </Space>
+              <Switch
+                size="small"
+                checked={dockSettings.autoHide}
+                onChange={(checked) =>
+                  setDockSettings((prev) => ({ ...prev, autoHide: checked }))
+                }
+              />
+            </div>
+          </Card>
+        </Space>
       ),
     },
   ];
@@ -513,6 +578,9 @@ export default function SettingsView() {
         height: "100%",
         overflowY: "auto",
         padding: "16px 24px",
+        backgroundColor: token.colorBgContainer,
+        color: token.colorText,
+        transition: "background-color 0.3s, color 0.3s",
       }}
     >
       <div className="max-w-3xl mx-auto">

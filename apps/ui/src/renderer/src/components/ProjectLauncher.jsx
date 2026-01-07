@@ -26,6 +26,7 @@ import {
   Tag,
   Tooltip,
   Typography,
+  theme,
 } from "antd";
 import React, { useCallback, useEffect, useState } from "react";
 import { generators } from "../generators-config";
@@ -117,6 +118,7 @@ const getGeneratorDescription = (project) => {
 };
 
 export const ProjectLauncher = ({ onNavigateToGenerator }) => {
+  const { token } = theme.useToken();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -156,13 +158,16 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
     const lowerIde = (ide || "").toLowerCase();
 
     // Show immediate feedback
-    const loadingMessage = message.loading(`Opening ${project.name} in ${ideLabel}...`, 0);
+    const loadingMessage = message.loading(
+      `Opening ${project.name} in ${ideLabel}...`,
+      0
+    );
 
     try {
       if (window.electronAPI?.openInIDE) {
         const result = await window.electronAPI.openInIDE(project.path, ide);
         loadingMessage(); // Clear loading message
-        
+
         if (result && result.success) {
           message.success(`Opened ${project.name} in ${ideLabel}`);
         } else if (result && result.error) {
@@ -174,7 +179,7 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
       }
     } catch (err) {
       loadingMessage(); // Clear loading message
-      
+
       if (["vscode", "vs-code", "code"].includes(lowerIde)) {
         message.error({
           content: (
@@ -194,7 +199,9 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
               </Button>{" "}
               and run "Install 'code' command in PATH" from Command Palette.
               {err?.message && (
-                <div style={{ opacity: 0.6, fontSize: "11px", marginTop: "4px" }}>
+                <div
+                  style={{ opacity: 0.6, fontSize: "11px", marginTop: "4px" }}
+                >
                   {err.message.includes("command not found")
                     ? "Error: command not found"
                     : err.message}
@@ -214,7 +221,9 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
               <br />
               Ensure {ideLabel} is installed and available in your PATH.
               {err?.message && (
-                <div style={{ opacity: 0.6, fontSize: "11px", marginTop: "4px" }}>
+                <div
+                  style={{ opacity: 0.6, fontSize: "11px", marginTop: "4px" }}
+                >
                   {err.message.includes("command not found")
                     ? `Error: ${lowerIde} command not found`
                     : err.message}
@@ -241,9 +250,8 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
   const handleDeleteProject = async (projectId) => {
     try {
       if (window.electronAPI?.deleteProject) {
-        const updatedProjects = await window.electronAPI.deleteProject(
-          projectId
-        );
+        const updatedProjects =
+          await window.electronAPI.deleteProject(projectId);
         setProjects(updatedProjects);
         message.success("Project removed from list");
       }
@@ -271,9 +279,8 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
           };
 
           if (window.electronAPI?.saveProject) {
-            const updatedProjects = await window.electronAPI.saveProject(
-              newProject
-            );
+            const updatedProjects =
+              await window.electronAPI.saveProject(newProject);
             setProjects(updatedProjects);
             message.success(`Added ${projectName} to your projects`);
           }
@@ -352,8 +359,10 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
         }}
       >
         <div>
-          <Title level={3} style={{ color: "#f1f5f9", margin: 0 }}>
-            <AppstoreOutlined style={{ marginRight: 12, color: "#6366f1" }} />
+          <Title level={3} style={{ margin: 0 }}>
+            <AppstoreOutlined
+              style={{ marginRight: 12, color: token.colorPrimary }}
+            />
             Project Launcher
           </Title>
           <Text type="secondary">
@@ -364,28 +373,12 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
 
         <Space>
           <Tooltip title="Add existing project">
-            <Button
-              icon={<PlusOutlined />}
-              onClick={handleAddExisting}
-              style={{
-                background: "#334155",
-                borderColor: "#475569",
-                color: "#f1f5f9",
-              }}
-            >
+            <Button icon={<PlusOutlined />} onClick={handleAddExisting}>
               Add Project
             </Button>
           </Tooltip>
           <Tooltip title="Refresh list">
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={loadProjects}
-              style={{
-                background: "#334155",
-                borderColor: "#475569",
-                color: "#f1f5f9",
-              }}
-            />
+            <Button icon={<ReloadOutlined />} onClick={loadProjects} />
           </Tooltip>
         </Space>
       </div>
@@ -394,7 +387,9 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
       <div style={{ marginBottom: 20 }}>
         <Search
           placeholder="Search projects..."
-          prefix={<SearchOutlined style={{ color: "#64748b" }} />}
+          prefix={
+            <SearchOutlined style={{ color: token.colorTextDescription }} />
+          }
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           style={{ maxWidth: 400 }}
@@ -411,7 +406,7 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
           gap: 8,
         }}
       >
-        <Text style={{ color: "#94a3b8" }}>Quick open with:</Text>
+        <Text type="secondary">Quick open with:</Text>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {IDE_OPTIONS.slice(0, 5).map((ide) => (
             <Tag
@@ -421,9 +416,12 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                 cursor: "pointer",
                 padding: "4px 10px",
                 borderRadius: 6,
-                background: defaultIDE === ide.key ? ide.color : "#334155",
-                borderColor: defaultIDE === ide.key ? ide.color : "#475569",
-                color: defaultIDE === ide.key ? "#fff" : "#94a3b8",
+                background:
+                  defaultIDE === ide.key ? ide.color : token.colorBgContainer,
+                borderColor:
+                  defaultIDE === ide.key ? ide.color : token.colorBorder,
+                color:
+                  defaultIDE === ide.key ? "#fff" : token.colorTextSecondary,
                 transition: "all 0.2s",
               }}
             >
@@ -436,27 +434,28 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
       {/* Projects Grid */}
       {loading ? (
         <div style={{ textAlign: "center", padding: 60 }}>
-          <ReloadOutlined spin style={{ fontSize: 32, color: "#6366f1" }} />
-          <div style={{ color: "#94a3b8", marginTop: 16 }}>
+          <ReloadOutlined
+            spin
+            style={{ fontSize: 32, color: token.colorPrimary }}
+          />
+          <div style={{ color: token.colorTextSecondary, marginTop: 16 }}>
             Loading projects...
           </div>
         </div>
       ) : filteredProjects.length === 0 ? (
         <Card
           style={{
-            background: "#1e293b",
-            borderColor: "#334155",
             textAlign: "center",
           }}
         >
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={
-              <span style={{ color: "#64748b" }}>
+              <Text type="secondary">
                 {searchQuery
                   ? "No projects match your search"
                   : "No projects yet. Generate one or add an existing project!"}
-              </span>
+              </Text>
             }
           >
             <Space>
@@ -464,24 +463,11 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={handleAddExisting}
-                style={{
-                  background:
-                    "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-                  border: "none",
-                }}
               >
                 Add Existing Project
               </Button>
               {onNavigateToGenerator && (
-                <Button
-                  icon={<CodeOutlined />}
-                  onClick={onNavigateToGenerator}
-                  style={{
-                    background: "#334155",
-                    borderColor: "#475569",
-                    color: "#f1f5f9",
-                  }}
-                >
+                <Button icon={<CodeOutlined />} onClick={onNavigateToGenerator}>
                   Create New Project
                 </Button>
               )}
@@ -533,7 +519,6 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                       strong
                       style={{
                         fontSize: 15,
-                        color: "#f1f5f9",
                         display: "block",
                         marginBottom: 2,
                       }}
@@ -549,8 +534,8 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                       }}
                     >
                       <Text
+                        type="secondary"
                         style={{
-                          color: "#64748b",
                           fontSize: 12,
                           flex: 1,
                         }}
@@ -565,7 +550,6 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                           icon={<CopyOutlined style={{ fontSize: 10 }} />}
                           onClick={() => handleCopyPath(project.path)}
                           style={{
-                            color: "#64748b",
                             width: 20,
                             height: 20,
                             minWidth: 20,
@@ -579,11 +563,12 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                     </div>
                     {getGeneratorDescription(project) && (
                       <Text
+                        type="secondary"
                         style={{
-                          color: "#9ca3af",
                           fontSize: 12,
                           display: "block",
                           marginTop: 2,
+                          opacity: 0.8,
                         }}
                         ellipsis={{ tooltip: getGeneratorDescription(project) }}
                       >
@@ -596,12 +581,7 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                     trigger={["click"]}
                     placement="bottomRight"
                   >
-                    <Button
-                      type="text"
-                      icon={<MoreOutlined />}
-                      size="small"
-                      style={{ color: "#64748b" }}
-                    />
+                    <Button type="text" icon={<MoreOutlined />} size="small" />
                   </Dropdown>
                 </div>
 
@@ -629,7 +609,7 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                     alignItems: "center",
                     gap: 4,
                     marginBottom: 12,
-                    color: "#64748b",
+                    color: token.colorTextSecondary,
                     fontSize: 12,
                   }}
                 >
@@ -647,7 +627,7 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                       flex: 1,
                       background:
                         IDE_OPTIONS.find((i) => i.key === defaultIDE)?.color ||
-                        "#6366f1",
+                        token.colorPrimary,
                       border: "none",
                     }}
                   >
@@ -661,11 +641,6 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                       size="small"
                       icon={<FolderOpenOutlined />}
                       onClick={() => handleOpenFolder(project)}
-                      style={{
-                        background: "#334155",
-                        borderColor: "#475569",
-                        color: "#f1f5f9",
-                      }}
                     />
                   </Tooltip>
                   <Popconfirm
@@ -676,15 +651,7 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
                     cancelText="Cancel"
                   >
                     <Tooltip title="Remove from list">
-                      <Button
-                        size="small"
-                        icon={<DeleteOutlined />}
-                        danger
-                        style={{
-                          background: "transparent",
-                          borderColor: "#475569",
-                        }}
-                      />
+                      <Button size="small" icon={<DeleteOutlined />} danger />
                     </Tooltip>
                   </Popconfirm>
                 </div>
@@ -697,24 +664,24 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
       {/* Styles */}
       <style>{`
         .project-card:hover {
-          border-color: #6366f1 !important;
+          border-color: ${token.colorPrimary} !important;
           transform: translateY(-2px);
-          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+          box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
         }
         
         .ant-input-affix-wrapper {
-          background: #1e293b !important;
-          border-color: #475569 !important;
+          background: ${token.colorBgContainer} !important;
+          border-color: ${token.colorBorder} !important;
         }
         
         .ant-input-affix-wrapper input {
           background: transparent !important;
-          color: #f1f5f9 !important;
+          color: ${token.colorText} !important;
         }
         
         .ant-input-affix-wrapper:hover,
         .ant-input-affix-wrapper:focus {
-          border-color: #6366f1 !important;
+          border-color: ${token.colorPrimary} !important;
         }
       `}</style>
     </div>

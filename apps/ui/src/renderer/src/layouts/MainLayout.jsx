@@ -5,6 +5,8 @@ import {
   Github,
   Globe,
   LayoutGrid,
+  Pin,
+  PinOff,
   Rocket,
   Search,
   Settings,
@@ -29,6 +31,10 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import { useResourceStore } from "../stores/resourceStore";
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
 
 function KeepAliveOutlet({ outletContext, keepAliveKeys }) {
   const location = useLocation();
@@ -79,6 +85,8 @@ export default function MainLayout({
   setIsDarkMode,
   designMode,
   setDesignMode,
+  dockSettings,
+  setDockSettings,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -519,9 +527,78 @@ export default function MainLayout({
       ? "generator"
       : location.pathname.substring(1).split("/")[0];
 
-  const handleTabChange = React.useCallback(
-    (value) => {
-      navigate(`/${value}`);
+  const [isDockVisible, setIsDockVisible] = React.useState(
+    !dockSettings.autoHide
+  );
+
+  React.useEffect(() => {
+    setIsDockVisible(!dockSettings.autoHide);
+  }, [dockSettings.autoHide]);
+
+  const appOptions = React.useMemo(
+    () => [
+      { key: "launchpad", label: "Launchpad", icon: Search },
+      { key: "generator", label: "Generator", icon: Rocket },
+      { key: "projects", label: "Projects", icon: AppWindow },
+      { key: "resources", label: "Resources", icon: Folder },
+      { key: "ui", label: "UI Builder", icon: LayoutGrid },
+      { key: "scrum-board", label: "Scrum Board", icon: Table },
+      { key: "browser", label: "Browser", icon: Globe },
+      { key: "tests", label: "Tests", icon: TestTube },
+      { key: "settings", label: "Settings", icon: Settings },
+    ],
+    []
+  );
+
+  const appByKey = React.useMemo(() => {
+    const map = new Map();
+    for (const a of appOptions) map.set(a.key, a);
+    return map;
+  }, [appOptions]);
+
+  const pinnedAppKeys = React.useMemo(
+    () => ["launchpad", "generator", "projects", "resources"],
+    []
+  );
+
+  const [recentAppKeys, setRecentAppKeys] = React.useState(() => {
+    try {
+      const raw = localStorage.getItem("dockRecentAppKeys");
+      const parsed = JSON.parse(raw || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((k) => typeof k === "string");
+    } catch {
+      return [];
+    }
+  });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem("dockRecentAppKeys", JSON.stringify(recentAppKeys));
+    } catch {}
+  }, [recentAppKeys]);
+
+  React.useEffect(() => {
+    if (!activeTab || pinnedAppKeys.includes(activeTab)) return;
+    if (!appByKey.has(activeTab)) return;
+    setRecentAppKeys((prev) => {
+      const next = [activeTab, ...prev.filter((k) => k !== activeTab)];
+      return next.slice(0, 4);
+    });
+  }, [activeTab, appByKey, pinnedAppKeys]);
+
+  const dockApps = React.useMemo(() => {
+    const pinned = pinnedAppKeys.map((k) => appByKey.get(k)).filter(Boolean);
+    const recents = recentAppKeys
+      .filter((k) => !pinnedAppKeys.includes(k))
+      .map((k) => appByKey.get(k))
+      .filter(Boolean);
+    return { pinned, recents };
+  }, [appByKey, pinnedAppKeys, recentAppKeys]);
+
+  const openApp = React.useCallback(
+    (key) => {
+      navigate(`/${key}`);
     },
     [navigate]
   );
@@ -536,7 +613,6 @@ export default function MainLayout({
       { key: "ui", label: "UI", icon: LayoutGrid },
       { key: "scrum-board", label: "Scrum Board", icon: Table },
       { key: "browser", label: "Browser", icon: Globe },
-      // { key: "tests", label: "Tests", icon: TestTube },
     ],
     []
   );
@@ -544,6 +620,13 @@ export default function MainLayout({
   const segmentedValue = tabOptions.some((t) => t.key === activeTab)
     ? activeTab
     : "launchpad";
+
+  const handleTabChange = React.useCallback(
+    (value) => {
+      openApp(value);
+    },
+    [openApp]
+  );
 
   const handleTabsKeyDown = React.useCallback(
     (e) => {
@@ -582,11 +665,63 @@ export default function MainLayout({
     [handleTabChange, segmentedValue, tabOptions]
   );
 
+  const dockItemRefs = React.useRef([]);
+  const dockRafRef = React.useRef(null);
+  const dockPointerRef = React.useRef(null);
+  const [dockPointer, setDockPointer] = React.useState(null);
+
+  const scheduleDockPointerUpdate = React.useCallback(() => {
+    if (dockRafRef.current) return;
+    dockRafRef.current = window.requestAnimationFrame(() => {
+      dockRafRef.current = null;
+      setDockPointer(dockPointerRef.current);
+    });
+  }, []);
+
+  const onDockMouseMove = React.useCallback(
+    (e) => {
+      dockPointerRef.current = { x: e.clientX, y: e.clientY };
+      scheduleDockPointerUpdate();
+    },
+    [scheduleDockPointerUpdate]
+  );
+
+  const onDockMouseLeave = React.useCallback(() => {
+    dockPointerRef.current = null;
+    setDockPointer(null);
+    if (dockRafRef.current) {
+      window.cancelAnimationFrame(dockRafRef.current);
+      dockRafRef.current = null;
+    }
+  }, []);
+
+  const getDockItemScale = React.useCallback(
+    (index) => {
+      if (!dockPointer) return 1;
+      const el = dockItemRefs.current[index];
+      if (!el) return 1;
+      const rect = el.getBoundingClientRect();
+
+      let distance;
+      if (dockSettings.position === "bottom") {
+        const centerX = rect.left + rect.width / 2;
+        distance = Math.abs(dockPointer.x - centerX);
+      } else {
+        const centerY = rect.top + rect.height / 2;
+        distance = Math.abs(dockPointer.y - centerY);
+      }
+
+      const t = 1 - clamp(distance / 120, 0, 1);
+      return 1 + t * 0.35;
+    },
+    [dockPointer, dockSettings.position]
+  );
+
   return (
     <TooltipProvider>
-      <div className="flex h-screen flex-col bg-[var(--color-bg-base)]">
+      <div className="flex h-screen flex-col bg-[var(--color-bg-base)] text-[var(--color-text-primary)] transition-colors duration-300">
         <div
-          className="flex h-16 items-center justify-between border-b bg-[var(--color-bg-container)] px-6"
+          className="flex h-16 items-center justify-between border-b bg-[var(--color-bg-container)] px-6 transition-colors duration-300"
           style={{ WebkitAppRegion: "drag", paddingRight: 150 }}
         >
           <div
@@ -806,7 +941,7 @@ export default function MainLayout({
         </div>
 
         <div
-          className="flex flex-1 flex-col overflow-hidden px-12 pb-6"
+          className="flex flex-1 flex-col overflow-hidden p-12"
           style={{ WebkitAppRegion: "no-drag" }}
         >
           <KeepAliveOutlet
@@ -815,9 +950,183 @@ export default function MainLayout({
               setIsDarkMode,
               designMode,
               setDesignMode,
+              dockSettings,
+              setDockSettings,
             }}
             keepAliveKeys={["browser"]}
           />
+        </div>
+
+        {/* Dock Hover Detection Area */}
+        {dockSettings.autoHide && (
+          <button
+            type="button"
+            aria-label="Show Dock"
+            tabIndex={-1}
+            className={`fixed z-[49] ${
+              dockSettings.position === "bottom"
+                ? "inset-x-0 bottom-0 h-4 w-full"
+                : dockSettings.position === "left"
+                  ? "inset-y-0 left-0 w-4 h-full"
+                  : "inset-y-0 right-0 w-4 h-full"
+            } border-none bg-transparent outline-none`}
+            onMouseEnter={() => setIsDockVisible(true)}
+          />
+        )}
+
+        <div
+          className={`pointer-events-none fixed z-50 flex transition-all duration-300 ease-in-out ${
+            dockSettings.position === "bottom"
+              ? "inset-x-0 bottom-2 justify-center"
+              : dockSettings.position === "left"
+                ? "inset-y-0 left-2 items-center"
+                : "inset-y-0 right-2 items-center"
+          } ${
+            dockSettings.autoHide && !isDockVisible
+              ? dockSettings.position === "bottom"
+                ? "translate-y-20 opacity-0"
+                : dockSettings.position === "left"
+                  ? "-translate-x-20 opacity-0"
+                  : "translate-x-20 opacity-0"
+              : "translate-0 opacity-100"
+          }`}
+        >
+          <div
+            role="toolbar"
+            aria-label="Dock"
+            className={`pointer-events-auto flex gap-2 rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.11)_0%,rgba(255,255,255,0.04)_100%)] shadow-[0_26px_70px_rgba(0,0,0,0.38)] backdrop-blur-xl transition-all duration-300 ${
+              dockSettings.position === "bottom"
+                ? "items-center px-3 py-2"
+                : "flex-col justify-center px-2 py-3"
+            }`}
+            onMouseMove={onDockMouseMove}
+            onMouseLeave={(e) => {
+              onDockMouseLeave(e);
+              if (dockSettings.autoHide) setIsDockVisible(false);
+            }}
+            style={{ WebkitAppRegion: "no-drag" }}
+          >
+            {/* Dock Items */}
+            {[...dockApps.pinned, ...dockApps.recents].map((app, idx) => {
+              const isRecent = idx >= dockApps.pinned.length;
+              const Icon = app.icon;
+              const isActive = activeTab === app.key;
+              const scale = getDockItemScale(idx);
+
+              return (
+                <React.Fragment key={app.key}>
+                  {isRecent && idx === dockApps.pinned.length ? (
+                    <div
+                      className={`mx-1 rounded bg-white/10 ${
+                        dockSettings.position === "bottom"
+                          ? "h-9 w-px"
+                          : "h-px w-9"
+                      }`}
+                    />
+                  ) : null}
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        ref={(el) => {
+                          dockItemRefs.current[idx] = el;
+                        }}
+                        type="button"
+                        onClick={() => openApp(app.key)}
+                        className="relative flex h-14 w-14 items-center justify-center focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.55)]"
+                        style={{ transform: `scale(${scale})` }}
+                      >
+                        <span
+                          className={
+                            "relative flex h-12 w-12 items-center justify-center rounded-2xl border bg-[radial-gradient(85%_85%_at_32%_22%,rgba(255,255,255,0.28)_0%,rgba(255,255,255,0.11)_38%,rgba(0,0,0,0.32)_100%)] shadow-[0_18px_34px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.20)] transition-transform duration-100 ease-out " +
+                            (isActive
+                              ? "border-white/20"
+                              : "border-white/10 hover:border-white/16")
+                          }
+                        >
+                          <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.34)_0%,transparent_70%)]" />
+                          <span className="pointer-events-none absolute inset-0 rounded-2xl bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
+                          <Icon
+                            className={
+                              "h-6 w-6 " +
+                              (isActive
+                                ? "text-[var(--color-text-primary)]"
+                                : "text-[var(--color-text-secondary)]")
+                            }
+                            aria-hidden="true"
+                          />
+                        </span>
+
+                        <span
+                          className={
+                            "absolute rounded-full transition-opacity " +
+                            (isActive
+                              ? "bg-white/70 opacity-100 "
+                              : "opacity-0 ") +
+                            (dockSettings.position === "bottom"
+                              ? "bottom-0 h-1 w-1"
+                              : dockSettings.position === "left"
+                                ? "left-0 h-1 w-1"
+                                : "right-0 h-1 w-1")
+                          }
+                        />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side={
+                        dockSettings.position === "bottom"
+                          ? "top"
+                          : dockSettings.position === "left"
+                            ? "right"
+                            : "left"
+                      }
+                    >
+                      {app.label}
+                    </TooltipContent>
+                  </Tooltip>
+                </React.Fragment>
+              );
+            })}
+
+            {/* Settings Toggle */}
+            <div
+              className={`mx-1 rounded bg-white/10 ${
+                dockSettings.position === "bottom" ? "h-6 w-px" : "h-px w-6"
+              }`}
+            />
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setDockSettings((prev) => ({
+                      ...prev,
+                      autoHide: !prev.autoHide,
+                    }))
+                  }
+                  className="group relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200 hover:bg-white/10 focus-visible:outline-none"
+                >
+                  {dockSettings.autoHide ? (
+                    <PinOff className="h-3.5 w-3.5 text-white/40 transition-colors group-hover:text-white/70" />
+                  ) : (
+                    <Pin className="h-3.5 w-3.5 text-white/70 transition-colors group-hover:text-white" />
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side={
+                  dockSettings.position === "bottom"
+                    ? "top"
+                    : dockSettings.position === "left"
+                      ? "right"
+                      : "left"
+                }
+              >
+                {dockSettings.autoHide ? "Always Show" : "Auto-hide"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         {captureOverlayOpen ? (

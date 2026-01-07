@@ -1,9 +1,10 @@
+import { ConfigProvider, theme } from "antd";
 import { Loader2 } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
+import { Toaster } from "./components/ui/sonner";
 import MainLayout from "./layouts/MainLayout";
 import { shadcnTokenKeys, usePuckStore } from "./stores/puckStore";
-import { Toaster } from "./components/ui/sonner";
 
 const GeneratorView = lazy(() => import("./views/GeneratorView"));
 const ProjectsView = lazy(() => import("./views/ProjectsView"));
@@ -35,6 +36,25 @@ function App() {
   const fontFamily = usePuckStore((s) => s.designSystem.fontFamily);
   const baseFontSize = usePuckStore((s) => s.designSystem.baseFontSize);
   const setDesignMode = usePuckStore((s) => s.setDesignMode);
+
+  const [dockSettings, setDockSettings] = useState(() => {
+    try {
+      const raw = localStorage.getItem("dockSettings");
+      const parsed = JSON.parse(raw || "{}");
+      return {
+        position: parsed.position || "left",
+        autoHide: parsed.autoHide ?? true,
+      };
+    } catch {
+      return { position: "left", autoHide: true };
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("dockSettings", JSON.stringify(dockSettings));
+    } catch {}
+  }, [dockSettings]);
 
   const [systemDarkMode, setSystemDarkMode] = useState(
     window.matchMedia?.("(prefers-color-scheme: dark)")?.matches || false
@@ -97,7 +117,15 @@ function App() {
   }, [designMode, isDarkMode]);
 
   return (
-    <>
+    <ConfigProvider
+      theme={{
+        algorithm: isDarkMode ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          colorPrimary: "#4f46e5", // Indigo 600
+          borderRadius: 8,
+        },
+      }}
+    >
       <Toaster position="bottom-right" richColors />
       <HashRouter>
         <Suspense
@@ -116,6 +144,8 @@ function App() {
                   setIsDarkMode={setIsDarkMode}
                   designMode={designMode}
                   setDesignMode={setDesignMode}
+                  dockSettings={dockSettings}
+                  setDockSettings={setDockSettings}
                 />
               }
             >
@@ -178,7 +208,7 @@ function App() {
           box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
         }
       `}</style>
-    </>
+    </ConfigProvider>
   );
 }
 
