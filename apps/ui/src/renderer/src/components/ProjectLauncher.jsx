@@ -151,67 +151,78 @@ export const ProjectLauncher = ({ onNavigateToGenerator }) => {
   }, [loadProjects]);
 
   const handleOpenInIDE = async (project, ide) => {
+    const selectedIDE = IDE_OPTIONS.find((item) => item.key === ide);
+    const ideLabel = selectedIDE?.label || ide;
+    const lowerIde = (ide || "").toLowerCase();
+
+    // Show immediate feedback
+    const loadingMessage = message.loading(`Opening ${project.name} in ${ideLabel}...`, 0);
+
     try {
       if (window.electronAPI?.openInIDE) {
-        await window.electronAPI.openInIDE(project.path, ide);
-        message.success(`Opening ${project.name} in ${ide}`);
+        const result = await window.electronAPI.openInIDE(project.path, ide);
+        loadingMessage(); // Clear loading message
+        
+        if (result && result.success) {
+          message.success(`Opened ${project.name} in ${ideLabel}`);
+        } else if (result && result.error) {
+          throw new Error(result.error);
+        }
+      } else {
+        loadingMessage();
+        message.error("Electron API not available");
       }
     } catch (err) {
-      const selectedIDE = IDE_OPTIONS.find((item) => item.key === ide);
-      const ideLabel = selectedIDE?.label || ide;
-      const lowerIde = (ide || "").toLowerCase();
-
+      loadingMessage(); // Clear loading message
+      
       if (["vscode", "vs-code", "code"].includes(lowerIde)) {
         message.error({
           content: (
-            <span>
-              Failed to open {project.name} in {ideLabel}.
+            <div style={{ fontSize: "13px" }}>
+              <Text strong style={{ color: "inherit" }}>
+                {ideLabel} command not found.
+              </Text>
               <br />
-              Check that Visual Studio Code is installed and the{" "}
-              <code>code</code> command is available in your terminal.
-              <br />
+              Install{" "}
               <Button
                 type="link"
                 size="small"
-                style={{
-                  padding: 0,
-                  height: "auto",
-                  color: "#6366f1",
-                  fontSize: "inherit",
-                }}
+                style={{ padding: 0, height: "auto", color: "#6366f1" }}
                 onClick={() => openExternal("https://code.visualstudio.com/")}
               >
-                Download VS Code
+                VS Code
               </Button>{" "}
-              and enable the terminal integration from the Command Palette with
-              “Shell Command: Install 'code' command in PATH”.
+              and run "Install 'code' command in PATH" from Command Palette.
               {err?.message && (
-                <>
-                  <br />
-                  <span style={{ opacity: 0.7 }}>{err.message}</span>
-                </>
+                <div style={{ opacity: 0.6, fontSize: "11px", marginTop: "4px" }}>
+                  {err.message.includes("command not found")
+                    ? "Error: command not found"
+                    : err.message}
+                </div>
               )}
-            </span>
+            </div>
           ),
-          duration: 10,
+          duration: 6,
         });
       } else {
         message.error({
           content: (
-            <span>
-              Failed to open {project.name} in {ideLabel}.
+            <div style={{ fontSize: "13px" }}>
+              <Text strong style={{ color: "inherit" }}>
+                {ideLabel} not found.
+              </Text>
               <br />
-              Check that this IDE is installed and its command is available in
-              your terminal.
+              Ensure {ideLabel} is installed and available in your PATH.
               {err?.message && (
-                <>
-                  <br />
-                  <span style={{ opacity: 0.7 }}>{err.message}</span>
-                </>
+                <div style={{ opacity: 0.6, fontSize: "11px", marginTop: "4px" }}>
+                  {err.message.includes("command not found")
+                    ? `Error: ${lowerIde} command not found`
+                    : err.message}
+                </div>
               )}
-            </span>
+            </div>
           ),
-          duration: 8,
+          duration: 5,
         });
       }
     }

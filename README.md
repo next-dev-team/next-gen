@@ -21,6 +21,7 @@ the next generation of template
 - [ ] Add more documentation
 - [ ] Wallpapers
 - [ ] setting manage menu and hide/show
+- [ ] Release VirusTotal scan results for security verification.
 
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
@@ -174,3 +175,5 @@ npm link turbo-generators
 ## Useful links
 
 <https://github.com/olliethedev/ui-builder>
+<https://github.com/AndyMik90/Auto-Claude/>
+https://github.com/ShareX/ShareX

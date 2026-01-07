@@ -2005,54 +2005,109 @@ ipcMain.handle("delete-project", async (event, projectId) => {
 // Open project in IDE
 ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
   const { exec } = require("child_process");
+  const path = require("path");
 
-  // Make path absolute
-  const absolutePath = await ensureAbsolutePath(projectPath);
+  console.log(`[IDE] Attempting to open ${projectPath} in ${ide}`);
 
-  // IDE commands for different editors
-  const ideCommands = {
-    cursor: "cursor",
-    vscode: "code",
-    "vs-code": "code",
-    code: "code",
-    webstorm: "webstorm",
-    idea: "idea",
-    sublime: "subl",
-    atom: "atom",
-    vim: "vim",
-    nvim: "nvim",
-    zed: "zed",
-    fleet: "fleet",
-    trae: "trae",
-    "google-antigravity": "antigravity",
-  };
+  try {
+    // Make path absolute
+    const absolutePath = await ensureAbsolutePath(projectPath);
+    console.log(`[IDE] Absolute path: ${absolutePath}`);
 
-  const command = ideCommands[ide.toLowerCase()] || ide;
-  const isWindows = process.platform === "win32";
-  const fullCommand = isWindows
-    ? `${command} "${absolutePath}"`
-    : `${command} "${absolutePath}"`;
+    // IDE commands for different editors
+    const ideCommands = {
+      cursor: "cursor",
+      vscode: "code",
+      "vs-code": "code",
+      code: "code",
+      webstorm: "webstorm",
+      idea: "idea",
+      sublime: "subl",
+      atom: "atom",
+      vim: "vim",
+      nvim: "nvim",
+      zed: "zed",
+      fleet: "fleet",
+      trae: "trae",
+      "google-antigravity": "antigravity",
+    };
 
-  return new Promise((resolve, reject) => {
-    exec(fullCommand, { shell: true }, (error, stdout, stderr) => {
-      if (error) {
-        // Try with .cmd extension on Windows
-        if (isWindows) {
-          exec(`${command}.cmd "${absolutePath}"`, { shell: true }, (err2) => {
-            if (err2) {
-              reject(new Error(`Failed to open in ${ide}: ${error.message}`));
-            } else {
-              resolve({ success: true });
+    const command = ideCommands[ide.toLowerCase()] || ide;
+    const isWindows = process.platform === "win32";
+    const isMac = process.platform === "darwin";
+
+    // For VS Code on Mac, we can try several options
+    if (isMac && ["code", "vscode", "vs-code"].includes(ide.toLowerCase())) {
+      return new Promise((resolve, reject) => {
+        // Option 1: Try 'code' command
+        exec(`code "${absolutePath}"`, (error) => {
+          if (!error) {
+            console.log("[IDE] Opened with 'code' command");
+            return resolve({ success: true });
+          }
+
+          console.log("[IDE] 'code' command failed, trying 'open -a'");
+
+          // Option 2: Try 'open -a' with common bundle IDs or names
+          const macOptions = [
+            'open -a "Visual Studio Code"',
+            'open -a "Visual Studio Code - Insiders"',
+            'open -b com.microsoft.VSCode',
+          ];
+
+          const tryMacOptions = (index) => {
+            if (index >= macOptions.length) {
+              return reject(new Error(`Could not find VS Code. Please install the 'code' command in your PATH.`));
             }
-          });
+
+            exec(`${macOptions[index]} "${absolutePath}"`, (err) => {
+              if (!err) {
+                console.log(`[IDE] Opened with ${macOptions[index]}`);
+                resolve({ success: true });
+              } else {
+                tryMacOptions(index + 1);
+              }
+            });
+          };
+
+          tryMacOptions(0);
+        });
+      });
+    }
+
+    // Default execution for other IDEs or platforms
+    const fullCommand = isWindows
+      ? `${command} "${absolutePath}"`
+      : `${command} "${absolutePath}"`;
+
+    console.log(`[IDE] Running command: ${fullCommand}`);
+
+    return new Promise((resolve, reject) => {
+      exec(fullCommand, { shell: true }, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`[IDE] Error: ${error.message}`);
+          // Try with .cmd extension on Windows
+          if (isWindows) {
+            exec(`${command}.cmd "${absolutePath}"`, { shell: true }, (err2) => {
+              if (err2) {
+                reject(new Error(`Failed to open in ${ide}: ${error.message}`));
+              } else {
+                resolve({ success: true });
+              }
+            });
+          } else {
+            reject(new Error(`Failed to open in ${ide}: ${error.message}`));
+          }
         } else {
-          reject(new Error(`Failed to open in ${ide}: ${error.message}`));
+          console.log(`[IDE] Successfully opened ${ide}`);
+          resolve({ success: true });
         }
-      } else {
-        resolve({ success: true });
-      }
+      });
     });
-  });
+  } catch (err) {
+    console.error(`[IDE] Fatal error: ${err.message}`);
+    throw err;
+  }
 });
 
 // Check if a path exists
