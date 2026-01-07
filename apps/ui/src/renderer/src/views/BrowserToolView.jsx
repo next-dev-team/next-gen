@@ -63,6 +63,7 @@ import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
 import { useResourceStore } from "../stores/resourceStore";
 import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
+import { ProfileSelector } from "../components/ProfileSelector";
 
 const createId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -2598,6 +2599,14 @@ export default function BrowserToolView() {
             />
           </Button>
         </div>
+
+        {/* Anti-Detection Profile Selector */}
+        {hasElectronView && (
+          <ProfileSelector
+            tabId={resolvedActiveTabId}
+            disabled={!activeIsBrowser}
+          />
+        )}
       </div>
 
       <div className="flex min-h-0 flex-1">

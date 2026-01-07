@@ -158,6 +158,31 @@ contextBridge.exposeInMainWorld("electronAPI", {
     },
   },
 
+  // ======= ANTI-DETECTION / FINGERPRINTING PROTECTION =======
+  antiDetection: {
+    // Get list of all available device profiles
+    listProfiles: () => ipcRenderer.invoke("anti-detection:list-profiles"),
+
+    // Get the current active profile for a browser tab
+    getActiveProfile: (tabId) =>
+      ipcRenderer.invoke("anti-detection:get-active-profile", { tabId }),
+
+    // Switch to a different device profile
+    switchProfile: (tabId, profileId) =>
+      ipcRenderer.invoke("anti-detection:switch-profile", { tabId, profileId }),
+
+    // Apply random variations to current profile (timezone, screen, etc.)
+    randomizeProfile: (tabId) =>
+      ipcRenderer.invoke("anti-detection:randomize-profile", { tabId }),
+
+    // Create a custom profile based on an existing one
+    createCustomProfile: (baseProfileId, customizations) =>
+      ipcRenderer.invoke("anti-detection:create-custom-profile", {
+        baseProfileId,
+        customizations,
+      }),
+  },
+
   appCapture: {
     captureRegion: (rect) => ipcRenderer.invoke("app-capture-region", { rect }),
     capturePage: () => ipcRenderer.invoke("app-capture-page"),

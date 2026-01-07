@@ -20,6 +20,9 @@ const { spawn, fork } = require("child_process");
 const fs = require("fs");
 const Conf = require("conf");
 
+// Anti-detection module for browser fingerprinting protection
+const antiDetection = require("./anti-detection");
+
 const scrumStore = new Conf({ projectName: "next-gen-scrum" });
 const resolveMcpServerPath = () => {
   const packagedCandidates = [
@@ -694,15 +697,22 @@ function getTabIdForWebContents(sender) {
   return null;
 }
 
-function ensureBrowserView(tabId) {
+function ensureBrowserView(tabId, options = {}) {
   const existing = browserViews.get(tabId);
   if (existing && !existing.webContents.isDestroyed()) return existing;
+
+  // Create anti-detection session for this tab
+  const antiDetectSession = antiDetection.createAntiDetectionSession(
+    tabId,
+    options.profileId || null
+  );
 
   const webPreferences = {
     preload: path.join(__dirname, "../preload/browserView.js"),
     nodeIntegration: false,
     contextIsolation: true,
-    sandbox: true,
+    sandbox: false, // Disable sandbox to allow preload to function properly with anti-detection
+    session: antiDetectSession || undefined,
   };
 
   const view = new BrowserView({ webPreferences });
@@ -716,10 +726,41 @@ function ensureBrowserView(tabId) {
     return { action: "deny" };
   });
 
+  // Inject stealth script on navigation
+  view.webContents.on(
+    "did-start-navigation",
+    (event, url, isInPlace, isMainFrame) => {
+      if (isMainFrame) {
+        notifyBrowserState(tabId);
+      }
+    }
+  );
+
   view.webContents.on("did-navigate", () => notifyBrowserState(tabId));
   view.webContents.on("did-navigate-in-page", () => notifyBrowserState(tabId));
-  view.webContents.on("did-start-navigation", () => notifyBrowserState(tabId));
-  view.webContents.on("did-finish-load", () => notifyBrowserState(tabId));
+
+  // Inject anti-detection stealth script after page load
+  view.webContents.on("did-finish-load", async () => {
+    notifyBrowserState(tabId);
+    // Inject stealth script to mask automation signals
+    try {
+      await antiDetection.injectStealthScript(view.webContents, tabId);
+    } catch (err) {
+      console.warn(
+        "[Anti-Detection] Failed to inject stealth script:",
+        err.message
+      );
+    }
+  });
+
+  // Also inject on DOM ready for earlier protection
+  view.webContents.on("dom-ready", async () => {
+    try {
+      await antiDetection.injectStealthScript(view.webContents, tabId, true); // minimal script first
+    } catch (err) {
+      // Ignore errors on early injection
+    }
+  });
 
   browserViews.set(tabId, view);
 
@@ -850,6 +891,9 @@ function destroyBrowserView(tabId) {
   if (activeBrowserTabId === tabId) activeBrowserTabId = null;
 
   detachBrowserView(view);
+
+  // Clean up anti-detection resources for this tab
+  antiDetection.cleanupTab(tabId);
 
   try {
     view.webContents.destroy();
@@ -2957,6 +3001,9 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
 app.whenReady().then(async () => {
   const currentStore = await getStore();
   const backgroundLaunch = process.argv.includes("--background");
+
+  // Initialize anti-detection IPC handlers
+  antiDetection.initAntiDetectionIPC();
 
   ensureTray();
 

@@ -3,6 +3,33 @@ import { resolve } from "path";
 import react from "@vitejs/plugin-react";
 import { codeInspectorPlugin } from "code-inspector-plugin";
 import tailwindcss from "@tailwindcss/vite";
+import fs from "fs";
+
+// Custom plugin to copy anti-detection module after build
+function copyAntiDetectionPlugin() {
+  return {
+    name: "copy-anti-detection",
+    writeBundle() {
+      const srcDir = resolve(__dirname, "src/main/anti-detection");
+      const destDir = resolve(__dirname, "out/main/anti-detection");
+
+      // Create destination directory if it doesn't exist
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+
+      // Copy all files from src to dest
+      const files = fs.readdirSync(srcDir);
+      for (const file of files) {
+        const srcFile = resolve(srcDir, file);
+        const destFile = resolve(destDir, file);
+        fs.copyFileSync(srcFile, destFile);
+      }
+
+      console.log("✓ Copied anti-detection module to out/main/");
+    },
+  };
+}
 
 export default defineConfig({
   main: {
@@ -13,6 +40,7 @@ export default defineConfig({
         },
       },
     },
+    plugins: [copyAntiDetectionPlugin()],
   },
   preload: {
     build: {
