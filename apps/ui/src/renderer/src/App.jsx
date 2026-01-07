@@ -43,10 +43,10 @@ function App() {
       const parsed = JSON.parse(raw || "{}");
       return {
         position: parsed.position || "left",
-        autoHide: parsed.autoHide ?? true,
+        autoHide: parsed.autoHide ?? false,
       };
     } catch {
-      return { position: "left", autoHide: true };
+      return { position: "left", autoHide: false };
     }
   });
 

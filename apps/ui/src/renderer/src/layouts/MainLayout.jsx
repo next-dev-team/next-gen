@@ -1188,8 +1188,8 @@ export default function MainLayout({
             aria-label="Dock"
             className={`pointer-events-auto flex gap-2 rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08)_0%,rgba(255,255,255,0.02)_100%)] shadow-[0_26px_70px_rgba(0,0,0,0.38)] backdrop-blur-2xl transition-all duration-300 ${
               dockSettings.position === "bottom"
-                ? "items-center px-3 py-2 max-w-[90vw] overflow-x-auto scrollbar-hide"
-                : "flex-col items-center justify-center px-2 py-3 max-h-[90vh] overflow-y-auto scrollbar-hide"
+                ? "items-center px-3 py-2 max-w-[90vw] overflow-x-auto overflow-y-hidden scrollbar-hide"
+                : "flex-col items-center px-2 py-3 max-h-[90vh] overflow-y-auto overflow-x-hidden scrollbar-hide"
             }`}
             onWheel={onDockWheel}
             onMouseMove={onDockMouseMove}
