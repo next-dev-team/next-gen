@@ -467,10 +467,10 @@ export default function LaunchpadView() {
                       setSelectedIndex(0);
                     }}
                     className={cn(
-                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition",
+                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer",
                       active
-                        ? "border-white/20 bg-white/18 text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-                        : "border-white/10 bg-white/8 text-white/75 hover:bg-white/12 hover:text-white"
+                        ? "border-menu-active bg-menu-active text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+                        : "border-white/10 bg-white/8 text-white/75 hover:bg-menu-active hover:text-white"
                     )}
                   >
                     {cat}
@@ -564,7 +564,7 @@ export default function LaunchpadView() {
                       key={a.key}
                       type="button"
                       onClick={() => runAction(a)}
-                      className="group flex flex-col items-center gap-2"
+                      className="group flex flex-col items-center gap-2 cursor-pointer"
                     >
                       <span
                         className={cn(

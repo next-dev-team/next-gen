@@ -947,9 +947,9 @@ export default function MainLayout({
                     className={
                       (isLaunchpad
                         ? "relative -my-2 inline-flex items-center justify-center rounded-full p-1 transition-all duration-200 ease-out [will-change:transform] focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.5)] hover:scale-[1.03] active:scale-[0.98]"
-                        : "cursor-pointer hover:bg-clip-padding hover:bg-[radial-gradient(51.07%_92.4%_at_51%_7.61%,#5a5a5a_0,#1a1a1a_100%)] text-[var(--Base-White)] hover:shadow-sm inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition-colors focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.5)] ") +
+                        : "cursor-pointer hover:bg-menu-active text-[var(--Base-White)] hover:shadow-sm inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium leading-none transition-colors focus-visible:outline-none focus-visible:shadow-[0_0_0_2px_rgba(var(--lines-color-rgb),.5)] ") +
                       (isActive
-                        ? "border-[hsla(0,0%,100%,.1)] bg-clip-padding bg-[radial-gradient(51.07%_92.4%_at_51%_7.61%,#5a5a5a_0,#1a1a1a_100%)] text-[var(--Base-White)] shadow-sm"
+                        ? "border-menu-active bg-menu-active text-[var(--Base-White)] shadow-sm"
                         : isLaunchpad
                           ? "text-[var(--color-text-secondary)]"
                           : "border-transparent text-[var(--color-text-secondary)] hover:bg-white/5 hover:text-[var(--Base-White)]")

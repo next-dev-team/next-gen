@@ -62,6 +62,15 @@
   @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
 }
 
+@utility bg-menu-active {
+  background-clip: padding-box;
+  background-image: radial-gradient(51.07% 92.4% at 51% 7.61%, #5a5a5a 0, #1a1a1a 100%);
+}
+
+@utility border-menu-active {
+  border-color: hsla(0, 0%, 100%, 0.1);
+}
+
 /* Base styles */
 :root {
   /* Shadcn Light Theme - v4 Compatible (Raw HSL) */
@@ -87,6 +96,12 @@
   --input: 214.3 31.8% 91.4%;
   --ring: 221.2 83.2% 53.3%;
   --radius: 0.5rem;
+}
+
+@layer base {
+  button {
+    cursor: pointer;
+  }
 }
 
 .dark {
