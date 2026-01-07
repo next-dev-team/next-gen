@@ -3251,16 +3251,28 @@ ipcMain.on("open-external", (event, url) => {
   shell.openExternal(url);
 });
 
-ipcMain.handle("run-e2e-test", async (event, { testFile }) => {
+ipcMain.handle("run-e2e-test", async (event, { testFile, options = {} }) => {
   const { spawn } = require("child_process");
 
   // Assuming running from apps/ui root in dev
   const cwd = process.cwd();
 
-  console.log(`[Test] Running test: ${testFile} in ${cwd}`);
+  console.log(
+    `[Test] Running test: ${testFile} in ${cwd} with options:`,
+    options
+  );
 
   const cmd = "npx";
   const args = ["playwright", "test", testFile, "--reporter=line"];
+
+  // Handle options
+  if (options.headless === false) {
+    args.push("--headed");
+  }
+
+  if (options.silent === true) {
+    args.push("--quiet");
+  }
 
   return new Promise((resolve) => {
     const child = spawn(cmd, args, {

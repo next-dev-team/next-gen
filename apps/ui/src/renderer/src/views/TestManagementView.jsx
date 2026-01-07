@@ -23,6 +23,7 @@ export default function TestManagementView() {
   const [runningTest, setRunningTest] = useState(null);
   const [logs, setLogs] = useState([]);
   const [results, setResults] = useState({});
+  const [options, setOptions] = useState({ headless: true, silent: false });
   const logsEndRef = useRef(null);
 
   useEffect(() => {
@@ -46,12 +47,15 @@ export default function TestManagementView() {
     setRunningTest(test.id);
     setLogs((prev) => [
       ...prev,
-      { type: "info", data: `--- Starting test: ${test.name} ---` },
+      {
+        type: "info",
+        data: `--- Starting test: ${test.name} (Headless: ${options.headless}, Silent: ${options.silent}) ---`,
+      },
     ]);
     setResults((prev) => ({ ...prev, [test.id]: "running" }));
 
     try {
-      const result = await window.electronAPI.tests.run(test.path);
+      const result = await window.electronAPI.tests.run(test.path, options);
       const passed = result.code === 0;
       setResults((prev) => ({
         ...prev,
@@ -88,11 +92,39 @@ export default function TestManagementView() {
 
   return (
     <div className="flex flex-col h-full bg-[var(--color-bg-base)] text-[var(--color-text-primary)]">
-      <div className="p-6 border-b border-[var(--color-border)]">
-        <h1 className="text-2xl font-bold mb-2">Test Management</h1>
-        <p className="text-[var(--color-text-secondary)]">
-          Run E2E tests to verify system stability and anti-detection features.
-        </p>
+      <div className="p-6 border-b border-[var(--color-border)] flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold mb-2">Test Management</h1>
+          <p className="text-[var(--color-text-secondary)]">
+            Run E2E tests to verify system stability and anti-detection
+            features.
+          </p>
+        </div>
+        <div className="flex gap-4 items-center bg-[var(--color-bg-elevated)] p-3 rounded-xl border border-[var(--color-border)]">
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={options.headless}
+              onChange={(e) =>
+                setOptions((prev) => ({ ...prev, headless: e.target.checked }))
+              }
+              className="rounded bg-[var(--color-bg-base)] border-[var(--color-border)] text-primary focus:ring-primary"
+            />
+            <span>Headless Mode</span>
+          </label>
+          <div className="w-px h-4 bg-[var(--color-border)] mx-2"></div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={options.silent}
+              onChange={(e) =>
+                setOptions((prev) => ({ ...prev, silent: e.target.checked }))
+              }
+              className="rounded bg-[var(--color-bg-base)] border-[var(--color-border)] text-primary focus:ring-primary"
+            />
+            <span>Silent Mode</span>
+          </label>
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden flex flex-col md:flex-row p-6 gap-6">

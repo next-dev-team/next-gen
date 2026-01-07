@@ -215,7 +215,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // E2E Tests
   tests: {
-    run: (testFile) => ipcRenderer.invoke("run-e2e-test", { testFile }),
+    run: (testFile, options) =>
+      ipcRenderer.invoke("run-e2e-test", { testFile, options }),
     onOutput: (callback) => {
       const handler = (event, payload) => callback(payload);
       ipcRenderer.on("test-output", handler);
