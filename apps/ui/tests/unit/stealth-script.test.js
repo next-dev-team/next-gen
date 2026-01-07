@@ -2,14 +2,16 @@
  * Unit tests for Stealth Script Generator
  */
 
+const { test, expect } = require("@playwright/test");
+
 const {
   generateStealthScript,
   generateMinimalStealthScript,
-} = require("../src/main/anti-detection/stealth-script");
-const { getProfile } = require("../src/main/anti-detection/device-profiles");
+} = require("../../src/main/anti-detection/stealth-script");
+const { getProfile } = require("../../src/main/anti-detection/device-profiles");
 
-describe("Stealth Script Generator", () => {
-  describe("generateStealthScript()", () => {
+test.describe("Stealth Script Generator", () => {
+  test.describe("generateStealthScript()", () => {
     const testProfile = getProfile("chrome-win11");
 
     test("should generate a non-empty script", () => {
@@ -134,7 +136,7 @@ describe("Stealth Script Generator", () => {
     });
   });
 
-  describe("generateMinimalStealthScript()", () => {
+  test.describe("generateMinimalStealthScript()", () => {
     const testProfile = getProfile("chrome-win11");
 
     test("should generate a shorter script than full version", () => {
@@ -166,7 +168,7 @@ describe("Stealth Script Generator", () => {
     });
   });
 
-  describe("Script Validity", () => {
+  test.describe("Script Validity", () => {
     test("generated script should be valid JavaScript", () => {
       const testProfile = getProfile("chrome-win11");
       const script = generateStealthScript(testProfile);
@@ -183,9 +185,7 @@ describe("Stealth Script Generator", () => {
     });
 
     test("script should work with all profiles", () => {
-      const {
-        getAllProfiles,
-      } = require("../src/main/anti-detection/device-profiles");
+      const { getAllProfiles } = require("../../src/main/anti-detection/device-profiles");
       const profiles = getAllProfiles();
 
       profiles.forEach((profile) => {
@@ -196,7 +196,7 @@ describe("Stealth Script Generator", () => {
   });
 });
 
-describe("Stealth Script Content Analysis", () => {
+test.describe("Stealth Script Content Analysis", () => {
   const testProfile = getProfile("chrome-win11");
   const script = generateStealthScript(testProfile);
 

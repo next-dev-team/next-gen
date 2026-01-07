@@ -2,6 +2,8 @@
  * Unit tests for Anti-Detection Device Profiles
  */
 
+const { test, expect } = require("@playwright/test");
+
 const {
   DEVICE_PROFILES,
   getAllProfiles,
@@ -10,10 +12,10 @@ const {
   getRandomProfile,
   createCustomProfile,
   randomizeProfile,
-} = require("../src/main/anti-detection/device-profiles");
+} = require("../../src/main/anti-detection/device-profiles");
 
-describe("Device Profiles", () => {
-  describe("DEVICE_PROFILES", () => {
+test.describe("Device Profiles", () => {
+  test.describe("DEVICE_PROFILES", () => {
     test("should have at least 8 predefined profiles", () => {
       expect(Object.keys(DEVICE_PROFILES).length).toBeGreaterThanOrEqual(8);
     });
@@ -88,7 +90,7 @@ describe("Device Profiles", () => {
     });
   });
 
-  describe("getAllProfiles()", () => {
+  test.describe("getAllProfiles()", () => {
     test("should return array of all profiles", () => {
       const profiles = getAllProfiles();
       expect(Array.isArray(profiles)).toBe(true);
@@ -96,7 +98,7 @@ describe("Device Profiles", () => {
     });
   });
 
-  describe("getProfile()", () => {
+  test.describe("getProfile()", () => {
     test("should return profile by ID", () => {
       const profile = getProfile("chrome-win11");
       expect(profile).toBeTruthy();
@@ -110,17 +112,21 @@ describe("Device Profiles", () => {
     });
   });
 
-  describe("getProfilesByCategory()", () => {
+  test.describe("getProfilesByCategory()", () => {
     test("should return desktop profiles", () => {
       const profiles = getProfilesByCategory("desktop");
       expect(profiles.length).toBeGreaterThan(0);
-      profiles.forEach((p) => expect(p.category).toBe("desktop"));
+      profiles.forEach((p) => {
+        expect(p.category).toBe("desktop");
+      });
     });
 
     test("should return mobile profiles", () => {
       const profiles = getProfilesByCategory("mobile");
       expect(profiles.length).toBeGreaterThan(0);
-      profiles.forEach((p) => expect(p.category).toBe("mobile"));
+      profiles.forEach((p) => {
+        expect(p.category).toBe("mobile");
+      });
     });
 
     test("should return empty array for unknown category", () => {
@@ -129,7 +135,7 @@ describe("Device Profiles", () => {
     });
   });
 
-  describe("getRandomProfile()", () => {
+  test.describe("getRandomProfile()", () => {
     test("should return a random profile", () => {
       const profile = getRandomProfile();
       expect(profile).toBeTruthy();
@@ -142,7 +148,7 @@ describe("Device Profiles", () => {
     });
   });
 
-  describe("createCustomProfile()", () => {
+  test.describe("createCustomProfile()", () => {
     test("should create custom profile from base", () => {
       const custom = createCustomProfile("chrome-win11", {
         id: "custom-test",
@@ -173,7 +179,7 @@ describe("Device Profiles", () => {
     });
   });
 
-  describe("randomizeProfile()", () => {
+  test.describe("randomizeProfile()", () => {
     test("should return profile with randomized properties", () => {
       const base = getProfile("chrome-win11");
       const randomized = randomizeProfile(base);
@@ -195,8 +201,8 @@ describe("Device Profiles", () => {
   });
 });
 
-describe("Profile Content Validation", () => {
-  describe("Chrome profiles", () => {
+test.describe("Profile Content Validation", () => {
+  test.describe("Chrome profiles", () => {
     test("chrome-win11 should have valid Windows Chrome UA", () => {
       const profile = getProfile("chrome-win11");
       expect(profile.userAgent).toContain("Windows NT 10.0");
@@ -226,7 +232,7 @@ describe("Profile Content Validation", () => {
     });
   });
 
-  describe("Firefox profiles", () => {
+  test.describe("Firefox profiles", () => {
     test("firefox-win11 should have valid Firefox UA", () => {
       const profile = getProfile("firefox-win11");
       expect(profile.userAgent).toContain("Firefox");
@@ -235,7 +241,7 @@ describe("Profile Content Validation", () => {
     });
   });
 
-  describe("Safari profiles", () => {
+  test.describe("Safari profiles", () => {
     test("safari-macos should have valid Safari UA", () => {
       const profile = getProfile("safari-macos");
       expect(profile.userAgent).toContain("Safari");
@@ -253,7 +259,7 @@ describe("Profile Content Validation", () => {
     });
   });
 
-  describe("Edge profiles", () => {
+  test.describe("Edge profiles", () => {
     test("edge-win11 should have valid Edge UA", () => {
       const profile = getProfile("edge-win11");
       expect(profile.userAgent).toContain("Edg");
