@@ -41,6 +41,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("power-state-changed", handler);
   },
 
+  updates: {
+    getState: () => ipcRenderer.invoke("updates-get-state"),
+    check: () => ipcRenderer.invoke("updates-check"),
+    download: () => ipcRenderer.invoke("updates-download"),
+    install: () => ipcRenderer.invoke("updates-install"),
+    onStateChanged: (callback) => {
+      const handler = (event, payload) => callback(payload);
+      ipcRenderer.on("updates-state-changed", handler);
+      return () => ipcRenderer.removeListener("updates-state-changed", handler);
+    },
+  },
+
   // Generator
   runGenerator: (generatorName, answers) =>
     ipcRenderer.invoke("run-generator", { generatorName, answers }),

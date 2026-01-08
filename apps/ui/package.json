@@ -76,6 +76,7 @@
     "clsx": "^2.1.1",
     "conf": "^10.2.0",
     "cross-fetch": "^4.1.0",
+    "electron-updater": "^6.3.0",
     "electron-store": "^8.1.0",
     "lucide-react": "^0.562.0",
     "node-pty": "^1.1.0",
@@ -92,6 +93,13 @@
   "build": {
     "appId": "com.float-devtools-app.app",
     "productName": "next-gen-tools",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "next-dev-team",
+        "repo": "next-gen"
+      }
+    ],
     "directories": {
       "output": "dist"
     },

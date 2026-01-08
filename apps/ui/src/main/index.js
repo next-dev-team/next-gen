@@ -13,6 +13,7 @@ const {
   desktopCapturer,
   screen,
   systemPreferences,
+  Notification,
 } = require("electron");
 const os = require("os");
 const path = require("path");
@@ -566,6 +567,15 @@ function createWindow({ show = true } = {}) {
 
   mainWindow.on("close", async (event) => {
     if (isQuitting) return;
+
+    if (shouldBlockWindowCloseForMandatoryUpdate()) {
+      event.preventDefault();
+      try {
+        safeShowWindow(mainWindow);
+      } catch {}
+      showMandatoryUpdateGate().catch(() => {});
+      return;
+    }
     const runInBackground = await getRunInBackground();
     if (!runInBackground) return;
 
@@ -3437,6 +3447,423 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
   });
 });
 
+const updatesRuntime = {
+  autoUpdater: null,
+  policy: null,
+  state: {
+    status: "idle",
+    mandatory: false,
+    info: null,
+    progress: null,
+    error: null,
+    lastCheckedAt: null,
+  },
+  gateDialogOpen: false,
+  availableDialogOpen: false,
+  downloadedDialogOpen: false,
+};
+
+function emitUpdatesState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send("updates-state-changed", updatesRuntime.state);
+}
+
+function setUpdatesState(patch) {
+  updatesRuntime.state = {
+    ...updatesRuntime.state,
+    ...patch,
+  };
+  emitUpdatesState();
+}
+
+function toVersionParts(input) {
+  const raw = String(input || "0");
+  const clean = raw.split("-")[0].split("+")[0];
+  return clean
+    .split(".")
+    .map((p) => Number.parseInt(p, 10))
+    .map((n) => (Number.isFinite(n) ? n : 0));
+}
+
+function compareVersions(a, b) {
+  const pa = toVersionParts(a);
+  const pb = toVersionParts(b);
+  const maxLen = Math.max(pa.length, pb.length, 3);
+
+  for (let i = 0; i < maxLen; i += 1) {
+    const va = pa[i] ?? 0;
+    const vb = pb[i] ?? 0;
+    if (va < vb) return -1;
+    if (va > vb) return 1;
+  }
+  return 0;
+}
+
+function normalizeReleaseNotes(releaseNotes) {
+  if (!releaseNotes) return "";
+  if (Array.isArray(releaseNotes)) {
+    return releaseNotes
+      .map((n) => {
+        if (!n) return "";
+        if (typeof n === "string") return n;
+        return String(n.note || n.title || "");
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  return String(releaseNotes);
+}
+
+function isMandatoryFromUpdateInfo(updateInfo) {
+  const notes = normalizeReleaseNotes(updateInfo?.releaseNotes).toLowerCase();
+  if (!notes) return false;
+  return (
+    notes.includes("force-update") ||
+    notes.includes("force update") ||
+    notes.includes("mandatory") ||
+    notes.includes("required update")
+  );
+}
+
+async function loadUpdatesPolicy() {
+  const url = process.env.NEXTGEN_UPDATE_POLICY_URL;
+  if (!url) return null;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "cache-control": "no-cache",
+      },
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json || typeof json !== "object") return null;
+    return json;
+  } catch {
+    return null;
+  }
+}
+
+function isMandatoryByPolicy(policy, updateInfo) {
+  if (!policy || typeof policy !== "object") return false;
+  if (policy.force === true || policy.mandatory === true) return true;
+
+  const minVersion = policy.minVersion;
+  if (!minVersion) return false;
+  const updateVersion = updateInfo?.version;
+  if (!updateVersion) return false;
+  if (compareVersions(updateVersion, minVersion) < 0) return false;
+  return compareVersions(app.getVersion(), minVersion) < 0;
+}
+
+function shouldEnableAutoUpdates() {
+  if (process.env.NEXTGEN_DISABLE_UPDATES === "1") return false;
+  if (process.env.NODE_ENV === "development") return false;
+  if (app.isPackaged) return true;
+  return process.env.NEXTGEN_ENABLE_UPDATES_IN_DEV === "1";
+}
+
+function shouldBlockWindowCloseForMandatoryUpdate() {
+  if (!updatesRuntime.state.mandatory) return false;
+  const s = updatesRuntime.state.status;
+  return s === "available" || s === "downloading" || s === "downloaded";
+}
+
+async function showMandatoryUpdateGate() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (updatesRuntime.gateDialogOpen) return;
+  updatesRuntime.gateDialogOpen = true;
+
+  try {
+    const status = updatesRuntime.state.status;
+    if (status === "downloaded") {
+      await dialog.showMessageBox(mainWindow, {
+        type: "info",
+        title: "Update required",
+        message: "A required update is ready to install.",
+        buttons: ["Install and relaunch"],
+        defaultId: 0,
+        cancelId: -1,
+        noLink: true,
+      });
+      try {
+        updatesRuntime.autoUpdater?.quitAndInstall(false, true);
+      } catch {}
+      return;
+    }
+
+    if (status === "downloading") {
+      await dialog.showMessageBox(mainWindow, {
+        type: "info",
+        title: "Updating",
+        message: "A required update is downloading. Please wait.",
+        buttons: ["OK"],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+      });
+      return;
+    }
+
+    if (status === "available") {
+      await dialog.showMessageBox(mainWindow, {
+        type: "warning",
+        title: "Update required",
+        message: "You must install the latest update to continue.",
+        buttons: ["Download update"],
+        defaultId: 0,
+        cancelId: -1,
+        noLink: true,
+      });
+      try {
+        updatesRuntime.autoUpdater?.downloadUpdate();
+      } catch {}
+    }
+  } finally {
+    updatesRuntime.gateDialogOpen = false;
+  }
+}
+
+async function promptUpdateAvailable(updateInfo, { mandatory }) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (updatesRuntime.availableDialogOpen) return;
+  updatesRuntime.availableDialogOpen = true;
+
+  try {
+    if (mandatory) {
+      try {
+        safeShowWindow(mainWindow);
+        mainWindow.focus();
+      } catch {}
+    }
+    const title = mandatory ? "Update required" : "Update available";
+    const version = updateInfo?.version ? `Version ${updateInfo.version}` : "";
+    const message = mandatory
+      ? `A required update is available. ${version}`.trim()
+      : `A new update is available. ${version}`.trim();
+
+    const buttons = mandatory ? ["Download update"] : ["Download", "Later"];
+
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: mandatory ? "warning" : "info",
+      title,
+      message,
+      buttons,
+      defaultId: 0,
+      cancelId: mandatory ? -1 : 1,
+      noLink: true,
+    });
+
+    if (result.response === 0) {
+      await updatesRuntime.autoUpdater?.downloadUpdate();
+    }
+  } finally {
+    updatesRuntime.availableDialogOpen = false;
+  }
+}
+
+async function promptUpdateDownloaded(updateInfo, { mandatory }) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (updatesRuntime.downloadedDialogOpen) return;
+  updatesRuntime.downloadedDialogOpen = true;
+
+  try {
+    if (mandatory) {
+      try {
+        safeShowWindow(mainWindow);
+        mainWindow.focus();
+      } catch {}
+    }
+    const title = mandatory ? "Update required" : "Update ready";
+    const buttons = mandatory ? ["Install and relaunch"] : ["Install", "Later"];
+
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: mandatory ? "warning" : "info",
+      title,
+      message: "The update has been downloaded and is ready to install.",
+      buttons,
+      defaultId: 0,
+      cancelId: mandatory ? -1 : 1,
+      noLink: true,
+    });
+
+    if (result.response === 0) {
+      try {
+        updatesRuntime.autoUpdater?.quitAndInstall(false, true);
+      } catch {}
+    }
+  } finally {
+    updatesRuntime.downloadedDialogOpen = false;
+  }
+}
+
+async function ensureAutoUpdater() {
+  if (updatesRuntime.autoUpdater) return updatesRuntime.autoUpdater;
+  if (!shouldEnableAutoUpdates()) return null;
+
+  let autoUpdater;
+  try {
+    autoUpdater = require("electron-updater").autoUpdater;
+  } catch (err) {
+    console.error("[Updates] Failed to load electron-updater:", err);
+    return null;
+  }
+
+  updatesRuntime.autoUpdater = autoUpdater;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+
+  const genericUrl = process.env.NEXTGEN_UPDATES_URL;
+  if (genericUrl) {
+    try {
+      autoUpdater.setFeedURL({ provider: "generic", url: genericUrl });
+    } catch (err) {
+      console.error("[Updates] Failed to set feed URL:", err);
+    }
+  }
+
+  autoUpdater.on("checking-for-update", () => {
+    setUpdatesState({
+      status: "checking",
+      error: null,
+      lastCheckedAt: new Date().toISOString(),
+    });
+  });
+
+  autoUpdater.on("update-not-available", (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setProgressBar(-1);
+    }
+    setUpdatesState({
+      status: "not-available",
+      mandatory: false,
+      info: info || null,
+      progress: null,
+      error: null,
+    });
+  });
+
+  autoUpdater.on("update-available", async (info) => {
+    updatesRuntime.policy =
+      updatesRuntime.policy || (await loadUpdatesPolicy());
+    const mandatory =
+      process.env.NEXTGEN_FORCE_UPDATE === "1" ||
+      isMandatoryFromUpdateInfo(info) ||
+      isMandatoryByPolicy(updatesRuntime.policy, info);
+
+    setUpdatesState({
+      status: "available",
+      mandatory: Boolean(mandatory),
+      info: info || null,
+      progress: null,
+      error: null,
+    });
+
+    if (Notification?.isSupported?.()) {
+      try {
+        const body = mandatory
+          ? "A required update is available."
+          : "A new update is available.";
+        new Notification({ title: "next-gen-tools", body }).show();
+      } catch {}
+    }
+
+    promptUpdateAvailable(info, { mandatory: Boolean(mandatory) }).catch(
+      () => {}
+    );
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    const ratio =
+      typeof progress?.percent === "number" && Number.isFinite(progress.percent)
+        ? Math.max(0, Math.min(1, progress.percent / 100))
+        : -1;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setProgressBar(ratio);
+    }
+    setUpdatesState({
+      status: "downloading",
+      progress: progress || null,
+      error: null,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setProgressBar(-1);
+    }
+    setUpdatesState({
+      status: "downloaded",
+      info: info || updatesRuntime.state.info || null,
+      progress: null,
+      error: null,
+    });
+
+    promptUpdateDownloaded(info, {
+      mandatory: updatesRuntime.state.mandatory,
+    }).catch(() => {});
+  });
+
+  autoUpdater.on("error", (err) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setProgressBar(-1);
+    }
+    setUpdatesState({
+      status: "error",
+      error: String(err?.message || err || "Unknown error"),
+      progress: null,
+    });
+  });
+
+  return autoUpdater;
+}
+
+ipcMain.handle("updates-get-state", async () => {
+  return updatesRuntime.state;
+});
+
+ipcMain.handle("updates-check", async () => {
+  const updater = await ensureAutoUpdater();
+  if (!updater) return updatesRuntime.state;
+  try {
+    await updater.checkForUpdates();
+  } catch (err) {
+    setUpdatesState({
+      status: "error",
+      error: String(err?.message || err || "Unknown error"),
+    });
+  }
+  return updatesRuntime.state;
+});
+
+ipcMain.handle("updates-download", async () => {
+  const updater = await ensureAutoUpdater();
+  if (!updater) return updatesRuntime.state;
+  try {
+    await updater.downloadUpdate();
+  } catch (err) {
+    setUpdatesState({
+      status: "error",
+      error: String(err?.message || err || "Unknown error"),
+    });
+  }
+  return updatesRuntime.state;
+});
+
+ipcMain.handle("updates-install", async () => {
+  const updater = await ensureAutoUpdater();
+  if (!updater) return false;
+  try {
+    updater.quitAndInstall(false, true);
+    return true;
+  } catch {
+    return false;
+  }
+});
+
 app.whenReady().then(async () => {
   const currentStore = await getStore();
   const backgroundLaunch = process.argv.includes("--background");
@@ -3459,6 +3886,18 @@ app.whenReady().then(async () => {
 
   createWindow({ show: !backgroundLaunch && !app.isPackaged });
   updateTrayMenu().catch(() => {});
+
+  ensureAutoUpdater().then((updater) => {
+    if (!updater) return;
+    setTimeout(() => {
+      updater.checkForUpdates().catch(() => {});
+    }, 8000);
+
+    const intervalMs = 6 * 60 * 60 * 1000;
+    setInterval(() => {
+      updater.checkForUpdates().catch(() => {});
+    }, intervalMs);
+  });
 
   await registerQuickToggleShortcut();
 
