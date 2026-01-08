@@ -840,30 +840,38 @@ function getTabIdForWebContents(sender) {
   return null;
 }
 
-function ensureBrowserView(tabId, options = {}) {
+async function ensureBrowserView(tabId, options = {}) {
   const existing = browserViews.get(tabId);
-  if (existing && !existing.webContents.isDestroyed()) return existing;
+  if (existing && !existing.webContents.isDestroyed()) {
+    console.log(`[Main] Returning existing BrowserView for tab ${tabId}`);
+    return existing;
+  }
 
-  // Create anti-detection session for this tab
-  const antiDetectSession = antiDetection.createAntiDetectionSession(
+  const antiDetectSession = await antiDetection.createAntiDetectionSession(
     tabId,
     options.profileId || null
   );
+
+  if (antiDetectSession) {
+    console.log(
+      `[Main] Session created for tab ${tabId}: ${antiDetectSession.getStoragePath() || "memory"}`
+    );
+  } else {
+    console.error(`[Main] FAILED to create session for tab ${tabId}`);
+  }
 
   const webPreferences = {
     preload: path.join(__dirname, "../preload/browserView.js"),
     nodeIntegration: false,
     contextIsolation: true,
-    sandbox: false, // Disable sandbox to allow preload to function properly with anti-detection
+    sandbox: false,
     session: antiDetectSession || undefined,
-    // Security hardening
     enableRemoteModule: false,
     nativeWindowOpen: false,
     webviewTag: false,
     allowRunningInsecureContent: false,
     experimentalFeatures: false,
     webSecurity: true,
-    // Disable features that could leak info
     spellcheck: false,
   };
 
@@ -1166,14 +1174,14 @@ function hideBrowserView(tabId) {
   view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 }
 
-function showBrowserView(tabId) {
+async function showBrowserView(tabId) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   activeBrowserTabId = tabId;
   for (const [id] of browserViews.entries()) {
     if (id !== tabId) hideBrowserView(id);
   }
 
-  const view = ensureBrowserView(tabId);
+  const view = await ensureBrowserView(tabId);
   attachBrowserView(view);
   const bounds = browserBoundsCache.get(tabId);
   if (bounds) view.setBounds(bounds);
@@ -1198,18 +1206,21 @@ function destroyBrowserView(tabId) {
   } catch {}
 }
 
-ipcMain.handle("browserview-create", async (event, { tabId, url }) => {
-  const view = ensureBrowserView(tabId);
-  if (url) {
-    try {
-      await view.webContents.loadURL(url);
-    } catch (err) {
-      const message = String(err?.message || err);
-      if (!message.includes("ERR_ABORTED")) throw err;
+ipcMain.handle(
+  "browserview-create",
+  async (event, { tabId, url, profileId }) => {
+    const view = await ensureBrowserView(tabId, { profileId });
+    if (url) {
+      try {
+        await view.webContents.loadURL(url);
+      } catch (err) {
+        const message = String(err?.message || err);
+        if (!message.includes("ERR_ABORTED")) throw err;
+      }
     }
+    return true;
   }
-  return true;
-});
+);
 
 ipcMain.handle("browserview-show", async (event, { tabId, visible = true }) => {
   if (visible) {
@@ -1235,13 +1246,13 @@ ipcMain.handle("browserview-set-bounds", async (event, { tabId, bounds }) => {
   if (!bounds) return false;
   browserBoundsCache.set(tabId, bounds);
   if (activeBrowserTabId !== tabId) return true;
-  const view = ensureBrowserView(tabId);
+  const view = await ensureBrowserView(tabId);
   view.setBounds(bounds);
   return true;
 });
 
 ipcMain.handle("browserview-load-url", async (event, { tabId, url }) => {
-  const view = ensureBrowserView(tabId);
+  const view = await ensureBrowserView(tabId);
   await view.webContents.loadURL(url);
   return true;
 });
@@ -1260,12 +1271,19 @@ ipcMain.handle("browserview-go-forward", async (event, { tabId }) => {
   return true;
 });
 
-ipcMain.handle("browserview-reload", async (event, { tabId }) => {
-  const view = browserViews.get(tabId);
-  if (!view || view.webContents.isDestroyed()) return false;
-  view.webContents.reload();
-  return true;
-});
+ipcMain.handle(
+  "browserview-reload",
+  async (event, { tabId, ignoreCache = false }) => {
+    const view = browserViews.get(tabId);
+    if (!view || view.webContents.isDestroyed()) return false;
+    if (ignoreCache) {
+      view.webContents.reloadIgnoringCache();
+    } else {
+      view.webContents.reload();
+    }
+    return true;
+  }
+);
 
 ipcMain.handle(
   "browserview-set-inspector-enabled",

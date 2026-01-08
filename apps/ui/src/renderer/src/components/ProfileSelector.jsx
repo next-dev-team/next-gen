@@ -4,6 +4,7 @@ import {
   Laptop,
   Monitor,
   RefreshCw,
+  Settings2,
   Shield,
   ShieldCheck,
   ShieldOff,
@@ -21,6 +22,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 import {
   Tooltip,
   TooltipContent,
@@ -59,6 +62,9 @@ export function ProfileSelector({ tabId, disabled = false }) {
   const [activeProfile, setActiveProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [proxyStr, setProxyStr] = useState("");
+  const [hasProxy, setHasProxy] = useState(false);
+  const [isSavingProxy, setIsSavingProxy] = useState(false);
 
   // Load available profiles
   useEffect(() => {
@@ -89,6 +95,33 @@ export function ProfileSelector({ tabId, disabled = false }) {
     };
     loadActiveProfile();
   }, [tabId]);
+
+  // Load proxy for active profile
+  useEffect(() => {
+    const loadProxy = async () => {
+      if (!activeProfile?.id || !window.electronAPI?.antiDetection?.getProxy)
+        return;
+      try {
+        const proxy = await window.electronAPI.antiDetection.getProxy(
+          activeProfile.id
+        );
+        if (proxy) {
+          const { host, port, username, password } = proxy;
+          let str = `${host}:${port}`;
+          if (username) str += `:${username}`;
+          if (password) str += `:${password}`;
+          setProxyStr(str);
+          setHasProxy(true);
+        } else {
+          setProxyStr("");
+          setHasProxy(false);
+        }
+      } catch (err) {
+        console.error("Failed to load proxy:", err);
+      }
+    };
+    loadProxy();
+  }, [activeProfile?.id]);
 
   const handleSwitchProfile = useCallback(
     async (profileId) => {
@@ -149,6 +182,33 @@ export function ProfileSelector({ tabId, disabled = false }) {
       setIsLoading(false);
     }
   }, [tabId]);
+
+  const handleSaveProxy = useCallback(async () => {
+    if (!activeProfile?.id || !window.electronAPI?.antiDetection?.setProxy)
+      return;
+
+    setIsSavingProxy(true);
+    try {
+      await window.electronAPI.antiDetection.setProxy(
+        activeProfile.id,
+        proxyStr
+      );
+      toast.success("Proxy settings applied", {
+        description: proxyStr ? `Proxy: ${proxyStr}` : "Proxy disabled",
+      });
+
+      // Reload the page to apply new proxy settings
+      if (window.electronAPI?.browserView?.reload) {
+        // Force reload ignoring cache to ensure proxy takes effect
+        await window.electronAPI.browserView.reload(tabId, true);
+      }
+    } catch (err) {
+      console.error("Failed to save proxy:", err);
+      toast.error("Failed to save proxy settings");
+    } finally {
+      setIsSavingProxy(false);
+    }
+  }, [activeProfile?.id, proxyStr, tabId]);
 
   // Check if anti-detection API is available
   const hasAntiDetection = Boolean(window.electronAPI?.antiDetection);
@@ -216,11 +276,23 @@ export function ProfileSelector({ tabId, disabled = false }) {
                   disabled={disabled || isLoading}
                   className="h-9 gap-1.5 px-2"
                 >
-                  <ShieldCheck className={`h-4 w-4 ${browserColor}`} />
-                  <span className="hidden sm:inline text-xs max-w-[100px] truncate">
-                    {activeProfile?.name || "Select Profile"}
-                  </span>
-                  <ChevronDown className="h-3 w-3 opacity-50" />
+                  <div className="relative">
+                    <ShieldCheck className={`h-4 w-4 ${browserColor}`} />
+                    {hasProxy && (
+                      <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border border-background shadow-sm" />
+                    )}
+                  </div>
+                  <div className="flex flex-col items-start min-w-0 text-left">
+                    <span className="hidden sm:inline text-[10px] font-medium truncate max-w-[100px]">
+                      {activeProfile?.name || "Select Profile"}
+                    </span>
+                    {activeProfile && (
+                      <span className="hidden sm:inline text-[8px] text-muted-foreground leading-none">
+                        {hasProxy ? "Proxy Active" : "No Proxy"}
+                      </span>
+                    )}
+                  </div>
+                  <ChevronDown className="h-3 w-3 opacity-50 shrink-0" />
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
@@ -257,6 +329,42 @@ export function ProfileSelector({ tabId, disabled = false }) {
                         {activeProfile.userAgent?.slice(0, 50)}...
                       </div>
                     </div>
+                  </div>
+                </div>
+
+                <DropdownMenuSeparator />
+
+                {/* Proxy Management */}
+                <div className="px-2 py-3 space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <Settings2 className="w-4 h-4 text-muted-foreground" />
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Proxy Settings
+                    </Label>
+                  </div>
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="host:port:user:pass"
+                      value={proxyStr}
+                      onChange={(e) => setProxyStr(e.target.value)}
+                      className="h-8 text-xs bg-muted/50 border-muted-foreground/20"
+                    />
+                    <Button
+                      size="sm"
+                      className="w-full h-8 text-xs"
+                      onClick={handleSaveProxy}
+                      disabled={isSavingProxy}
+                    >
+                      {isSavingProxy ? (
+                        <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="w-3 h-3 mr-2" />
+                      )}
+                      Apply Proxy
+                    </Button>
+                    <p className="px-1 text-[10px] text-muted-foreground leading-tight">
+                      Format: host:port[:username:password]
+                    </p>
                   </div>
                 </div>
                 <DropdownMenuSeparator />
@@ -332,20 +440,28 @@ export function ProfileSelector({ tabId, disabled = false }) {
  */
 export function AntiDetectionStatus({ tabId }) {
   const [activeProfile, setActiveProfile] = useState(null);
+  const [hasProxy, setHasProxy] = useState(false);
 
   useEffect(() => {
-    const loadActiveProfile = async () => {
+    const loadData = async () => {
       if (!tabId || !window.electronAPI?.antiDetection?.getActiveProfile)
         return;
       try {
-        const result =
+        const profile =
           await window.electronAPI.antiDetection.getActiveProfile(tabId);
-        setActiveProfile(result);
+        setActiveProfile(profile);
+
+        if (profile?.id && window.electronAPI?.antiDetection?.getProxy) {
+          const proxy = await window.electronAPI.antiDetection.getProxy(
+            profile.id
+          );
+          setHasProxy(!!proxy);
+        }
       } catch (err) {
-        console.error("Failed to load active profile:", err);
+        console.error("Failed to load active profile/proxy:", err);
       }
     };
-    loadActiveProfile();
+    loadData();
   }, [tabId]);
 
   if (!activeProfile) return null;
@@ -357,9 +473,19 @@ export function AntiDetectionStatus({ tabId }) {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            <ShieldCheck className={`h-3 w-3 ${browserColor}`} />
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <div className="relative">
+              <ShieldCheck className={`h-3 w-3 ${browserColor}`} />
+              {hasProxy && (
+                <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full border border-background" />
+              )}
+            </div>
             <span className="hidden md:inline">{activeProfile.name}</span>
+            {hasProxy && (
+              <span className="text-[10px] text-green-500/80 hidden lg:inline">
+                (Proxy)
+              </span>
+            )}
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-xs">

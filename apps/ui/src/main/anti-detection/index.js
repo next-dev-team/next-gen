@@ -3,7 +3,7 @@
  * Manages profiles, sessions, and applies anti-fingerprinting measures
  */
 
-const { session, ipcMain } = require("electron");
+const { session, ipcMain, app } = require("electron");
 const {
   getAllProfiles,
   getProfile,
@@ -15,24 +15,56 @@ const {
   generateStealthScript,
   generateMinimalStealthScript,
 } = require("./stealth-script");
+const proxyManager = require("./proxy-manager");
 
 // Store active profiles for each tab
 const activeProfiles = new Map();
 // Store session instances
 const tabSessions = new Map();
 
+const proxyAuthBySession = new WeakMap();
+let proxyLoginHandlerInstalled = false;
+
+function ensureProxyLoginHandler() {
+  if (proxyLoginHandlerInstalled) return;
+  proxyLoginHandlerInstalled = true;
+
+  app.on("login", (event, webContents, _details, authInfo, callback) => {
+    if (!authInfo || !authInfo.isProxy) return;
+    const ses = webContents?.session;
+    if (!ses) return;
+    const creds = proxyAuthBySession.get(ses);
+    if (!creds) return;
+    event.preventDefault();
+    callback(creds.username, creds.password);
+  });
+}
+
 /**
  * Create a partition session for a tab with anti-detection measures
  * @param {string} tabId - The tab identifier
  * @param {string} profileId - Optional profile ID to use
- * @returns {Electron.Session}
+ * @returns {Promise<Electron.Session>}
  */
-function createAntiDetectionSession(tabId, profileId = null) {
-  const profile = profileId
-    ? getProfile(profileId)
-    : getRandomProfile("desktop");
+async function createAntiDetectionSession(tabId, profileId = null) {
+  // If no profileId provided, check if we already have one for this tab
+  // This handles cases where switchProfile was called before session creation
+  const existingProfile = activeProfiles.get(tabId);
+
+  let profile;
+  if (profileId) {
+    profile = getProfile(profileId);
+  } else if (existingProfile) {
+    profile = existingProfile;
+    console.log(
+      `[Anti-Detection] Using existing profile ${profile.id} for tab ${tabId}`
+    );
+  } else {
+    profile = getRandomProfile("desktop");
+  }
+
   if (!profile) {
-    console.error(`Profile not found: ${profileId}`);
+    console.error(`Profile not found: ${profileId || "random"}`);
     return null;
   }
 
@@ -40,12 +72,16 @@ function createAntiDetectionSession(tabId, profileId = null) {
   const partition = `persist:tab-${tabId}`;
   const ses = session.fromPartition(partition);
 
+  console.log(
+    `[Anti-Detection] Created session for tab ${tabId} with partition ${partition}. Storage path: ${ses.getStoragePath()}`
+  );
+
   // Store the profile
   activeProfiles.set(tabId, profile);
   tabSessions.set(tabId, ses);
 
   // Set up anti-detection measures
-  setupSessionAntiDetection(ses, profile);
+  await setupSessionAntiDetection(ses, profile);
 
   return ses;
 }
@@ -55,9 +91,53 @@ function createAntiDetectionSession(tabId, profileId = null) {
  * @param {Electron.Session} ses - The session to configure
  * @param {Object} profile - The device profile
  */
-function setupSessionAntiDetection(ses, profile) {
+async function setupSessionAntiDetection(ses, profile) {
   // 1. Set User Agent
   ses.setUserAgent(profile.userAgent, profile.languages.join(", "));
+
+  // 1.1 Apply Proxy if configured
+  const proxyConfig = await proxyManager.getProxyForProfile(profile.id);
+
+  ensureProxyLoginHandler();
+
+  if (proxyConfig) {
+    const proxyRules = `http=${proxyConfig.host}:${proxyConfig.port};https=${proxyConfig.host}:${proxyConfig.port}`;
+
+    console.log(
+      `[Proxy] Applying for profile ${profile.id} in session ${ses.getStoragePath() || "memory"}: ${proxyRules}`
+    );
+
+    try {
+      await ses.setProxy({
+        proxyRules: proxyRules,
+        proxyBypassRules: "<local>",
+      });
+
+      await ses.forceReloadProxyConfig();
+      const resolved = await ses.resolveProxy("http://example.com");
+      console.log(
+        `[Proxy] resolveProxy for profile ${profile.id}: ${String(resolved || "")}`
+      );
+    } catch (err) {
+      console.error(
+        `[Proxy] Failed to setProxy for profile ${profile.id}:`,
+        err
+      );
+    }
+
+    if (proxyConfig.username && proxyConfig.password) {
+      proxyAuthBySession.set(ses, {
+        username: proxyConfig.username,
+        password: proxyConfig.password,
+      });
+    } else {
+      proxyAuthBySession.delete(ses);
+    }
+  } else {
+    console.log(`[Proxy] No proxy for profile ${profile.id}, resetting.`);
+    await ses.setProxy({ proxyRules: "" });
+    proxyAuthBySession.delete(ses);
+  }
 
   // 2. Modify request headers to appear more human
   ses.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -219,7 +299,7 @@ function getActiveProfile(tabId) {
 /**
  * Switch the profile for a tab
  */
-function switchProfile(tabId, profileId) {
+async function switchProfile(tabId, profileId) {
   const profile = getProfile(profileId);
   if (!profile) return false;
 
@@ -227,7 +307,7 @@ function switchProfile(tabId, profileId) {
 
   const ses = tabSessions.get(tabId);
   if (ses) {
-    setupSessionAntiDetection(ses, profile);
+    await setupSessionAntiDetection(ses, profile);
   }
 
   return true;
@@ -236,7 +316,7 @@ function switchProfile(tabId, profileId) {
 /**
  * Apply a random variation to the current profile
  */
-function randomizeCurrentProfile(tabId) {
+async function randomizeCurrentProfile(tabId) {
   const current = activeProfiles.get(tabId);
   if (!current) return null;
 
@@ -245,7 +325,7 @@ function randomizeCurrentProfile(tabId) {
 
   const ses = tabSessions.get(tabId);
   if (ses) {
-    setupSessionAntiDetection(ses, randomized);
+    await setupSessionAntiDetection(ses, randomized);
   }
 
   return randomized;
@@ -306,6 +386,40 @@ function initAntiDetectionIPC() {
       return createCustomProfile(baseProfileId, customizations);
     }
   );
+
+  // Proxy Management IPCs
+  ipcMain.handle(
+    "anti-detection:set-proxy",
+    async (event, { profileId, proxyData }) => {
+      console.log(`[Proxy] Setting proxy for profile ${profileId}`);
+      await proxyManager.setProxyForProfile(profileId, proxyData);
+
+      // Re-apply proxy if this profile is active in any session
+      let appliedCount = 0;
+      for (const [tabId, profile] of activeProfiles.entries()) {
+        if (profile.id === profileId) {
+          const ses = tabSessions.get(tabId);
+          if (ses) {
+            console.log(
+              `[Proxy] Re-applying to active session for tab ${tabId}`
+            );
+            await setupSessionAntiDetection(ses, profile);
+            appliedCount++;
+          }
+        }
+      }
+      console.log(`[Proxy] Re-applied to ${appliedCount} active sessions`);
+      return true;
+    }
+  );
+
+  ipcMain.handle("anti-detection:get-proxy", async (event, { profileId }) => {
+    return proxyManager.getProxyForProfile(profileId);
+  });
+
+  ipcMain.handle("anti-detection:get-all-proxies", async () => {
+    return proxyManager.getAllProxies();
+  });
 }
 
 module.exports = {

@@ -924,4 +924,102 @@ test.describe("Anti-Detection System", () => {
       expect(profile.platform).toBe("iPhone");
     });
   });
+
+  // =====================================================
+  // PROXY MANAGEMENT TESTS
+  // =====================================================
+
+  test.describe("Proxy Management", () => {
+    test("should apply proxy and verify US IP", async () => {
+      const window = await electronApp.firstWindow();
+      await window.reload();
+
+      const proxyStr = "64.137.96.74:6641:gjcsaeax:kwsvbf1wiopu";
+      const profileId = "chrome-win11";
+
+      console.log("Setting proxy for profile...");
+      await window.evaluate(
+        ({ profileId, proxyStr }) =>
+          window.electronAPI.antiDetection.setProxy(profileId, proxyStr),
+        { profileId, proxyStr }
+      );
+
+      console.log("Creating tab with profile...");
+      const tabId = await window.evaluate(async (profileId) => {
+        const tabBtn = Array.from(document.querySelectorAll("button")).find(
+          (b) => b.innerText.includes("Browser")
+        );
+        if (tabBtn) tabBtn.click();
+
+        await new Promise((r) => setTimeout(r, 500));
+
+        const id = "proxy-test-" + Date.now();
+
+        await window.electronAPI.browserView.create(
+          id,
+          "about:blank",
+          profileId
+        );
+
+        await window.electronAPI.browserView.show(id);
+
+        return id;
+      }, profileId);
+
+      console.log("Created tab:", tabId);
+
+      const url = "http://ip-api.com/json";
+      console.log("Loading URL:", url);
+      await window.evaluate(
+        ({ tabId, url }) => window.electronAPI.browserView.loadURL(tabId, url),
+        { tabId, url }
+      );
+
+      console.log("Waiting for proxy response...");
+      await new Promise((r) => setTimeout(r, 15000));
+
+      const result = await electronApp.evaluate(
+        async ({ BrowserWindow }, { expectedUrl }) => {
+          const win = BrowserWindow.getAllWindows()[0];
+          const views = win.getBrowserViews?.() || [];
+
+          const view = views.find(
+            (v) => v.webContents.getURL() === expectedUrl
+          );
+
+          if (!view) return { error: "No BrowserView found" };
+
+          const text = await view.webContents.executeJavaScript(
+            "document.body.innerText"
+          );
+          let ipData;
+          try {
+            ipData = JSON.parse(text);
+          } catch (e) {
+            ipData = { query: text };
+          }
+
+          const proxyInfo =
+            await view.webContents.session.resolveProxy(expectedUrl);
+
+          return {
+            ip: ipData.query || text,
+            country: ipData.country,
+            countryCode: ipData.countryCode,
+            proxyInfo,
+            userAgent: view.webContents.getUserAgent(),
+          };
+        },
+        { expectedUrl: url }
+      );
+
+      console.log("Proxy Test Result:", result);
+
+      expect(result.error).toBeUndefined();
+      expect(String(result.proxyInfo || "")).toContain("64.137.96.74:6641");
+      expect(result.userAgent).toContain("Windows NT 10.0");
+      expect(result.countryCode).toBeTruthy();
+      expect(result.ip).toBe("64.137.96.74");
+    });
+  });
 });

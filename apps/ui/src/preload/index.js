@@ -124,8 +124,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   browserView: {
-    create: (tabId, url) =>
-      ipcRenderer.invoke("browserview-create", { tabId, url }),
+    create: (tabId, url, profileId) =>
+      ipcRenderer.invoke("browserview-create", { tabId, url, profileId }),
     show: (tabId, visible = true) =>
       ipcRenderer.invoke("browserview-show", { tabId, visible }),
     hideAll: () => ipcRenderer.invoke("browserview-hide-all"),
@@ -137,7 +137,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     goBack: (tabId) => ipcRenderer.invoke("browserview-go-back", { tabId }),
     goForward: (tabId) =>
       ipcRenderer.invoke("browserview-go-forward", { tabId }),
-    reload: (tabId) => ipcRenderer.invoke("browserview-reload", { tabId }),
+    reload: (tabId, ignoreCache = false) =>
+      ipcRenderer.invoke("browserview-reload", { tabId, ignoreCache }),
     setInspectorEnabled: (tabId, enabled) =>
       ipcRenderer.invoke("browserview-set-inspector-enabled", {
         tabId,
@@ -203,6 +204,16 @@ contextBridge.exposeInMainWorld("electronAPI", {
         baseProfileId,
         customizations,
       }),
+
+    // Proxy management
+    setProxy: (profileId, proxyData) =>
+      ipcRenderer.invoke("anti-detection:set-proxy", {
+        profileId,
+        proxyData,
+      }),
+    getProxy: (profileId) =>
+      ipcRenderer.invoke("anti-detection:get-proxy", { profileId }),
+    getAllProxies: () => ipcRenderer.invoke("anti-detection:get-all-proxies"),
   },
 
   appCapture: {
