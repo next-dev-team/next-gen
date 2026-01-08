@@ -3347,11 +3347,26 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
     if (app.isPackaged) {
       // Production: resources are in the app resources folder
       scriptPath = path.join(process.resourcesPath, "scripts/run-generator.ts");
-      cwd = path.join(process.resourcesPath);
+      cwd = process.resourcesPath;
     } else {
-      // Development: relative to the project
-      scriptPath = path.resolve(__dirname, "../../../scripts/run-generator.ts");
-      cwd = path.resolve(__dirname, "../../..");
+      // Development: relative to the project root
+      // Usually: root/apps/ui/out/main/index.js (4 levels from root)
+      // or root/apps/ui/src/main/index.js (3 levels from root)
+      const possibleRoot4 = path.resolve(__dirname, "../../../../");
+      const possibleRoot3 = path.resolve(__dirname, "../../../");
+
+      if (fs.existsSync(path.join(possibleRoot4, "scripts/run-generator.ts"))) {
+        scriptPath = path.join(possibleRoot4, "scripts/run-generator.ts");
+        cwd = possibleRoot4;
+      } else {
+        scriptPath = path.join(possibleRoot3, "scripts/run-generator.ts");
+        cwd = possibleRoot3;
+      }
+    }
+
+    if (!fs.existsSync(scriptPath)) {
+      sendLog("error", `❌ Generator script not found: ${scriptPath}`);
+      return reject(new Error(`Generator script not found: ${scriptPath}`));
     }
 
     const answersString = JSON.stringify(answers);

@@ -112,7 +112,9 @@ test.describe("Generator UI", () => {
     await expect(
       window.getByRole("button", { name: "Add Column" })
     ).toBeVisible({ timeout: 15000 });
-    await expect(window.getByRole("button", { name: "New", exact: true })).toBeVisible({
+    await expect(
+      window.getByRole("button", { name: "New", exact: true })
+    ).toBeVisible({
       timeout: 15000,
     });
   });
@@ -378,5 +380,59 @@ test.describe("Generator UI", () => {
 
     await expect(window.getByTitle("Undo (Ctrl+Z)")).toBeVisible();
     await expect(window.getByTitle("Redo (Ctrl+Shift+Z)")).toBeVisible();
+  });
+
+  test("should run agent-rules generator successfully", async () => {
+    const window = await electronApp.firstWindow();
+    await window.reload();
+
+    await goTo(window, "#/generator");
+
+    // Click on agent-rules generator
+    const agentRulesButton = window
+      .getByRole("button", { name: /agent-rules/i })
+      .first();
+    await agentRulesButton.click();
+
+    const wizardFooter = window
+      .getByRole("button", { name: "Start Over" })
+      .locator("..");
+    const nextButton = wizardFooter.getByRole("button", {
+      name: "Next",
+      exact: true,
+    });
+    await nextButton.click();
+
+    // Wait for form
+    await expect(
+      window.getByRole("heading", { name: "Configure agent-rules" })
+    ).toBeVisible({ timeout: 15000 });
+
+    // Select Claude - it's a Tag component that acts as a checkbox
+    const claudeCheckbox = window.getByText("Claude");
+    await claudeCheckbox.click();
+
+    // Click Next to go to Preview step
+    await nextButton.click();
+    await expect(
+      window.getByRole("heading", { name: "Preview Your Project" })
+    ).toBeVisible({ timeout: 15000 });
+
+    // Click Next to go to Generate step
+    await nextButton.click();
+    await expect(
+      window.getByRole("heading", { name: "Generate Project" })
+    ).toBeVisible({ timeout: 15000 });
+
+    // Click Generate
+    const generateButton = window.getByRole("button", {
+      name: "Generate Project",
+    });
+    await generateButton.click();
+
+    // Wait for success message in logs
+    await expect(
+      window.getByText("✅ Generator completed successfully!")
+    ).toBeVisible({ timeout: 60000 });
   });
 });

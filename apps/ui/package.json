@@ -10,11 +10,11 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "prebuild:copy": "mkdir -p out/main && cp -r src/main/anti-detection out/main/",
+    "prebuild:copy": "node scripts/prebuild-copy.js",
     "start": "node ../../node_modules/electron-vite/bin/electron-vite.js preview",
     "dev": "npm run prebuild:copy && node ../../node_modules/electron-vite/bin/electron-vite.js dev",
     "web:dev": "node ../../node_modules/vite/bin/vite.js --config vite.web.config.mjs",
-    "build": "node ../../node_modules/electron-vite/bin/electron-vite.js build && cp -r src/main/anti-detection out/main/",
+    "build": "node ../../node_modules/electron-vite/bin/electron-vite.js build && npm run prebuild:copy",
     "web:build": "node ../../node_modules/vite/bin/vite.js build --config vite.web.config.mjs",
     "web:preview": "node ../../node_modules/vite/bin/vite.js preview --config vite.web.config.mjs --port 5176",
     "postinstall": "node scripts/postinstall.js || echo 'postinstall failed (non-fatal)'",
@@ -113,6 +113,10 @@
       {
         "from": "scripts",
         "to": "scripts"
+      },
+      {
+        "from": "../../scripts/run-generator.ts",
+        "to": "scripts/run-generator.ts"
       },
       {
         "from": "../../turbo",
