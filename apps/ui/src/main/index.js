@@ -2094,6 +2094,64 @@ ipcMain.handle("open-folder", async (event, folderPath) => {
   return false;
 });
 
+// Open external URL
+ipcMain.handle("open-external", async (event, url) => {
+  if (url) {
+    try {
+      await shell.openExternal(url);
+      return true;
+    } catch (err) {
+      console.error("Failed to open external URL:", err);
+      return false;
+    }
+  }
+  return false;
+});
+
+// Write text to clipboard
+ipcMain.handle("clipboard-write-text", async (event, text) => {
+  try {
+    const { clipboard } = require("electron");
+    clipboard.writeText(String(text ?? ""));
+    return true;
+  } catch (err) {
+    console.error("Failed to write to clipboard:", err);
+    return false;
+  }
+});
+
+// Uninstall app (clear data and quit)
+ipcMain.handle("app-uninstall", async () => {
+  const result = await dialog.showMessageBox(mainWindow, {
+    type: "warning",
+    title: "Uninstall Application",
+    message:
+      "Are you sure you want to uninstall the application? This will clear all settings and project data, then close the app.",
+    buttons: ["Cancel", "Uninstall"],
+    defaultId: 0,
+    cancelId: 0,
+  });
+
+  if (result.response === 1) {
+    try {
+      const currentStore = await getStore();
+      currentStore.clear();
+      if (scrumStore && typeof scrumStore.clear === "function") {
+        scrumStore.clear();
+      }
+
+      // Quit the application
+      isQuitting = true;
+      app.quit();
+      return true;
+    } catch (err) {
+      console.error("Failed during uninstallation:", err);
+      return false;
+    }
+  }
+  return false;
+});
+
 // Get project root path
 ipcMain.handle("get-project-root", async () => {
   if (app.isPackaged) {

@@ -1,10 +1,4 @@
-const {
-  contextBridge,
-  ipcRenderer,
-  shell,
-  clipboard,
-  nativeImage,
-} = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   versions: {
@@ -78,6 +72,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Delete a project
   deleteProject: (projectId) => ipcRenderer.invoke("delete-project", projectId),
+
+  // Uninstall app
+  uninstallApp: () => ipcRenderer.invoke("app-uninstall"),
 
   // Open project in IDE
   openInIDE: (projectPath, ide) =>
@@ -158,7 +155,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       return () => ipcRenderer.removeListener("browserview-state", handler);
     },
     getAdblockEnabled: () => ipcRenderer.invoke("adblock-get-enabled"),
-    setAdblockEnabled: (enabled) => ipcRenderer.invoke("adblock-set-enabled", enabled),
+    setAdblockEnabled: (enabled) =>
+      ipcRenderer.invoke("adblock-set-enabled", enabled),
     onAdblockState: (callback) => {
       const handler = (event, payload) => callback(payload);
       ipcRenderer.on("adblock-state", handler);
@@ -207,14 +205,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("external-capture-primary-screen-region"),
   },
 
-  clipboardWriteText: (text) => {
-    try {
-      clipboard.writeText(String(text ?? ""));
-      return true;
-    } catch {
-      return false;
-    }
-  },
+  clipboardWriteText: (text) =>
+    ipcRenderer.invoke("clipboard-write-text", text),
 
   clipboardWriteImageDataUrl: (dataUrl) =>
     ipcRenderer.invoke("clipboard-write-image-data-url", { dataUrl }),
@@ -236,7 +228,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
   },
 
   // External links
-  openExternal: (url) => {
-    shell.openExternal(url);
-  },
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
 });

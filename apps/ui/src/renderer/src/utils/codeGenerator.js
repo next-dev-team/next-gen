@@ -553,7 +553,8 @@ export const copyToClipboard = async (text) => {
 
   try {
     if (window?.electronAPI?.clipboardWriteText) {
-      return Boolean(window.electronAPI.clipboardWriteText(value));
+      const ok = await window.electronAPI.clipboardWriteText(value);
+      return Boolean(ok);
     }
   } catch {}
 

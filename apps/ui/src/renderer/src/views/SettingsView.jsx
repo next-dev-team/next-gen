@@ -6,6 +6,7 @@ import {
   MoonOutlined,
   SettingOutlined,
   SunOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
 import {
   Button,
@@ -18,10 +19,12 @@ import {
   Tag,
   Typography,
   theme,
+  Modal,
 } from "antd";
 import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
 import { keyboardShortcuts } from "../components/editor/hooks/useKeyboardShortcuts";
+import LabeledItem from "../components/ui/LabeledItem";
 
 const { Title, Text } = Typography;
 
@@ -183,6 +186,23 @@ export default function SettingsView() {
     }
   };
 
+  const handleUninstall = () => {
+    Modal.confirm({
+      title: "Uninstall Application",
+      icon: <WarningOutlined style={{ color: "#ff4d4f" }} />,
+      content:
+        "Are you sure you want to uninstall? This will clear all settings and close the application.",
+      okText: "Uninstall",
+      okType: "danger",
+      cancelText: "Cancel",
+      onOk: async () => {
+        if (window.electronAPI?.uninstallApp) {
+          await window.electronAPI.uninstallApp();
+        }
+      },
+    });
+  };
+
   const formatShortcutForDisplay = (shortcut) => {
     return String(shortcut)
       .replaceAll("CommandOrControl", "Ctrl/Cmd")
@@ -215,71 +235,60 @@ export default function SettingsView() {
       children: (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Card title="General" variant="outlined">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+            <LabeledItem
+              label="Auto-start"
+              subLabel="Launch app when system starts."
             >
-              <Space direction="vertical" size={0}>
-                <Text strong>Auto-start</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Launch app when system starts.
-                </Text>
-              </Space>
               <Switch
                 size="small"
                 checked={startOnBoot}
                 onChange={handleStartOnBootChange}
               />
-            </div>
+            </LabeledItem>
 
-            <Divider style={{ margin: "12px 0" }} />
+            <Divider style={{ margin: "8px 0" }} />
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+            <LabeledItem
+              label="Run in Background"
+              subLabel="Keep running when the window is closed."
             >
-              <Space direction="vertical" size={0}>
-                <Text strong>Run in Background</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Keep running when the window is closed.
-                </Text>
-              </Space>
               <Switch
                 size="small"
                 checked={runInBackground}
                 onChange={handleRunInBackgroundChange}
               />
-            </div>
+            </LabeledItem>
+          </Card>
+
+          <Card
+            title="Danger Zone"
+            variant="outlined"
+            headStyle={{ color: "#ff4d4f" }}
+          >
+            <LabeledItem
+              label="Uninstall App"
+              subLabel="Completely remove app data and settings."
+            >
+              <Button danger size="small" onClick={handleUninstall}>
+                Uninstall
+              </Button>
+            </LabeledItem>
           </Card>
 
           <Card title="System Tray" variant="outlined">
             <Space direction="vertical" size={10} style={{ width: "100%" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  gap: 12,
-                }}
+              <LabeledItem
+                label="Window Status"
+                subLabel={
+                  appVisibility.visible
+                    ? "The app window is currently visible."
+                    : "The app is running in the background (tray only)."
+                }
               >
-                <Space direction="vertical" size={0}>
-                  <Text strong>Window Status</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {appVisibility.visible
-                      ? "The app window is currently visible."
-                      : "The app is running in the background (tray only)."}
-                  </Text>
-                </Space>
                 <Tag color={appVisibility.visible ? "green" : "default"}>
                   {appVisibility.visible ? "Visible" : "Hidden"}
                 </Tag>
-              </div>
+              </LabeledItem>
 
               <Space size="small">
                 <Button
@@ -306,12 +315,11 @@ export default function SettingsView() {
           </Card>
 
           <Card title="About" variant="outlined">
-            <Space direction="vertical" size={0}>
-              <Text>Next Gen v1.0</Text>
+            <LabeledItem label="Next Gen" subLabel="v1.0.1">
               <Text type="secondary" style={{ fontSize: 12 }}>
-                Code generation and project management tool.
+                Productive dev tool.
               </Text>
-            </Space>
+            </LabeledItem>
           </Card>
         </Space>
       ),
@@ -327,59 +335,47 @@ export default function SettingsView() {
       children: (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Card title="Controls" variant="outlined">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+            <LabeledItem
+              label="Keyboard Controls"
+              subLabel="Enable keyboard shortcuts and the shortcuts panel."
             >
-              <Space direction="vertical" size={0}>
-                <Text strong>Keyboard Controls</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Enable keyboard shortcuts and the shortcuts panel.
-                </Text>
-              </Space>
               <Switch
                 size="small"
                 checked={keyboardControlsEnabled}
                 onChange={handleKeyboardControlsChange}
               />
-            </div>
+            </LabeledItem>
 
             <Divider style={{ margin: "12px 0" }} />
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Space direction="vertical" size={0}>
-                <Text strong>Toggle Window Shortcut</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Show/hide the window from anywhere.
-                </Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Shortcut:{" "}
-                  <Text code>
-                    {formatShortcutForDisplay(quickToggleShortcut)}
-                  </Text>
-                </Text>
-                {!runInBackground && (
+            <LabeledItem
+              label="Toggle Window Shortcut"
+              subLabel={
+                <Space direction="vertical" size={0}>
                   <Text type="secondary" style={{ fontSize: 12 }}>
-                    Tip: Enable Run in Background to use this when the window is
-                    closed.
+                    Show/hide the window from anywhere.
                   </Text>
-                )}
-              </Space>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    Shortcut:{" "}
+                    <Text code>
+                      {formatShortcutForDisplay(quickToggleShortcut)}
+                    </Text>
+                  </Text>
+                  {!runInBackground && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      Tip: Enable Run in Background to use this when the window
+                      is closed.
+                    </Text>
+                  )}
+                </Space>
+              }
+            >
               <Switch
                 size="small"
                 checked={quickToggleEnabled}
                 onChange={handleQuickToggleEnabledChange}
               />
-            </div>
+            </LabeledItem>
           </Card>
 
           <Card title="Editor Shortcuts" variant="outlined">
@@ -449,19 +445,10 @@ export default function SettingsView() {
       children: (
         <Space direction="vertical" size="middle" style={{ width: "100%" }}>
           <Card title="Theme" variant="outlined">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+            <LabeledItem
+              label="Theme Mode"
+              subLabel="Switch between light, dark, or system-wide theme."
             >
-              <Space direction="vertical" size={0}>
-                <Text strong>Theme Mode</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Switch between light, dark, or system-wide theme.
-                </Text>
-              </Space>
               <Segmented
                 value={designMode}
                 onChange={(value) => setDesignMode(value)}
@@ -513,23 +500,14 @@ export default function SettingsView() {
                   },
                 ]}
               />
-            </div>
+            </LabeledItem>
           </Card>
 
           <Card title="Dock" variant="outlined">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+            <LabeledItem
+              label="Position on screen"
+              subLabel="Choose where the Dock appears on your screen."
             >
-              <Space direction="vertical" size={0}>
-                <Text strong>Position on screen</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Choose where the Dock appears on your screen.
-                </Text>
-              </Space>
               <Segmented
                 value={dockSettings.position}
                 onChange={(value) =>
@@ -541,23 +519,14 @@ export default function SettingsView() {
                   { label: "Right", value: "right" },
                 ]}
               />
-            </div>
+            </LabeledItem>
 
             <Divider style={{ margin: "12px 0" }} />
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
+            <LabeledItem
+              label="Auto-hide Dock"
+              subLabel="Automatically hide and show the Dock."
             >
-              <Space direction="vertical" size={0}>
-                <Text strong>Auto-hide Dock</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Automatically hide and show the Dock.
-                </Text>
-              </Space>
               <Switch
                 size="small"
                 checked={dockSettings.autoHide}
@@ -565,7 +534,7 @@ export default function SettingsView() {
                   setDockSettings((prev) => ({ ...prev, autoHide: checked }))
                 }
               />
-            </div>
+            </LabeledItem>
           </Card>
         </Space>
       ),
