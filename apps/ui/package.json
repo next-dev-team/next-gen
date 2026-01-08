@@ -108,7 +108,11 @@
       },
       {
         "from": "../../turbo",
-        "to": "turbo"
+        "to": "turbo",
+        "filter": [
+          "**/*",
+          "!**/node_modules/**"
+        ]
       }
     ],
     "mac": {
