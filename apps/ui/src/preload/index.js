@@ -191,8 +191,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
       ipcRenderer.invoke("anti-detection:get-active-profile", { tabId }),
 
     // Switch to a different device profile
-    switchProfile: (tabId, profileId) =>
-      ipcRenderer.invoke("anti-detection:switch-profile", { tabId, profileId }),
+    switchProfile: (tabId, profileOrId) => {
+      if (profileOrId && typeof profileOrId === "object") {
+        return ipcRenderer.invoke("anti-detection:switch-profile", {
+          tabId,
+          profile: profileOrId,
+        });
+      }
+      return ipcRenderer.invoke("anti-detection:switch-profile", {
+        tabId,
+        profileId: profileOrId,
+      });
+    },
 
     // Apply random variations to current profile (timezone, screen, etc.)
     randomizeProfile: (tabId) =>

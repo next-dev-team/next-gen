@@ -3,15 +3,18 @@ import {
   Globe,
   Laptop,
   Monitor,
+  Network,
   RefreshCw,
   Settings2,
   Shield,
   ShieldCheck,
   ShieldOff,
+  ShoppingCart,
   Smartphone,
   User,
+  Users,
 } from "lucide-react";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import {
@@ -30,11 +33,18 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { useBrowserProfileStore } from "../stores/browserProfileStore";
+import { useProxyStore, formatProxyString } from "../stores/proxyStore";
+import { getSyncedProxyForProfile } from "../stores/syncMiddleware";
 
 const CATEGORY_ICONS = {
   desktop: Monitor,
   mobile: Smartphone,
   tablet: Laptop,
+  work: Monitor,
+  personal: User,
+  social: Users,
+  shopping: ShoppingCart,
 };
 
 const BROWSER_COLORS = {
@@ -53,34 +63,77 @@ function getBrowserType(profileId) {
   return "chrome";
 }
 
+const createBackendProfilePayload = (profile, proxy) => {
+  if (!profile || !profile.fingerprint) return profile;
+  const fallbackLanguage = String(profile.fingerprint.language || "en-US");
+  const fallbackLanguages = [fallbackLanguage];
+  if (fallbackLanguage.includes("-")) {
+    fallbackLanguages.push(fallbackLanguage.split("-")[0]);
+  }
+
+  const languages =
+    Array.isArray(profile.fingerprint.languages) &&
+    profile.fingerprint.languages.length
+      ? profile.fingerprint.languages
+      : fallbackLanguages;
+
+  return {
+    ...profile,
+    category: profile.categoryId,
+    userAgent: profile.fingerprint.userAgent || profile.userAgent,
+    languages,
+    platform: profile.fingerprint.platform,
+    timezone: profile.fingerprint.timezone,
+    screen: profile.fingerprint.screen,
+    webgl: {
+      vendor: profile.fingerprint.webglVendor,
+      renderer: profile.fingerprint.webglRenderer,
+      unmaskedVendor: profile.fingerprint.webglVendor,
+      unmaskedRenderer: profile.fingerprint.webglRenderer,
+    },
+    hardwareConcurrency: profile.fingerprint.hardwareConcurrency,
+    deviceMemory: profile.fingerprint.deviceMemory,
+    proxy: proxy,
+  };
+};
+
 /**
  * Anti-Detection Profile Selector
  * Allows users to switch browser fingerprint profiles to avoid detection
  */
 export function ProfileSelector({ tabId, disabled = false }) {
-  const [profiles, setProfiles] = useState([]);
+  // Use store for profiles instead of IPC
+  const profiles = useBrowserProfileStore((s) => s.profiles);
+  const getProfileById = useBrowserProfileStore((s) => s.getProfileById);
+  const setActiveProfileStore = useBrowserProfileStore(
+    (s) => s.setActiveProfile
+  );
+  const globalActiveProfileId = useBrowserProfileStore(
+    (s) => s.activeProfileId
+  );
+
   const [activeProfile, setActiveProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [proxyStr, setProxyStr] = useState("");
   const [hasProxy, setHasProxy] = useState(false);
-  const [isSavingProxy, setIsSavingProxy] = useState(false);
+  const [activeProxy, setActiveProxy] = useState(null);
+  const autoApplyStateRef = useRef({
+    lastAttemptKey: null,
+    lastAttemptAt: 0,
+    lastFailureKey: null,
+    lastFailureAt: 0,
+  });
+  const switchStateRef = useRef({
+    inFlight: false,
+    pendingProfileId: null,
+    pendingOptions: null,
+  });
+  // Disabled inline proxy edit in favor of store management
+  // const [isSavingProxy, setIsSavingProxy] = useState(false);
 
-  // Load available profiles
-  useEffect(() => {
-    const loadProfiles = async () => {
-      if (!window.electronAPI?.antiDetection?.listProfiles) return;
-      try {
-        const result = await window.electronAPI.antiDetection.listProfiles();
-        setProfiles(result || []);
-      } catch (err) {
-        console.error("Failed to load profiles:", err);
-      }
-    };
-    loadProfiles();
-  }, []);
-
-  // Load active profile for this tab
+  // Load active profile for this tab from Main process
+  // This is still needed because "Active for Tab X" is a runtime Main state
   useEffect(() => {
     const loadActiveProfile = async () => {
       if (!tabId || !window.electronAPI?.antiDetection?.getActiveProfile)
@@ -88,76 +141,249 @@ export function ProfileSelector({ tabId, disabled = false }) {
       try {
         const result =
           await window.electronAPI.antiDetection.getActiveProfile(tabId);
-        setActiveProfile(result);
+
+        // If we get a result from IPC, try to match it with our store
+        // to get the full rich object with proxy linkage
+        if (result && result.id) {
+          const storeProfile = getProfileById(result.id);
+          setActiveProfile(storeProfile || result);
+          // Also sync to store if this is the first load
+          if (storeProfile) {
+            setActiveProfileStore(storeProfile.id);
+          }
+        } else {
+          setActiveProfile(result);
+        }
       } catch (err) {
         console.error("Failed to load active profile:", err);
       }
     };
     loadActiveProfile();
-  }, [tabId]);
+  }, [tabId, getProfileById, profiles, setActiveProfileStore]); // Re-run if profiles change
 
-  // Load proxy for active profile
+  // Load proxy for active profile using the sync middleware
   useEffect(() => {
-    const loadProxy = async () => {
-      if (!activeProfile?.id || !window.electronAPI?.antiDetection?.getProxy)
+    if (!activeProfile?.id) return;
+
+    // Get proxy from store via active profile
+    const proxy = getSyncedProxyForProfile(activeProfile.id);
+    setActiveProxy(proxy);
+
+    if (proxy) {
+      setHasProxy(true);
+      setProxyStr(formatProxyString(proxy));
+    } else {
+      setHasProxy(false);
+      setProxyStr("");
+    }
+  }, [activeProfile, profiles]); // Re-run when active profile or profiles list changes
+
+  // Auto-sync active profile changes to backend (Live Updates)
+  useEffect(() => {
+    const syncProfileToBackend = async () => {
+      // Only sync if we have a valid active profile ID and we are not loading the initial switch
+      if (
+        !activeProfile?.id ||
+        isLoading ||
+        !tabId ||
+        !window.electronAPI?.antiDetection?.switchProfile
+      )
         return;
+
+      // Check if this profile is managed by store (custom profile)
+      const storeProfile = getProfileById(activeProfile.id);
+      if (!storeProfile) return;
+
+      // Construct payload
+      const proxy = getSyncedProxyForProfile(storeProfile.id);
+      const profileToSend = createBackendProfilePayload(storeProfile, proxy);
+
+      // We assume activeProfile.id match means we are already on this profile,
+      // so we are just pushing updates.
       try {
-        const proxy = await window.electronAPI.antiDetection.getProxy(
-          activeProfile.id
+        await window.electronAPI.antiDetection.switchProfile(
+          tabId,
+          profileToSend
         );
-        if (proxy) {
-          const { host, port, username, password } = proxy;
-          let str = `${host}:${port}`;
-          if (username) str += `:${username}`;
-          if (password) str += `:${password}`;
-          setProxyStr(str);
-          setHasProxy(true);
-        } else {
-          setProxyStr("");
-          setHasProxy(false);
-        }
       } catch (err) {
-        console.error("Failed to load proxy:", err);
+        console.error("Failed to auto-sync profile:", err);
       }
     };
-    loadProxy();
-  }, [activeProfile?.id]);
+
+    // We debounce slightly to avoid rapid updates if store changes fast
+    const timer = setTimeout(syncProfileToBackend, 500);
+    return () => clearTimeout(timer);
+  }, [activeProfile, tabId, isLoading, getProfileById]);
 
   const handleSwitchProfile = useCallback(
-    async (profileId) => {
-      if (!tabId || !window.electronAPI?.antiDetection?.switchProfile) return;
+    async (profileId, options = {}) => {
+      if (!tabId || !window.electronAPI?.antiDetection?.switchProfile)
+        return false;
+
+      const showToast = options.showToast !== false;
+      const closeMenu = options.closeMenu !== false;
+      const toastId = `switch-profile-${String(tabId)}`;
+
+      const state = switchStateRef.current;
+      state.pendingProfileId = profileId;
+      state.pendingOptions = { showToast, closeMenu };
+
+      if (state.inFlight) return false;
+
+      state.inFlight = true;
       setIsLoading(true);
+
+      let lastOk = false;
+      let lastCloseMenu = closeMenu;
+      let lastShowToast = showToast;
+      let lastTargetId = profileId;
+
       try {
-        const success = await window.electronAPI.antiDetection.switchProfile(
-          tabId,
-          profileId
-        );
-        if (success) {
-          const newProfile =
-            await window.electronAPI.antiDetection.getActiveProfile(tabId);
-          setActiveProfile(newProfile);
-          toast.success("Profile switched", {
-            description: `Now using: ${newProfile?.name || profileId}`,
-          });
-          // Reload the page to apply new fingerprint
-          if (window.electronAPI?.browserView?.reload) {
-            await window.electronAPI.browserView.reload(tabId);
+        while (state.pendingProfileId) {
+          const targetId = state.pendingProfileId;
+          const targetOptions = state.pendingOptions || {
+            showToast,
+            closeMenu,
+          };
+          state.pendingProfileId = null;
+          state.pendingOptions = null;
+
+          lastCloseMenu = Boolean(targetOptions.closeMenu);
+          lastShowToast = Boolean(targetOptions.showToast);
+          lastTargetId = targetId;
+
+          let profileToSend = targetId;
+          const profile = getProfileById(targetId);
+
+          if (profile) {
+            const proxy = getSyncedProxyForProfile(targetId);
+            profileToSend = createBackendProfilePayload(profile, proxy);
           }
-        } else {
-          toast.error("Failed to switch profile");
+
+          const success = await window.electronAPI.antiDetection.switchProfile(
+            tabId,
+            profileToSend
+          );
+
+          if (success) {
+            const newProfile =
+              await window.electronAPI.antiDetection.getActiveProfile(tabId);
+            setActiveProfile(newProfile);
+
+            if (newProfile?.id) {
+              setActiveProfileStore(newProfile.id);
+            }
+
+            if (lastShowToast) {
+              toast.success("Profile switched", {
+                id: toastId,
+                description: `Now using: ${newProfile?.name || targetId}`,
+              });
+            }
+
+            if (window.electronAPI?.browserView?.reload) {
+              await window.electronAPI.browserView.reload(tabId);
+            }
+
+            lastOk = true;
+            continue;
+          }
+
+          if (lastShowToast) {
+            toast.error("Failed to switch profile", { id: toastId });
+          }
+          lastOk = false;
+          if (!state.pendingProfileId) break;
         }
+
+        return lastOk;
       } catch (err) {
         console.error("Failed to switch profile:", err);
-        toast.error("Failed to switch profile", {
-          description: String(err?.message || err),
-        });
+        if (lastShowToast) {
+          toast.error("Failed to switch profile", {
+            id: toastId,
+            description: String(err?.message || err),
+          });
+        }
+        return false;
       } finally {
+        state.inFlight = false;
         setIsLoading(false);
-        setIsOpen(false);
+        if (lastCloseMenu) setIsOpen(false);
+
+        const nextTargetId = state.pendingProfileId;
+        const nextOptions = state.pendingOptions;
+        state.pendingProfileId = null;
+        state.pendingOptions = null;
+
+        if (nextTargetId && nextTargetId !== lastTargetId) {
+          Promise.resolve()
+            .then(() => handleSwitchProfile(nextTargetId, nextOptions || {}))
+            .catch(() => {});
+        }
       }
     },
-    [tabId]
+    [tabId, getProfileById, setActiveProfileStore, setActiveProfile, setIsOpen]
   );
+
+  useEffect(() => {
+    if (!tabId) return;
+    if (disabled) return;
+    if (!globalActiveProfileId) return;
+    if (isLoading) return;
+    if (activeProfile?.id === globalActiveProfileId) return;
+
+    const desiredKey = `${String(tabId)}::${String(globalActiveProfileId)}`;
+    const now = Date.now();
+    const attemptCooldownMs = 800;
+    const failureCooldownMs = 4000;
+
+    if (
+      autoApplyStateRef.current.lastFailureKey === desiredKey &&
+      now - autoApplyStateRef.current.lastFailureAt < failureCooldownMs
+    )
+      return;
+
+    if (
+      autoApplyStateRef.current.lastAttemptKey === desiredKey &&
+      now - autoApplyStateRef.current.lastAttemptAt < attemptCooldownMs
+    )
+      return;
+
+    autoApplyStateRef.current.lastAttemptKey = desiredKey;
+    autoApplyStateRef.current.lastAttemptAt = now;
+
+    const timer = setTimeout(() => {
+      handleSwitchProfile(globalActiveProfileId, {
+        showToast: false,
+        closeMenu: false,
+      })
+        .then((ok) => {
+          if (ok) {
+            if (autoApplyStateRef.current.lastFailureKey === desiredKey) {
+              autoApplyStateRef.current.lastFailureKey = null;
+              autoApplyStateRef.current.lastFailureAt = 0;
+            }
+            return;
+          }
+          autoApplyStateRef.current.lastFailureKey = desiredKey;
+          autoApplyStateRef.current.lastFailureAt = Date.now();
+        })
+        .catch(() => {
+          autoApplyStateRef.current.lastFailureKey = desiredKey;
+          autoApplyStateRef.current.lastFailureAt = Date.now();
+        });
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [
+    activeProfile?.id,
+    disabled,
+    globalActiveProfileId,
+    handleSwitchProfile,
+    isLoading,
+    tabId,
+  ]);
 
   const handleRandomize = useCallback(async () => {
     if (!tabId || !window.electronAPI?.antiDetection?.randomizeProfile) return;
@@ -183,33 +409,6 @@ export function ProfileSelector({ tabId, disabled = false }) {
     }
   }, [tabId]);
 
-  const handleSaveProxy = useCallback(async () => {
-    if (!activeProfile?.id || !window.electronAPI?.antiDetection?.setProxy)
-      return;
-
-    setIsSavingProxy(true);
-    try {
-      await window.electronAPI.antiDetection.setProxy(
-        activeProfile.id,
-        proxyStr
-      );
-      toast.success("Proxy settings applied", {
-        description: proxyStr ? `Proxy: ${proxyStr}` : "Proxy disabled",
-      });
-
-      // Reload the page to apply new proxy settings
-      if (window.electronAPI?.browserView?.reload) {
-        // Force reload ignoring cache to ensure proxy takes effect
-        await window.electronAPI.browserView.reload(tabId, true);
-      }
-    } catch (err) {
-      console.error("Failed to save proxy:", err);
-      toast.error("Failed to save proxy settings");
-    } finally {
-      setIsSavingProxy(false);
-    }
-  }, [activeProfile?.id, proxyStr, tabId]);
-
   // Check if anti-detection API is available
   const hasAntiDetection = Boolean(window.electronAPI?.antiDetection);
 
@@ -230,9 +429,6 @@ export function ProfileSelector({ tabId, disabled = false }) {
     },
     [tabId]
   );
-
-  const desktopProfiles = profiles.filter((p) => p.category === "desktop");
-  const mobileProfiles = profiles.filter((p) => p.category === "mobile");
   const browserType = getBrowserType(activeProfile?.id);
   const browserColor = BROWSER_COLORS[browserType] || "text-muted-foreground";
 
@@ -326,7 +522,11 @@ export function ProfileSelector({ tabId, disabled = false }) {
                         {activeProfile.name}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {activeProfile.userAgent?.slice(0, 50)}...
+                        {(
+                          activeProfile.userAgent ||
+                          activeProfile.fingerprint?.userAgent
+                        )?.slice(0, 50)}
+                        ...
                       </div>
                     </div>
                   </div>
@@ -334,37 +534,45 @@ export function ProfileSelector({ tabId, disabled = false }) {
 
                 <DropdownMenuSeparator />
 
-                {/* Proxy Management */}
+                {/* Proxy Management (Read Only) */}
                 <div className="px-2 py-3 space-y-3">
                   <div className="flex items-center gap-2 px-1">
                     <Settings2 className="w-4 h-4 text-muted-foreground" />
                     <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Proxy Settings
+                      Proxy Status
                     </Label>
                   </div>
-                  <div className="space-y-2">
-                    <Input
-                      placeholder="host:port:user:pass"
-                      value={proxyStr}
-                      onChange={(e) => setProxyStr(e.target.value)}
-                      className="h-8 text-xs bg-muted/50 border-muted-foreground/20"
-                    />
-                    <Button
-                      size="sm"
-                      className="w-full h-8 text-xs"
-                      onClick={handleSaveProxy}
-                      disabled={isSavingProxy}
-                    >
-                      {isSavingProxy ? (
-                        <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
-                      ) : (
-                        <ShieldCheck className="w-3 h-3 mr-2" />
+
+                  {activeProxy ? (
+                    <div className="bg-muted/30 rounded-md p-2 border border-border/50">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Network className="h-3.5 w-3.5 text-green-500" />
+                        <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                          Proxy Active
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground break-all font-mono">
+                        {activeProxy.host}:{activeProxy.port}
+                      </div>
+                      {activeProxy.country && (
+                        <div className="text-[10px] text-muted-foreground mt-1">
+                          {activeProxy.country}
+                        </div>
                       )}
-                      Apply Proxy
-                    </Button>
-                    <p className="px-1 text-[10px] text-muted-foreground leading-tight">
-                      Format: host:port[:username:password]
-                    </p>
+                    </div>
+                  ) : (
+                    <div className="bg-muted/30 rounded-md p-2 border border-border/50">
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">
+                          No proxy assigned
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="text-[10px] text-muted-foreground px-1">
+                    To manage proxies, go to Browser Profiles panel.
                   </div>
                 </div>
                 <DropdownMenuSeparator />
@@ -373,52 +581,37 @@ export function ProfileSelector({ tabId, disabled = false }) {
 
             <DropdownMenuLabel className="text-xs flex items-center gap-1">
               <Monitor className="h-3 w-3" />
-              Desktop Browsers
+              Profiles
             </DropdownMenuLabel>
-            {desktopProfiles.map((profile) => {
-              const Icon = CATEGORY_ICONS[profile.category] || Monitor;
-              const isActive = activeProfile?.id === profile.id;
-              return (
-                <DropdownMenuItem
-                  key={profile.id}
-                  onClick={() => handleSwitchProfile(profile.id)}
-                  className="gap-2"
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="flex-1">{profile.name}</span>
-                  {isActive && (
-                    <span className="text-xs text-green-500">Active</span>
-                  )}
-                </DropdownMenuItem>
-              );
-            })}
-
-            {mobileProfiles.length > 0 && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs flex items-center gap-1">
-                  <Smartphone className="h-3 w-3" />
-                  Mobile Browsers
-                </DropdownMenuLabel>
-                {mobileProfiles.map((profile) => {
-                  const Icon = CATEGORY_ICONS[profile.category] || Smartphone;
-                  const isActive = activeProfile?.id === profile.id;
-                  return (
-                    <DropdownMenuItem
-                      key={profile.id}
-                      onClick={() => handleSwitchProfile(profile.id)}
-                      className="gap-2"
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="flex-1">{profile.name}</span>
-                      {isActive && (
-                        <span className="text-xs text-green-500">Active</span>
-                      )}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </>
-            )}
+            <div className="max-h-60 overflow-y-auto">
+              {profiles.map((profile) => {
+                const Icon =
+                  CATEGORY_ICONS[profile.categoryId] ||
+                  CATEGORY_ICONS.personal ||
+                  User;
+                const isActive = activeProfile?.id === profile.id;
+                return (
+                  <DropdownMenuItem
+                    key={profile.id}
+                    onClick={() => handleSwitchProfile(profile.id)}
+                    className="gap-2"
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="flex-1 truncate">{profile.name}</span>
+                    {isActive && (
+                      <span className="text-xs text-green-500 shrink-0">
+                        Active
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                );
+              })}
+              {profiles.length === 0 && (
+                <div className="px-2 py-2 text-xs text-muted-foreground text-center">
+                  No profiles found. Create one in Profiles panel.
+                </div>
+              )}
+            </div>
 
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -441,6 +634,7 @@ export function ProfileSelector({ tabId, disabled = false }) {
 export function AntiDetectionStatus({ tabId }) {
   const [activeProfile, setActiveProfile] = useState(null);
   const [hasProxy, setHasProxy] = useState(false);
+  const profiles = useBrowserProfileStore((s) => s.profiles);
 
   useEffect(() => {
     const loadData = async () => {
@@ -451,10 +645,9 @@ export function AntiDetectionStatus({ tabId }) {
           await window.electronAPI.antiDetection.getActiveProfile(tabId);
         setActiveProfile(profile);
 
-        if (profile?.id && window.electronAPI?.antiDetection?.getProxy) {
-          const proxy = await window.electronAPI.antiDetection.getProxy(
-            profile.id
-          );
+        if (profile?.id) {
+          // Use sync middleware to check if this profile has a proxy
+          const proxy = getSyncedProxyForProfile(profile.id);
           setHasProxy(!!proxy);
         }
       } catch (err) {
@@ -462,7 +655,7 @@ export function AntiDetectionStatus({ tabId }) {
       }
     };
     loadData();
-  }, [tabId]);
+  }, [tabId, profiles]); // Re-run if profiles change (e.g. proxy assigned/unassigned)
 
   if (!activeProfile) return null;
 

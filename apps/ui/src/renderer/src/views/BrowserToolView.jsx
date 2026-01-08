@@ -70,8 +70,11 @@ import {
 } from "../components/ui/tooltip";
 import { cn } from "../lib/utils";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
+import { useBrowserProfileStore } from "../stores/browserProfileStore";
+import { useProxyStore } from "../stores/proxyStore";
 import { useResourceStore } from "../stores/resourceStore";
 import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
+import AntiBrowserView from "./AntiBrowserView";
 
 const createId = () =>
   typeof crypto !== "undefined" && crypto.randomUUID
@@ -2023,6 +2026,34 @@ export default function BrowserToolView() {
     location.pathname === "/browser" ||
     location.pathname.startsWith("/browser/");
 
+  const ensureBrowserViewPromiseByTabIdRef = useRef(new Map());
+
+  const ensureBrowserView = useCallback(
+    async (tabId, url) => {
+      if (!hasElectronView) return;
+      if (!tabId) return;
+      if (!window.electronAPI?.browserView?.create) return;
+
+      const map = ensureBrowserViewPromiseByTabIdRef.current;
+      const existing = map.get(tabId);
+      if (existing) return existing;
+
+      const p = (async () => {
+        await window.electronAPI.browserView.create(
+          tabId,
+          normalizeUrl(url) || "about:blank"
+        );
+      })().catch((err) => {
+        map.delete(tabId);
+        throw err;
+      });
+
+      map.set(tabId, p);
+      return p;
+    },
+    [hasElectronView]
+  );
+
   const [adblockEnabled, setAdblockEnabled] = useState(true);
 
   useEffect(() => {
@@ -2320,6 +2351,8 @@ export default function BrowserToolView() {
         return;
       }
       if (activeTab?.kind === "browser") {
+        if (!resolvedActiveTabId) return;
+        await ensureBrowserView(resolvedActiveTabId, activeTabState.url);
         if (window.electronAPI?.browserView?.show) {
           await window.electronAPI.browserView.show(resolvedActiveTabId);
         }
@@ -2339,6 +2372,8 @@ export default function BrowserToolView() {
     devPanel.isOpen,
     isRouteActive,
     resolvedActiveTabId,
+    activeTabState.url,
+    ensureBrowserView,
     updateBounds,
   ]);
 
@@ -2353,9 +2388,7 @@ export default function BrowserToolView() {
 
       if (hasElectronView) {
         try {
-          if (window.electronAPI?.browserView?.create) {
-            await window.electronAPI.browserView.create(id, normalized);
-          }
+          await ensureBrowserView(id, normalized);
           if (window.electronAPI?.browserView?.show) {
             await window.electronAPI.browserView.show(id);
           }
@@ -2366,7 +2399,7 @@ export default function BrowserToolView() {
         }
       }
     },
-    [addHistoryEntry, hasElectronView, openUrlTab]
+    [addHistoryEntry, ensureBrowserView, hasElectronView, openUrlTab]
   );
 
   useEffect(() => {
@@ -2428,6 +2461,7 @@ export default function BrowserToolView() {
       addHistoryEntry(url, url);
 
       if (hasElectronView) {
+        await ensureBrowserView(resolvedActiveTabId, url);
         if (window.electronAPI?.browserView?.loadURL) {
           await window.electronAPI.browserView.loadURL(
             resolvedActiveTabId,
@@ -2459,271 +2493,279 @@ export default function BrowserToolView() {
   }, [activeUrlForBookmark, bookmarks]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg border bg-background">
-      <div className="flex items-center gap-2 border-b px-2 py-2">
-        <div
-          role="tablist"
-          aria-label="Browser tabs"
-          className="flex flex-1 items-center gap-1 overflow-x-auto"
-        >
-          {tabs.map((t, idx) => {
-            const isActive = t.id === resolvedActiveTabId;
-            return (
-              <div
-                key={t.id}
-                className={cn(
-                  "group flex items-center rounded-md border transition-all duration-200 ease-in-out",
-                  isActive
-                    ? "bg-accent text-accent-foreground shadow-sm ring-1 ring-ring/20"
-                    : "bg-background/50 hover:bg-accent/50 border-transparent hover:border-border"
-                )}
-              >
-                <button
-                  id={`browser-tab-${t.id}`}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  onClick={() => setActiveTab(t.id)}
-                  onKeyDown={(e) => {
-                    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-                    e.preventDefault();
-                    const nextIdx =
-                      e.key === "ArrowLeft"
-                        ? Math.max(0, idx - 1)
-                        : Math.min(tabs.length - 1, idx + 1);
-                    const next = tabs[nextIdx];
-                    if (next?.id) setActiveTab(next.id);
-                  }}
-                  title={t.title}
-                  className="flex items-center gap-2 px-3 py-1 text-sm"
+    <AntiBrowserView>
+      <div className="flex h-full flex-col overflow-hidden rounded-lg border bg-background">
+        <div className="flex items-center gap-2 border-b px-2 py-2">
+          <div
+            role="tablist"
+            aria-label="Browser tabs"
+            className="flex flex-1 items-center gap-1 overflow-x-auto"
+          >
+            {tabs.map((t, idx) => {
+              const isActive = t.id === resolvedActiveTabId;
+              return (
+                <div
+                  key={t.id}
+                  className={cn(
+                    "group flex items-center rounded-md border transition-all duration-200 ease-in-out",
+                    isActive
+                      ? "bg-accent text-accent-foreground shadow-sm ring-1 ring-ring/20"
+                      : "bg-background/50 hover:bg-accent/50 border-transparent hover:border-border"
+                  )}
                 >
-                  <span className="max-w-[220px] truncate font-medium">
-                    {t.title}
-                  </span>
-                </button>
-                {t.closable ? (
                   <button
+                    id={`browser-tab-${t.id}`}
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeTab(t.id);
-                      if (hasElectronView) {
-                        if (window.electronAPI?.browserView?.destroy) {
-                          window.electronAPI.browserView
-                            .destroy(t.id)
-                            .catch(() => {});
-                        }
-                      }
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setActiveTab(t.id)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight")
+                        return;
+                      e.preventDefault();
+                      const nextIdx =
+                        e.key === "ArrowLeft"
+                          ? Math.max(0, idx - 1)
+                          : Math.min(tabs.length - 1, idx + 1);
+                      const next = tabs[nextIdx];
+                      if (next?.id) setActiveTab(next.id);
                     }}
-                    className="mr-1 flex h-6 w-6 items-center justify-center rounded hover:bg-background/80"
-                    aria-label={`Close ${t.title} tab`}
+                    title={t.title}
+                    className="flex items-center gap-2 px-3 py-1 text-sm"
                   >
-                    <X className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100" />
+                    <span className="max-w-[220px] truncate font-medium">
+                      {t.title}
+                    </span>
                   </button>
-                ) : null}
-              </div>
-            );
-          })}
+                  {t.closable ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        closeTab(t.id);
+                        if (hasElectronView) {
+                          if (window.electronAPI?.browserView?.destroy) {
+                            window.electronAPI.browserView
+                              .destroy(t.id)
+                              .catch(() => {});
+                          }
+                        }
+                        ensureBrowserViewPromiseByTabIdRef.current.delete(t.id);
+                      }}
+                      className="mr-1 flex h-6 w-6 items-center justify-center rounded hover:bg-background/80"
+                      aria-label={`Close ${t.title} tab`}
+                    >
+                      <X className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100" />
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => {
+                openInNewTab("https://www.google.com");
+              }}
+              aria-label="New tab"
+              className="h-8 w-8 shrink-0 rounded-full hover:bg-accent/80"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
           <Button
             size="icon"
             variant="ghost"
-            onClick={() => {
-              openInNewTab("https://www.google.com");
-            }}
-            aria-label="New tab"
-            className="h-8 w-8 shrink-0 rounded-full hover:bg-accent/80"
+            onClick={() => setDevPanelOpen(!devPanel.isOpen)}
+            aria-label="Toggle dev panel"
           >
-            <Plus className="h-4 w-4" />
+            {devPanel.isOpen ? (
+              <PanelRightClose className="h-4 w-4" />
+            ) : (
+              <PanelRightOpen className="h-4 w-4" />
+            )}
           </Button>
         </div>
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => setDevPanelOpen(!devPanel.isOpen)}
-          aria-label="Toggle dev panel"
-        >
-          {devPanel.isOpen ? (
-            <PanelRightClose className="h-4 w-4" />
-          ) : (
-            <PanelRightOpen className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
 
-      <div className="flex items-center gap-2 border-b px-2 py-2">
-        <Button
-          size="icon"
-          variant="outline"
-          disabled={backDisabled}
-          onClick={() => {
-            if (!activeIsBrowser) return;
-            if (hasElectronView) {
-              if (window.electronAPI?.browserView?.goBack) {
-                window.electronAPI.browserView.goBack(resolvedActiveTabId);
+        <div className="flex items-center gap-2 border-b px-2 py-2">
+          <Button
+            size="icon"
+            variant="outline"
+            disabled={backDisabled}
+            onClick={() => {
+              if (!activeIsBrowser) return;
+              if (hasElectronView) {
+                if (window.electronAPI?.browserView?.goBack) {
+                  window.electronAPI.browserView.goBack(resolvedActiveTabId);
+                }
+                return;
               }
-              return;
-            }
-            iframeRef.current?.contentWindow?.history?.back?.();
-          }}
-          aria-label="Back"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="outline"
-          disabled={forwardDisabled}
-          onClick={() => {
-            if (!activeIsBrowser) return;
-            if (hasElectronView) {
-              if (window.electronAPI?.browserView?.goForward) {
-                window.electronAPI.browserView.goForward(resolvedActiveTabId);
-              }
-              return;
-            }
-            iframeRef.current?.contentWindow?.history?.forward?.();
-          }}
-          aria-label="Forward"
-        >
-          <ArrowRight className="h-4 w-4" />
-        </Button>
-        <Button
-          size="icon"
-          variant="outline"
-          disabled={!activeIsBrowser}
-          onClick={() => {
-            if (hasElectronView) {
-              if (window.electronAPI?.browserView?.reload) {
-                window.electronAPI.browserView.reload(resolvedActiveTabId);
-              }
-              return;
-            }
-            if (iframeRef.current) {
-              iframeRef.current.contentWindow?.location?.reload?.();
-            }
-          }}
-          aria-label="Reload"
-        >
-          <RotateCw className="h-4 w-4" />
-        </Button>
-
-        <div className="flex flex-1 items-center gap-2">
-          <Globe className="h-4 w-4 text-muted-foreground" />
-          <Input
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Enter URL or search"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") go().catch(() => {});
+              iframeRef.current?.contentWindow?.history?.back?.();
             }}
-          />
-          <Button variant="secondary" onClick={() => go()}>
-            Go
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <Button
             size="icon"
-            variant={isActiveBookmarked ? "secondary" : "outline"}
-            disabled={!activeIsBrowser || !activeUrlForBookmark}
+            variant="outline"
+            disabled={forwardDisabled}
             onClick={() => {
-              if (!activeUrlForBookmark) return;
-              toggleBookmark(activeUrlForBookmark, activeUrlForBookmark);
+              if (!activeIsBrowser) return;
+              if (hasElectronView) {
+                if (window.electronAPI?.browserView?.goForward) {
+                  window.electronAPI.browserView.goForward(resolvedActiveTabId);
+                }
+                return;
+              }
+              iframeRef.current?.contentWindow?.history?.forward?.();
             }}
-            aria-label={isActiveBookmarked ? "Remove bookmark" : "Add bookmark"}
+            aria-label="Forward"
           >
-            <Star
-              className={cn(
-                "h-4 w-4",
-                isActiveBookmarked ? "fill-current" : ""
-              )}
-            />
+            <ArrowRight className="h-4 w-4" />
           </Button>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="icon"
-                  variant={adblockEnabled ? "secondary" : "outline"}
-                  disabled={!hasElectronView || !activeIsBrowser}
-                  onClick={async () => {
-                    if (!window.electronAPI?.browserView?.setAdblockEnabled)
-                      return;
-                    const next = !adblockEnabled;
-                    setAdblockEnabled(next);
-                    try {
-                      const res =
-                        await window.electronAPI.browserView.setAdblockEnabled(
-                          next
-                        );
-                      setAdblockEnabled(Boolean(res));
-                    } catch {
-                      setAdblockEnabled(!next);
+          <Button
+            size="icon"
+            variant="outline"
+            disabled={!activeIsBrowser}
+            onClick={() => {
+              if (hasElectronView) {
+                if (window.electronAPI?.browserView?.reload) {
+                  window.electronAPI.browserView.reload(resolvedActiveTabId);
+                }
+                return;
+              }
+              if (iframeRef.current) {
+                iframeRef.current.contentWindow?.location?.reload?.();
+              }
+            }}
+            aria-label="Reload"
+          >
+            <RotateCw className="h-4 w-4" />
+          </Button>
+
+          <div className="flex flex-1 items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <Input
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Enter URL or search"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") go().catch(() => {});
+              }}
+            />
+            <Button variant="secondary" onClick={() => go()}>
+              Go
+            </Button>
+            <Button
+              size="icon"
+              variant={isActiveBookmarked ? "secondary" : "outline"}
+              disabled={!activeIsBrowser || !activeUrlForBookmark}
+              onClick={() => {
+                if (!activeUrlForBookmark) return;
+                toggleBookmark(activeUrlForBookmark, activeUrlForBookmark);
+              }}
+              aria-label={
+                isActiveBookmarked ? "Remove bookmark" : "Add bookmark"
+              }
+            >
+              <Star
+                className={cn(
+                  "h-4 w-4",
+                  isActiveBookmarked ? "fill-current" : ""
+                )}
+              />
+            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon"
+                    variant={adblockEnabled ? "secondary" : "outline"}
+                    disabled={!hasElectronView || !activeIsBrowser}
+                    onClick={async () => {
+                      if (!window.electronAPI?.browserView?.setAdblockEnabled)
+                        return;
+                      const next = !adblockEnabled;
+                      setAdblockEnabled(next);
+                      try {
+                        const res =
+                          await window.electronAPI.browserView.setAdblockEnabled(
+                            next
+                          );
+                        setAdblockEnabled(Boolean(res));
+                      } catch {
+                        setAdblockEnabled(!next);
+                      }
+                    }}
+                    aria-label={
+                      adblockEnabled
+                        ? "Disable ad blocker"
+                        : "Enable ad blocker"
                     }
-                  }}
-                  aria-label={
-                    adblockEnabled ? "Disable ad blocker" : "Enable ad blocker"
-                  }
-                >
-                  {adblockEnabled && hasElectronView ? (
-                    <Shield className="h-4 w-4" />
-                  ) : (
-                    <ShieldOff className="h-4 w-4" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              {!hasElectronView && (
-                <TooltipContent>
-                  <p>Ad blocker is not available in this environment</p>
-                </TooltipContent>
-              )}
-            </Tooltip>
-          </TooltipProvider>
-        </div>
+                  >
+                    {adblockEnabled && hasElectronView ? (
+                      <Shield className="h-4 w-4" />
+                    ) : (
+                      <ShieldOff className="h-4 w-4" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                {!hasElectronView && (
+                  <TooltipContent>
+                    <p>Ad blocker is not available in this environment</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
+          </div>
 
-        {/* Anti-Detection Profile Selector */}
-        <ProfileSelector
-          tabId={resolvedActiveTabId}
-          disabled={!hasElectronView || !activeIsBrowser}
-        />
-      </div>
-
-      <div className="flex min-h-0 flex-1">
-        <div
-          className={cn(
-            "relative min-h-0 flex-1",
-            devPanel.isOpen && devPanel.isFullWidth && "hidden"
-          )}
-        >
-          {activeTab?.kind === "dashboard" ? (
-            <ScrollArea className="h-full">
-              <Dashboard onOpenUrl={openInNewTab} />
-            </ScrollArea>
-          ) : null}
-
-          {activeTab?.kind === "browser" ? (
-            <div ref={contentRef} className="absolute inset-0">
-              {!hasElectronView ? (
-                <iframe
-                  ref={iframeRef}
-                  title="Web preview"
-                  className="h-full w-full"
-                  src={activeTabState.url || "about:blank"}
-                />
-              ) : (
-                <div className="h-full w-full" />
-              )}
-            </div>
-          ) : null}
-        </div>
-
-        {devPanel.isOpen ? (
-          <DevPanel
-            activeTabId={resolvedActiveTabId}
-            activeIsBrowser={activeIsBrowser}
-            hasElectronView={hasElectronView}
-            isRouteActive={isRouteActive}
+          {/* Anti-Detection Profile Selector */}
+          <ProfileSelector
+            tabId={resolvedActiveTabId}
+            disabled={!hasElectronView || !activeIsBrowser}
           />
-        ) : null}
+        </div>
+
+        <div className="flex min-h-0 flex-1">
+          <div
+            className={cn(
+              "relative min-h-0 flex-1",
+              devPanel.isOpen && devPanel.isFullWidth && "hidden"
+            )}
+          >
+            {activeTab?.kind === "dashboard" ? (
+              <ScrollArea className="h-full">
+                <Dashboard onOpenUrl={openInNewTab} />
+              </ScrollArea>
+            ) : null}
+
+            {activeTab?.kind === "browser" ? (
+              <div ref={contentRef} className="absolute inset-0">
+                {!hasElectronView ? (
+                  <iframe
+                    ref={iframeRef}
+                    title="Web preview"
+                    className="h-full w-full"
+                    src={activeTabState.url || "about:blank"}
+                  />
+                ) : (
+                  <div className="h-full w-full" />
+                )}
+              </div>
+            ) : null}
+          </div>
+
+          {devPanel.isOpen ? (
+            <DevPanel
+              activeTabId={resolvedActiveTabId}
+              activeIsBrowser={activeIsBrowser}
+              hasElectronView={hasElectronView}
+              isRouteActive={isRouteActive}
+            />
+          ) : null}
+        </div>
       </div>
-    </div>
+    </AntiBrowserView>
   );
 }

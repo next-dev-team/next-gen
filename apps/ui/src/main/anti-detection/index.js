@@ -43,17 +43,19 @@ function ensureProxyLoginHandler() {
 /**
  * Create a partition session for a tab with anti-detection measures
  * @param {string} tabId - The tab identifier
- * @param {string} profileId - Optional profile ID to use
+ * @param {string|Object} profileOrId - Optional profile ID or object to use
  * @returns {Promise<Electron.Session>}
  */
-async function createAntiDetectionSession(tabId, profileId = null) {
+async function createAntiDetectionSession(tabId, profileOrId = null) {
   // If no profileId provided, check if we already have one for this tab
   // This handles cases where switchProfile was called before session creation
   const existingProfile = activeProfiles.get(tabId);
 
   let profile;
-  if (profileId) {
-    profile = getProfile(profileId);
+  if (profileOrId && typeof profileOrId === "object") {
+    profile = profileOrId;
+  } else if (profileOrId && typeof profileOrId === "string") {
+    profile = getProfile(profileOrId);
   } else if (existingProfile) {
     profile = existingProfile;
     console.log(
@@ -64,7 +66,7 @@ async function createAntiDetectionSession(tabId, profileId = null) {
   }
 
   if (!profile) {
-    console.error(`Profile not found: ${profileId || "random"}`);
+    console.error(`Profile not found: ${profileOrId || "random"}`);
     return null;
   }
 
@@ -93,10 +95,30 @@ async function createAntiDetectionSession(tabId, profileId = null) {
  */
 async function setupSessionAntiDetection(ses, profile) {
   // 1. Set User Agent
-  ses.setUserAgent(profile.userAgent, profile.languages.join(", "));
+  const fallbackUa =
+    (typeof ses.getUserAgent === "function" ? ses.getUserAgent() : "") ||
+    String(app.userAgentFallback || "");
+  const userAgent =
+    typeof profile?.userAgent === "string" && profile.userAgent.trim()
+      ? profile.userAgent
+      : fallbackUa;
+
+  const languages =
+    Array.isArray(profile?.languages) && profile.languages.length
+      ? profile.languages.filter(Boolean).map((l) => String(l))
+      : profile?.language
+        ? [String(profile.language)]
+        : ["en-US", "en"];
+  const acceptLanguage = languages.join(", ");
+
+  if (userAgent) {
+    ses.setUserAgent(userAgent, acceptLanguage);
+  }
 
   // 1.1 Apply Proxy if configured
-  const proxyConfig = await proxyManager.getProxyForProfile(profile.id);
+  // Check profile.proxy first (from frontend object)
+  const proxyConfig =
+    profile.proxy || (await proxyManager.getProxyForProfile(profile.id));
 
   ensureProxyLoginHandler();
 
@@ -148,10 +170,12 @@ async function setupSessionAntiDetection(ses, profile) {
     delete headers["X-Requested-With"];
 
     // Ensure consistent User-Agent
-    headers["User-Agent"] = profile.userAgent;
+    if (userAgent) headers["User-Agent"] = userAgent;
 
     // Add Accept-Language based on profile
-    headers["Accept-Language"] = profile.languages.join(", ") + ";q=0.9";
+    if (acceptLanguage) {
+      headers["Accept-Language"] = `${acceptLanguage};q=0.9`;
+    }
 
     // Add realistic Accept header
     if (!headers["Accept"]) {
@@ -160,7 +184,7 @@ async function setupSessionAntiDetection(ses, profile) {
     }
 
     // Add SEC headers for Chromium browsers
-    if (profile.userAgent.includes("Chrome")) {
+    if (userAgent && userAgent.includes("Chrome")) {
       headers["Sec-CH-UA"] = generateSecChUa(profile);
       headers["Sec-CH-UA-Mobile"] = profile.category === "mobile" ? "?1" : "?0";
       headers["Sec-CH-UA-Platform"] = getPlatformHint(profile);
@@ -299,8 +323,13 @@ function getActiveProfile(tabId) {
 /**
  * Switch the profile for a tab
  */
-async function switchProfile(tabId, profileId) {
-  const profile = getProfile(profileId);
+async function switchProfile(tabId, profileOrId) {
+  let profile;
+  if (profileOrId && typeof profileOrId === "object") {
+    profile = profileOrId;
+  } else {
+    profile = getProfile(profileOrId);
+  }
   if (!profile) return false;
 
   activeProfiles.set(tabId, profile);
@@ -368,8 +397,8 @@ function initAntiDetectionIPC() {
 
   ipcMain.handle(
     "anti-detection:switch-profile",
-    async (event, { tabId, profileId }) => {
-      return switchProfile(tabId, profileId);
+    async (event, { tabId, profileId, profile }) => {
+      return switchProfile(tabId, profile || profileId);
     }
   );
 

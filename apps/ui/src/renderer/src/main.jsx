@@ -5,6 +5,10 @@ import VConsole from "vconsole";
 import App from "./App";
 import GlobalErrorBoundary from "./components/GlobalErrorBoundary";
 import "./input.css";
+import { initializeStoreSync } from "./stores/syncMiddleware";
+
+// Initialize store synchronization
+initializeStoreSync();
 
 const queryClient = new QueryClient();
 
