@@ -909,7 +909,7 @@ export default function MainLayout({
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-[var(--color-bg-base)] text-[var(--color-text-primary)] transition-colors duration-300">
         <div
-          className="flex h-16 items-center justify-between border-b bg-[var(--color-bg-container)] px-6 transition-colors duration-300"
+          className="flex h-14 items-center justify-between border-b bg-[var(--color-bg-container)] px-6 transition-colors duration-300"
           style={{ WebkitAppRegion: "drag", paddingRight: 150 }}
         >
           <div
@@ -1131,7 +1131,7 @@ export default function MainLayout({
         <div
           className={
             "flex flex-1 flex-col overflow-hidden " +
-            (activeTab === "launchpad" ? "p-0" : "p-12")
+            (activeTab === "launchpad" ? "p-0" : "p-4")
           }
           style={{ WebkitAppRegion: "no-drag" }}
         >

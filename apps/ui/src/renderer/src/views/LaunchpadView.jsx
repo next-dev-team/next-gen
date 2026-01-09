@@ -421,7 +421,7 @@ export default function LaunchpadView() {
       <div className="pointer-events-none absolute inset-0 opacity-[0.14] [background-image:radial-gradient(rgba(255,255,255,0.9)_1px,transparent_1px)] [background-size:18px_18px]" />
 
       <div className="relative z-10 flex h-full w-full flex-col">
-        <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-3 px-6 pt-7">
+        <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-3 px-6 pt-4">
           <div className="relative w-full">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/70" />
             <Input
@@ -467,7 +467,7 @@ export default function LaunchpadView() {
                       setSelectedIndex(0);
                     }}
                     className={cn(
-                      "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer",
+                      "shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium transition cursor-pointer",
                       active
                         ? "border-menu-active bg-menu-active text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
                         : "border-white/10 bg-white/8 text-white/75 hover:bg-menu-active hover:text-white"
@@ -556,7 +556,7 @@ export default function LaunchpadView() {
             </div>
           ) : (
             <div className="mx-auto flex w-full max-w-6xl flex-col items-center">
-              <div className="grid w-full grid-cols-4 gap-x-5 gap-y-6 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8">
+              <div className="grid w-full grid-cols-4 gap-x-4 gap-y-5 sm:grid-cols-6 md:grid-cols-7 lg:grid-cols-8">
                 {pagedGridActions.map((a) => {
                   const Icon = a.icon;
                   return (
@@ -568,13 +568,13 @@ export default function LaunchpadView() {
                     >
                       <span
                         className={cn(
-                          "relative flex h-[89px] w-[89px] items-center justify-center overflow-hidden rounded-[26px] border border-white/12 shadow-[0_24px_52px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.26)] transition-transform duration-150 ease-out group-hover:scale-[1.06] group-active:scale-[0.98]",
+                          "relative flex h-[74px] w-[74px] items-center justify-center overflow-hidden rounded-[20px] border border-white/12 shadow-[0_24px_52px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.26)] transition-transform duration-150 ease-out group-hover:scale-[1.06] group-active:scale-[0.98]",
                           a.gradient
                         )}
                       >
                         <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.42)_0%,transparent_70%)]" />
                         <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(70%_85%_at_50%_92%,rgba(0,0,0,0.42)_0%,transparent_58%)]" />
-                        <Icon className="relative h-8 w-8 text-white/95 drop-shadow" />
+                        <Icon className="relative h-7 w-7 text-white/95 drop-shadow" />
                       </span>
 
                       <span className="w-full max-w-[132px] line-clamp-2 text-center text-[11px] leading-tight font-medium text-white/90">
