@@ -8,6 +8,7 @@ import {
   FileJson,
   Globe,
   Image,
+  Loader2,
   Maximize2,
   Minimize2,
   Monitor,
@@ -69,8 +70,8 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import { cn } from "../lib/utils";
-import { useBrowserTabsStore } from "../stores/browserTabsStore";
 import { useBrowserProfileStore } from "../stores/browserProfileStore";
+import { useBrowserTabsStore } from "../stores/browserTabsStore";
 import { useProxyStore } from "../stores/proxyStore";
 import { useResourceStore } from "../stores/resourceStore";
 import { copyToClipboard, generateElementCode } from "../utils/codeGenerator";
@@ -550,6 +551,56 @@ function Dashboard({ onOpenUrl }) {
       },
       { title: "Lucide Icons", url: "https://lucide.dev", group: "Docs" },
       {
+        title: "ChatGPT",
+        url: "https://chatgpt.com",
+        group: "AI",
+      },
+      {
+        title: "Claude",
+        url: "https://claude.ai",
+        group: "AI",
+      },
+      {
+        title: "Gemini",
+        url: "https://gemini.google.com",
+        group: "AI",
+      },
+      {
+        title: "Perplexity",
+        url: "https://www.perplexity.ai",
+        group: "AI",
+      },
+      {
+        title: "Grok",
+        url: "https://grok.com",
+        group: "AI",
+      },
+      {
+        title: "DeepSeek",
+        url: "https://chat.deepseek.com",
+        group: "AI",
+      },
+      {
+        title: "Qwen",
+        url: "https://chat.qwen.ai",
+        group: "AI",
+      },
+      {
+        title: "Kimi K2",
+        url: "https://kimi.moonshot.cn",
+        group: "AI",
+      },
+      {
+        title: "Mistral",
+        url: "https://chat.mistral.ai",
+        group: "AI",
+      },
+      {
+        title: "Doubao",
+        url: "https://www.doubao.com",
+        group: "AI",
+      },
+      {
         title: "Shadcn Chat",
         url: "https://context7.com/websites/ui_shadcn?tab=chat",
         group: "Docs",
@@ -646,9 +697,10 @@ function Dashboard({ onOpenUrl }) {
     (it) => it.group === "Entertainment"
   );
   const musicItems = filtered.filter((it) => it.group === "Music");
+  const aiItems = filtered.filter((it) => it.group === "AI");
   const docsItems = filtered.filter((it) => it.group === "Docs");
   const moreItems = filtered.filter(
-    (it) => !["Entertainment", "Music", "Docs"].includes(it.group)
+    (it) => !["Entertainment", "Music", "AI", "Docs"].includes(it.group)
   );
 
   return (
@@ -682,6 +734,7 @@ function Dashboard({ onOpenUrl }) {
                 <TabsTrigger value="docs">Docs</TabsTrigger>
                 <TabsTrigger value="entertainment">Entertainment</TabsTrigger>
                 <TabsTrigger value="music">Music</TabsTrigger>
+                <TabsTrigger value="ai">AI</TabsTrigger>
                 <TabsTrigger value="more">More</TabsTrigger>
               </TabsList>
               <TabsContent value="entertainment">
@@ -704,6 +757,23 @@ function Dashboard({ onOpenUrl }) {
               <TabsContent value="music">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
                   {musicItems.map((it) => (
+                    <Button
+                      key={it.url}
+                      onClick={() => handleOpen(it.url)}
+                      variant="outline"
+                      className="h-auto justify-between gap-2 px-3 py-2"
+                    >
+                      <span className="font-medium">{it.title}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {it.group}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </TabsContent>
+              <TabsContent value="ai">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                  {aiItems.map((it) => (
                     <Button
                       key={it.url}
                       onClick={() => handleOpen(it.url)}
@@ -2326,6 +2396,7 @@ export default function BrowserToolView() {
         url: payload.url,
         canGoBack: payload.canGoBack,
         canGoForward: payload.canGoForward,
+        isLoading: payload.isLoading,
       });
       if (payload.url) addHistoryEntry(payload.url, payload.url);
     });
@@ -2457,7 +2528,7 @@ export default function BrowserToolView() {
     if (!activeIsBrowser) return;
 
     try {
-      updateTabState(resolvedActiveTabId, { url });
+      updateTabState(resolvedActiveTabId, { url, isLoading: true });
       addHistoryEntry(url, url);
 
       if (hasElectronView) {
@@ -2503,6 +2574,9 @@ export default function BrowserToolView() {
           >
             {tabs.map((t, idx) => {
               const isActive = t.id === resolvedActiveTabId;
+              const tState = tabStateById[t.id] || {};
+              const isLoading = tState.isLoading;
+
               return (
                 <div
                   key={t.id}
@@ -2533,6 +2607,9 @@ export default function BrowserToolView() {
                     title={t.title}
                     className="flex items-center gap-2 px-3 py-1 text-sm"
                   >
+                    {isLoading && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
                     <span className="max-w-[220px] truncate font-medium">
                       {t.title}
                     </span>
@@ -2636,12 +2713,18 @@ export default function BrowserToolView() {
                 return;
               }
               if (iframeRef.current) {
+                updateTabState(resolvedActiveTabId, { isLoading: true });
                 iframeRef.current.contentWindow?.location?.reload?.();
               }
             }}
             aria-label="Reload"
           >
-            <RotateCw className="h-4 w-4" />
+            <RotateCw
+              className={cn(
+                "h-4 w-4",
+                activeTabState.isLoading && "animate-spin"
+              )}
+            />
           </Button>
 
           <div className="flex flex-1 items-center gap-2">
@@ -2742,12 +2825,25 @@ export default function BrowserToolView() {
 
             {activeTab?.kind === "browser" ? (
               <div ref={contentRef} className="absolute inset-0">
+                {activeTabState.isLoading && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/50 backdrop-blur-[1px]">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      <span className="text-xs text-muted-foreground font-medium">
+                        Loading...
+                      </span>
+                    </div>
+                  </div>
+                )}
                 {!hasElectronView ? (
                   <iframe
                     ref={iframeRef}
                     title="Web preview"
                     className="h-full w-full"
                     src={activeTabState.url || "about:blank"}
+                    onLoad={() => {
+                      updateTabState(resolvedActiveTabId, { isLoading: false });
+                    }}
                   />
                 ) : (
                   <div className="h-full w-full" />

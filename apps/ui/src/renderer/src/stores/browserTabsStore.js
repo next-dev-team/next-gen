@@ -106,6 +106,7 @@ export const useBrowserTabsStore = create(
                 url: trimmed,
                 canGoBack: false,
                 canGoForward: false,
+                isLoading: true,
               },
             },
           }));

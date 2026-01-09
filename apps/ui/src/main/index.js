@@ -828,6 +828,7 @@ function notifyBrowserState(tabId) {
     url: view.webContents.getURL(),
     canGoBack: view.webContents.canGoBack(),
     canGoForward: view.webContents.canGoForward(),
+    isLoading: view.webContents.isLoading(),
   });
 }
 
@@ -895,6 +896,9 @@ async function ensureBrowserView(tabId, options = {}) {
 
   view.webContents.on("did-navigate", () => notifyBrowserState(tabId));
   view.webContents.on("did-navigate-in-page", () => notifyBrowserState(tabId));
+  view.webContents.on("did-start-loading", () => notifyBrowserState(tabId));
+  view.webContents.on("did-stop-loading", () => notifyBrowserState(tabId));
+  view.webContents.on("did-fail-load", () => notifyBrowserState(tabId));
 
   // Inject anti-detection stealth script after page load
   view.webContents.on("did-finish-load", async () => {
