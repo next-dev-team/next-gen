@@ -26,11 +26,11 @@ test.describe("Generator UI", () => {
 
   // test("should load the app and show title", async () => {
   //   const window = await electronApp.firstWindow();
-  //   await expect(window).toHaveTitle("Next Gen Tools");
+  //   await expect(window).toHaveTitle("Next Gen Dev");
   //   await expect(
-  //     window.getByRole("heading", { name: "Next Gen" })
+  //     window.getByRole("heading", { name: "Next Gen Dev" })
   //   ).toBeVisible();
-  //   await expect(window.getByText(/Next Gen Generator ©/)).toBeVisible();
+  //   await expect(window.getByText(/Next Gen Dev Generator ©/)).toBeVisible();
   // });
 
   test("should list generators", async () => {

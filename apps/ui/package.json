@@ -1,7 +1,7 @@
 {
-  "name": "@nde/next-gen-tools",
+  "name": "next-gen-dev",
   "version": "1.0.1",
-  "description": "Electron app with floating DevTools",
+  "description": "Next Gen Developer Tools",
   "main": "./out/main/index.js",
   "author": "Next Dev Team <info@next-dev.team>",
   "homepage": "https://github.com/next-dev-team/next-gen#readme",
@@ -91,8 +91,8 @@
     "zustand": "^5.0.9"
   },
   "build": {
-    "appId": "com.float-devtools-app.app",
-    "productName": "next-gen-tools",
+    "appId": "com.next-gen-dev.app",
+    "productName": "Next Gen Dev",
     "publish": [
       {
         "provider": "github",
@@ -101,7 +101,8 @@
       }
     ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "resources"
     },
     "files": [
       "out/**/*",

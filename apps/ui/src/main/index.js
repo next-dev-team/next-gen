@@ -21,6 +21,21 @@ const { spawn, fork } = require("child_process");
 const fs = require("fs");
 const Conf = require("conf");
 
+// Set app name explicitly for system dialogs and notifications
+app.name = "Next Gen Dev";
+
+// Configure About panel for macOS
+if (process.platform === "darwin") {
+  app.setAboutPanelOptions({
+    applicationName: "Next Gen Dev",
+    applicationVersion: app.getVersion(),
+    copyright: "Copyright © 2026 Next Dev Team",
+    version: "1.0.1",
+    website: "https://next-dev.team",
+    iconPath: path.resolve(__dirname, "../../resources/icon.svg"),
+  });
+}
+
 // Anti-detection module for browser fingerprinting protection
 const antiDetection = require("./anti-detection");
 
@@ -98,6 +113,38 @@ let registeredQuickToggleShortcut = null;
 let trayClickTimer = null;
 
 const DEFAULT_QUICK_TOGGLE_SHORTCUT = "CommandOrControl+Shift+Space";
+
+// ============================================
+// SINGLE INSTANCE LOCK & DEEP LINKING
+// ============================================
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (event, commandLine) => {
+    // Someone tried to run a second instance, we should focus our window.
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.focus();
+
+      // On Windows/Linux, URLs come through command line
+      const url = commandLine.find(
+        (arg) => arg.startsWith("http://") || arg.startsWith("https://")
+      );
+      if (url) {
+        openUrlWithTarget(url, true).catch(console.error);
+      }
+    }
+  });
+
+  // Handle URLs on macOS
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    openUrlWithTarget(url, true).catch(console.error);
+  });
+}
 
 const browserViews = new Map();
 let activeBrowserTabId = null;
@@ -521,6 +568,11 @@ function safeHideWindow(windowInstance) {
 
 function createWindow({ show = true } = {}) {
   const shouldShow = Boolean(show);
+  const trayIcon = resolveAppIcon({
+    size: process.platform === "darwin" ? 18 : 16,
+  });
+  const windowIcon = resolveAppIcon({ size: 256 });
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -528,6 +580,7 @@ function createWindow({ show = true } = {}) {
     minHeight: 600,
     backgroundColor: "#0f172a",
     show: false,
+    icon: windowIcon,
     skipTaskbar: true,
     titleBarStyle: "hidden",
     titleBarOverlay: {
@@ -584,39 +637,17 @@ function createWindow({ show = true } = {}) {
   });
 }
 
-function resolveTrayIcon() {
+function resolveAppIcon({ size = 16 } = {}) {
   const packagedCandidates = [
-    path.join(
-      process.resourcesPath,
-      "turbo",
-      "generators",
-      "templates",
-      "rnr-expo",
-      "assets",
-      "images",
-      "favicon.png"
-    ),
-    path.join(
-      process.resourcesPath,
-      "turbo",
-      "generators",
-      "templates",
-      "rnr-uniwind",
-      "assets",
-      "images",
-      "favicon.png"
-    ),
+    path.join(process.resourcesPath, "icon.png"),
+    path.join(process.resourcesPath, "icon.ico"),
+    path.join(process.resourcesPath, "resources", "icon.png"),
+    path.join(process.resourcesPath, "resources", "icon.svg"),
   ];
 
   const devCandidates = [
-    path.resolve(
-      __dirname,
-      "../../../turbo/generators/templates/rnr-expo/assets/images/favicon.png"
-    ),
-    path.resolve(
-      __dirname,
-      "../../../turbo/generators/templates/rnr-uniwind/assets/images/favicon.png"
-    ),
+    path.resolve(__dirname, "../../resources/icon.png"),
+    path.resolve(__dirname, "../../resources/icon.svg"),
   ];
 
   const candidates = app.isPackaged
@@ -628,12 +659,12 @@ function resolveTrayIcon() {
       if (!fs.existsSync(candidate)) continue;
       const image = nativeImage.createFromPath(candidate);
       if (image && !image.isEmpty()) {
-        const size = process.platform === "darwin" ? 18 : 16;
         return image.resize({ width: size, height: size });
       }
     } catch {}
   }
 
+  // Fallback to a simple data URL if no icon found
   return nativeImage.createFromDataURL(
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAABmSURBVHgB7ZKxDYAwCENzJ3EFd3AEZ3AEZ3AEZ7DgQi1KM3pZVj9kqUQy4X5y0KcQ7mGdR1gHQQQyQq0v7z0yWmWcX4q8WwWQjT2QbC7a0g6y9mYp+Qb9b7QxQy2lQAAAABJRU5ErkJggg=="
   );
@@ -698,9 +729,11 @@ async function updateTrayMenu() {
 function ensureTray() {
   if (tray) return tray;
 
-  const icon = resolveTrayIcon();
+  const icon = resolveAppIcon({
+    size: process.platform === "darwin" ? 18 : 16,
+  });
   tray = new Tray(icon);
-  tray.setToolTip("Next Gen");
+  tray.setToolTip("Next Gen Dev");
 
   updateTrayMenu().catch(() => {});
 
@@ -1050,7 +1083,7 @@ async function ensureBrowserView(tabId, options = {}) {
       });
 
       if (!adblockEnabledCache) {
-        shell.openExternal(url).catch(() => {});
+        openUrlWithTarget(url).catch(() => {});
       }
       return { action: "deny" };
     } catch {
@@ -2085,6 +2118,52 @@ ipcMain.handle("get-quick-toggle-shortcut", async () => {
   return currentStore.get("quickToggleShortcut", DEFAULT_QUICK_TOGGLE_SHORTCUT);
 });
 
+ipcMain.handle("get-external-link-target", async () => {
+  const currentStore = await getStore();
+  const value = String(
+    currentStore.get("externalLinkTarget", "system") || "system"
+  );
+  return value === "app" ? "app" : "system";
+});
+
+ipcMain.handle("set-external-link-target", async (event, value) => {
+  const currentStore = await getStore();
+  const normalized = value === "app" ? "app" : "system";
+  currentStore.set("externalLinkTarget", normalized);
+  sendSettingsChanged("externalLinkTarget", normalized);
+  return true;
+});
+
+ipcMain.handle("is-default-browser", async () => {
+  // Check if both http and https are handled by this app
+  return (
+    app.isDefaultProtocolClient("http") && app.isDefaultProtocolClient("https")
+  );
+});
+
+ipcMain.handle("set-as-default-browser", async (event, value) => {
+  let success = false;
+  if (value) {
+    const successHttp = app.setAsDefaultProtocolClient("http");
+    const successHttps = app.setAsDefaultProtocolClient("https");
+    success = successHttp && successHttps;
+  } else {
+    const successHttp = app.removeAsDefaultProtocolClient("http");
+    const successHttps = app.removeAsDefaultProtocolClient("https");
+    success = successHttp && successHttps;
+  }
+
+  if (success) {
+    // Notify renderer about the change
+    const isDefault =
+      app.isDefaultProtocolClient("http") &&
+      app.isDefaultProtocolClient("https");
+    sendSettingsChanged("isDefaultBrowser", isDefault);
+  }
+
+  return success;
+});
+
 // Select folder dialog
 ipcMain.handle("select-folder", async (event, { title, defaultPath }) => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -2116,6 +2195,48 @@ async function ensureAbsolutePath(targetPath) {
   return path.resolve(rootPath, targetPath);
 }
 
+async function openUrlWithTarget(url, forceApp = false) {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  if (!/^https?:$/.test(parsed.protocol)) return false;
+
+  const currentStore = await getStore();
+  const target = String(
+    currentStore.get("externalLinkTarget", "system") || "system"
+  );
+
+  // If forced (e.g. from deep link) or if the app is the system default browser,
+  // we should open it in the app's internal browser view.
+  const isDefault =
+    app.isDefaultProtocolClient("http") && app.isDefaultProtocolClient("https");
+
+  if (forceApp || isDefault || target === "app") {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("open-in-app-browser", {
+        url: parsed.toString(),
+      });
+      return true;
+    }
+    return false;
+  }
+
+  try {
+    await shell.openExternal(parsed.toString());
+    return true;
+  } catch (err) {
+    console.error("Failed to open external URL:", err);
+    return false;
+  }
+}
+
 // Open folder in file explorer
 ipcMain.handle("open-folder", async (event, folderPath) => {
   if (folderPath) {
@@ -2128,16 +2249,7 @@ ipcMain.handle("open-folder", async (event, folderPath) => {
 
 // Open external URL
 ipcMain.handle("open-external", async (event, url) => {
-  if (url) {
-    try {
-      await shell.openExternal(url);
-      return true;
-    } catch (err) {
-      console.error("Failed to open external URL:", err);
-      return false;
-    }
-  }
-  return false;
+  return await openUrlWithTarget(url);
 });
 
 // Write text to clipboard
@@ -3992,14 +4104,19 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (mainWindow === null) {
+    if (process.platform === "win32" && process.argv.length > 1) {
+      const url = process.argv.find(
+        (arg) => arg.startsWith("http://") || arg.startsWith("https://")
+      );
+      if (url) {
+        openUrlWithTarget(url, true).catch(console.error);
+      }
+    }
     createWindow();
   }
 });
 
-// Handle external links
-ipcMain.on("open-external", (event, url) => {
-  shell.openExternal(url);
-});
+// Handle external links removed - using ipcMain.handle("open-external") instead
 
 ipcMain.handle("run-e2e-test", async (event, { testFile, options = {} }) => {
   const { spawn } = require("child_process");

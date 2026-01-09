@@ -11,6 +11,7 @@ import {
   Search,
   Settings,
   Table,
+  Terminal,
   TestTube,
 } from "lucide-react";
 import React from "react";
@@ -916,17 +917,17 @@ export default function MainLayout({
             className="flex min-w-0 flex-1 items-center gap-3"
             style={{ WebkitAppRegion: "no-drag" }}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-indigo-600 to-indigo-500">
-              <Rocket className="h-[18px] w-[18px] text-white" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 shadow-lg shadow-indigo-500/20">
+              <Terminal className="h-[18px] w-[18px] text-white" />
             </div>
-            <h1 className="truncate text-sm font-medium text-[var(--color-text-primary)]">
+            <h1 className="truncate text-sm font-semibold tracking-tight text-[var(--color-text-primary)]">
               {activeTab === "ui"
                 ? "UI Builder"
                 : activeTab === "resources"
                   ? "Resources"
                   : activeTab === "launchpad"
                     ? "Launchpad"
-                    : "Next Gen"}
+                    : "Next Gen Dev"}
             </h1>
             <div className="rounded bg-[var(--color-bg-elevated)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]">
               v1.0

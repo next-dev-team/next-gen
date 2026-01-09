@@ -12,6 +12,7 @@ import {
   Button,
   Card,
   Divider,
+  Modal,
   Segmented,
   Space,
   Switch,
@@ -19,7 +20,6 @@ import {
   Tag,
   Typography,
   theme,
-  Modal,
 } from "antd";
 import React, { useEffect, useState } from "react";
 import { useOutletContext } from "react-router-dom";
@@ -42,6 +42,8 @@ export default function SettingsView() {
   const [runInBackground, setRunInBackground] = useState(true);
   const [keyboardControlsEnabled, setKeyboardControlsEnabled] = useState(true);
   const [quickToggleEnabled, setQuickToggleEnabled] = useState(true);
+  const [externalLinkTarget, setExternalLinkTarget] = useState("system");
+  const [isDefaultBrowser, setIsDefaultBrowser] = useState(false);
   const [appVisibility, setAppVisibility] = useState({
     visible: false,
     focused: false,
@@ -104,6 +106,28 @@ export default function SettingsView() {
         .catch(() => {});
     }
 
+    try {
+      const raw = window.localStorage.getItem("externalLinkTarget");
+      if (raw === "app" || raw === "system") setExternalLinkTarget(raw);
+    } catch {}
+
+    if (window.electronAPI?.getExternalLinkTarget) {
+      window.electronAPI
+        .getExternalLinkTarget()
+        .then((value) => {
+          if (value === "app" || value === "system")
+            setExternalLinkTarget(value);
+        })
+        .catch(() => {});
+    }
+
+    if (window.electronAPI?.isDefaultBrowser) {
+      window.electronAPI
+        .isDefaultBrowser()
+        .then(setIsDefaultBrowser)
+        .catch(() => {});
+    }
+
     if (window.electronAPI?.getAppVisibility) {
       window.electronAPI
         .getAppVisibility()
@@ -130,6 +154,13 @@ export default function SettingsView() {
             setKeyboardControlsEnabled(Boolean(value));
           if (key === "quickToggleEnabled")
             setQuickToggleEnabled(Boolean(value));
+          if (key === "externalLinkTarget") {
+            const next = value === "app" ? "app" : "system";
+            setExternalLinkTarget(next);
+          }
+          if (key === "isDefaultBrowser") {
+            setIsDefaultBrowser(Boolean(value));
+          }
         }
       );
     }
@@ -183,6 +214,34 @@ export default function SettingsView() {
     } catch {}
     if (window.electronAPI?.setQuickToggleEnabled) {
       window.electronAPI.setQuickToggleEnabled(checked);
+    }
+  };
+
+  const handleExternalLinkTargetChange = (value) => {
+    const next = value === "app" ? "app" : "system";
+    setExternalLinkTarget(next);
+    try {
+      window.localStorage.setItem("externalLinkTarget", next);
+    } catch {}
+    if (window.electronAPI?.setExternalLinkTarget) {
+      window.electronAPI.setExternalLinkTarget(next);
+    }
+  };
+
+  const handleDefaultBrowserToggle = async (checked) => {
+    if (window.electronAPI?.setAsDefaultBrowser) {
+      const success = await window.electronAPI.setAsDefaultBrowser(checked);
+      if (success) {
+        setIsDefaultBrowser(checked);
+        // If we just set it as default, also set externalLinkTarget to "app" for immediate feedback
+        if (checked) {
+          handleExternalLinkTargetChange("app");
+        }
+      } else {
+        // Refresh status if it failed (e.g. user cancelled)
+        const current = await window.electronAPI.isDefaultBrowser();
+        setIsDefaultBrowser(current);
+      }
     }
   };
 
@@ -258,6 +317,35 @@ export default function SettingsView() {
                 onChange={handleRunInBackgroundChange}
               />
             </LabeledItem>
+
+            <Divider style={{ margin: "8px 0" }} />
+
+            <LabeledItem
+              label="Open External Links"
+              subLabel="Choose where links from the app should open."
+            >
+              <Segmented
+                value={externalLinkTarget}
+                onChange={handleExternalLinkTargetChange}
+                options={[
+                  { label: "System Browser", value: "system" },
+                  { label: "Next Gen Dev App", value: "app" },
+                ]}
+              />
+            </LabeledItem>
+
+            <Divider style={{ margin: "8px 0" }} />
+
+            <LabeledItem
+              label="Set as Default Browser"
+              subLabel="Make Next Gen Dev your primary browser for all links."
+            >
+              <Switch
+                size="small"
+                checked={isDefaultBrowser}
+                onChange={handleDefaultBrowserToggle}
+              />
+            </LabeledItem>
           </Card>
 
           <Card
@@ -315,10 +403,8 @@ export default function SettingsView() {
           </Card>
 
           <Card title="About" variant="outlined">
-            <LabeledItem label="Next Gen" subLabel="v1.0.1">
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Productive dev tool.
-              </Text>
+            <LabeledItem label="Next Gen Dev" subLabel="v1.0.1">
+              <Tag color="blue">Stable</Tag>
             </LabeledItem>
           </Card>
         </Space>
