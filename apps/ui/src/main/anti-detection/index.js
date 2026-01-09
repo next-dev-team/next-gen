@@ -185,9 +185,11 @@ async function setupSessionAntiDetection(ses, profile) {
 
     // Add SEC headers for Chromium browsers
     if (userAgent && userAgent.includes("Chrome")) {
-      headers["Sec-CH-UA"] = generateSecChUa(profile);
-      headers["Sec-CH-UA-Mobile"] = profile.category === "mobile" ? "?1" : "?0";
-      headers["Sec-CH-UA-Platform"] = getPlatformHint(profile);
+      const profileWithUserAgent = { ...profile, userAgent };
+      headers["Sec-CH-UA"] = generateSecChUa(profileWithUserAgent);
+      headers["Sec-CH-UA-Mobile"] =
+        profile?.category === "mobile" ? "?1" : "?0";
+      headers["Sec-CH-UA-Platform"] = getPlatformHint(profileWithUserAgent);
       headers["Sec-Fetch-Dest"] = headers["Sec-Fetch-Dest"] || "document";
       headers["Sec-Fetch-Mode"] = headers["Sec-Fetch-Mode"] || "navigate";
       headers["Sec-Fetch-Site"] = headers["Sec-Fetch-Site"] || "none";
@@ -245,16 +247,21 @@ async function setupSessionAntiDetection(ses, profile) {
  * Generate Sec-CH-UA header value
  */
 function generateSecChUa(profile) {
-  if (profile.userAgent.includes("Chrome")) {
-    const match = profile.userAgent.match(/Chrome\/(\d+)/);
-    const version = match ? match[1] : "122";
-    return `"Chromium";v="${version}", "Google Chrome";v="${version}", "Not(A:Brand";v="24"`;
-  }
-  if (profile.userAgent.includes("Edg")) {
-    const match = profile.userAgent.match(/Edg\/(\d+)/);
+  const userAgent =
+    typeof profile?.userAgent === "string" ? profile.userAgent : "";
+
+  if (userAgent.includes("Edg")) {
+    const match = userAgent.match(/Edg\/(\d+)/);
     const version = match ? match[1] : "122";
     return `"Chromium";v="${version}", "Microsoft Edge";v="${version}", "Not(A:Brand";v="24"`;
   }
+
+  if (userAgent.includes("Chrome")) {
+    const match = userAgent.match(/Chrome\/(\d+)/);
+    const version = match ? match[1] : "122";
+    return `"Chromium";v="${version}", "Google Chrome";v="${version}", "Not(A:Brand";v="24"`;
+  }
+
   return `"Chromium";v="122", "Not(A:Brand";v="24"`;
 }
 
@@ -262,14 +269,16 @@ function generateSecChUa(profile) {
  * Get platform hint from profile
  */
 function getPlatformHint(profile) {
-  if (profile.platform.includes("Win")) return '"Windows"';
-  if (profile.platform.includes("Mac")) return '"macOS"';
-  if (profile.platform.includes("Linux")) return '"Linux"';
-  if (profile.platform.includes("iPhone")) return '"iOS"';
-  if (
-    profile.platform.includes("armv") ||
-    profile.userAgent.includes("Android")
-  )
+  const platform =
+    typeof profile?.platform === "string" ? profile.platform : "";
+  const userAgent =
+    typeof profile?.userAgent === "string" ? profile.userAgent : "";
+
+  if (platform.includes("Win")) return '"Windows"';
+  if (platform.includes("Mac")) return '"macOS"';
+  if (platform.includes("Linux")) return '"Linux"';
+  if (platform.includes("iPhone")) return '"iOS"';
+  if (platform.includes("armv") || userAgent.includes("Android"))
     return '"Android"';
   return '"Unknown"';
 }
@@ -464,4 +473,6 @@ module.exports = {
   getAllProfiles,
   getProfile,
   getRandomProfile,
+  generateSecChUa,
+  getPlatformHint,
 };

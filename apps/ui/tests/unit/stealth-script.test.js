@@ -9,6 +9,10 @@ const {
   generateMinimalStealthScript,
 } = require("../../src/main/anti-detection/stealth-script");
 const { getProfile } = require("../../src/main/anti-detection/device-profiles");
+const {
+  generateSecChUa,
+  getPlatformHint,
+} = require("../../src/main/anti-detection");
 
 test.describe("Stealth Script Generator", () => {
   test.describe("generateStealthScript()", () => {
@@ -247,5 +251,33 @@ test.describe("Stealth Script Content Analysis", () => {
 
   test("should mask console.debug for detection script bypass", () => {
     expect(script).toContain("console.debug");
+  });
+});
+
+test.describe("Anti-Detection Header Helpers", () => {
+  test("generateSecChUa() should not throw for missing profile", () => {
+    expect(() => generateSecChUa()).not.toThrow();
+    expect(typeof generateSecChUa()).toBe("string");
+  });
+
+  test("generateSecChUa() should extract Chrome major version", () => {
+    const value = generateSecChUa({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+    });
+    expect(value).toContain('"Google Chrome";v="123"');
+  });
+
+  test("generateSecChUa() should prefer Edge when UA contains Edg", () => {
+    const value = generateSecChUa({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0",
+    });
+    expect(value).toContain('"Microsoft Edge";v="122"');
+  });
+
+  test("getPlatformHint() should not throw for missing profile", () => {
+    expect(() => getPlatformHint()).not.toThrow();
+    expect(getPlatformHint()).toBe('"Unknown"');
   });
 });
