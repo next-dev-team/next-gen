@@ -76,6 +76,8 @@ export function AntiBrowserView({ children }) {
     activeProxy,
     protectionChecks,
     protectionScore,
+    checklistItems,
+    improvementItems,
     normalizedScore,
     scoreLabel,
     scoreTone,
@@ -378,48 +380,17 @@ export function AntiBrowserView({ children }) {
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-3 text-sm">
-                    <li className="flex items-center justify-between">
-                      <span>Activate a browser profile for protection.</span>
-                      <Badge variant={activeProfileId ? "default" : "outline"}>
-                        {activeProfileId ? "Done" : "Pending"}
-                      </Badge>
-                    </li>
-                    <li className="flex items-center justify-between">
-                      <span>Assign a working proxy to the active profile.</span>
-                      <Badge
-                        variant={
-                          activeProxy?.status === "active"
-                            ? "default"
-                            : "outline"
-                        }
+                    {improvementItems.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between"
                       >
-                        {activeProxy?.status === "active" ? "Active" : "Pending"}
-                      </Badge>
-                    </li>
-                    <li className="flex items-center justify-between">
-                      <span>Start at least one profile session.</span>
-                      <Badge
-                        variant={
-                          stats.runningProfiles > 0 ? "default" : "outline"
-                        }
-                      >
-                        {stats.runningProfiles > 0 ? "Running" : "Pending"}
-                      </Badge>
-                    </li>
-                    <li className="flex items-center justify-between">
-                      <span>Enable all fingerprint protections.</span>
-                      <Badge
-                        variant={
-                          protectionScore === protectionChecks.length
-                            ? "default"
-                            : "outline"
-                        }
-                      >
-                        {protectionScore === protectionChecks.length
-                          ? "Complete"
-                          : "Pending"}
-                      </Badge>
-                    </li>
+                        <span>{item.label}</span>
+                        <Badge variant={item.done ? "default" : "outline"}>
+                          {item.done ? item.doneLabel : item.pendingLabel}
+                        </Badge>
+                      </li>
+                    ))}
                   </ul>
                 </CardContent>
               </Card>
@@ -432,36 +403,17 @@ export function AntiBrowserView({ children }) {
                 </CardHeader>
                 <CardContent>
                   <ul className="space-y-3 text-sm">
-                    <li className="flex items-center justify-between">
-                      <span>At least one browser profile is configured.</span>
-                      <Badge variant={stats.profiles > 0 ? "default" : "outline"}>
-                        {stats.profiles > 0 ? "Done" : "Pending"}
-                      </Badge>
-                    </li>
-                    <li className="flex items-center justify-between">
-                      <span>Attach a live proxy for session routing.</span>
-                      <Badge
-                        variant={stats.activeProxies > 0 ? "default" : "outline"}
+                    {checklistItems.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between"
                       >
-                        {stats.activeProxies > 0 ? "Active" : "Pending"}
-                      </Badge>
-                    </li>
-                    <li className="flex items-center justify-between">
-                      <span>Start a profile to activate protections.</span>
-                      <Badge
-                        variant={
-                          stats.runningProfiles > 0 ? "default" : "outline"
-                        }
-                      >
-                        {stats.runningProfiles > 0 ? "Running" : "Pending"}
-                      </Badge>
-                    </li>
-                    <li className="flex items-center justify-between">
-                      <span>Confirm an active profile is selected.</span>
-                      <Badge variant={activeProfileId ? "default" : "outline"}>
-                        {activeProfileId ? "Selected" : "Pending"}
-                      </Badge>
-                    </li>
+                        <span>{item.label}</span>
+                        <Badge variant={item.done ? "default" : "outline"}>
+                          {item.done ? item.doneLabel : item.pendingLabel}
+                        </Badge>
+                      </li>
+                    ))}
                   </ul>
                 </CardContent>
               </Card>

@@ -1,35 +1,42 @@
-const buildProtectionChecks = (profile) => [
+const PROTECTION_CHECK_DEFINITIONS = [
   {
     id: "webrtc",
     label: "WebRTC leak protection",
-    enabled: Boolean(profile?.settings?.blockWebRTC),
+    settingKey: "blockWebRTC",
   },
   {
     id: "canvas",
     label: "Canvas fingerprint masking",
-    enabled: Boolean(profile?.settings?.blockCanvasFingerprint),
+    settingKey: "blockCanvasFingerprint",
   },
   {
     id: "audio",
     label: "Audio fingerprint masking",
-    enabled: Boolean(profile?.settings?.blockAudioFingerprint),
+    settingKey: "blockAudioFingerprint",
   },
   {
     id: "webgl",
     label: "WebGL shielding",
-    enabled: Boolean(profile?.settings?.blockWebGL),
+    settingKey: "blockWebGL",
   },
   {
     id: "fonts",
     label: "Font enumeration blocking",
-    enabled: Boolean(profile?.settings?.blockFonts),
+    settingKey: "blockFonts",
   },
   {
     id: "geo",
     label: "Geolocation guarding",
-    enabled: Boolean(profile?.settings?.blockGeolocation),
+    settingKey: "blockGeolocation",
   },
 ];
+
+const buildProtectionChecks = (profile) =>
+  PROTECTION_CHECK_DEFINITIONS.map((check) => ({
+    id: check.id,
+    label: check.label,
+    enabled: Boolean(profile?.settings?.[check.settingKey]),
+  }));
 
 const getScoreTone = (normalizedScore) => {
   if (normalizedScore >= 80) return "bg-emerald-500";
@@ -73,6 +80,66 @@ export const getSecurityScore = ({
     (activeProxy?.status === "active" ? 15 : 0) +
     protectionScore * 5;
   const normalizedScore = Math.min(Math.max(rawScore, 0), 100);
+  const checklistItems = [
+    {
+      id: "profiles",
+      label: "At least one browser profile is configured.",
+      done: stats.profiles > 0,
+      doneLabel: "Done",
+      pendingLabel: "Pending",
+    },
+    {
+      id: "proxy",
+      label: "Attach a live proxy for session routing.",
+      done: stats.activeProxies > 0,
+      doneLabel: "Active",
+      pendingLabel: "Pending",
+    },
+    {
+      id: "running",
+      label: "Start a profile to activate protections.",
+      done: stats.runningProfiles > 0,
+      doneLabel: "Running",
+      pendingLabel: "Pending",
+    },
+    {
+      id: "active-profile",
+      label: "Confirm an active profile is selected.",
+      done: Boolean(activeProfileId),
+      doneLabel: "Selected",
+      pendingLabel: "Pending",
+    },
+  ];
+  const improvementItems = [
+    {
+      id: "activate-profile",
+      label: "Activate a browser profile for protection.",
+      done: Boolean(activeProfileId),
+      doneLabel: "Done",
+      pendingLabel: "Pending",
+    },
+    {
+      id: "active-proxy",
+      label: "Assign a working proxy to the active profile.",
+      done: activeProxy?.status === "active",
+      doneLabel: "Active",
+      pendingLabel: "Pending",
+    },
+    {
+      id: "run-profile",
+      label: "Start at least one profile session.",
+      done: stats.runningProfiles > 0,
+      doneLabel: "Running",
+      pendingLabel: "Pending",
+    },
+    {
+      id: "enable-protections",
+      label: "Enable all fingerprint protections.",
+      done: protectionScore === protectionChecks.length,
+      doneLabel: "Complete",
+      pendingLabel: "Pending",
+    },
+  ];
 
   return {
     stats,
@@ -81,6 +148,8 @@ export const getSecurityScore = ({
     protectionChecks,
     protectionScore,
     normalizedScore,
+    checklistItems,
+    improvementItems,
     scoreLabel: getScoreLabel(normalizedScore),
     scoreTone: getScoreTone(normalizedScore),
   };
