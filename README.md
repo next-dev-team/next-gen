@@ -24,6 +24,9 @@ the next generation of template
 - [ ] Release VirusTotal scan results for security verification.
 - [ ] Auto update
 - [ ] Https for mcp
+- [ ] wallpapers app and system
+- [ ] System app
+- [ ] Uninstall system external app
 
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
