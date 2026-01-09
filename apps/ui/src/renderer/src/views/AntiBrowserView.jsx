@@ -1,5 +1,5 @@
 import { Globe, Network, Settings2, Shield, ShieldCheck, Users } from "lucide-react";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import BrowserProfilesPanel from "../components/BrowserProfilesPanel";
 import ProxyManagementPanel from "../components/ProxyManagementPanel";
@@ -42,6 +42,13 @@ export function AntiBrowserView({ children }) {
   const profiles = useBrowserProfileStore((s) => s.profiles);
   const proxies = useProxyStore((s) => s.proxies);
   const openUrlTab = useBrowserTabsStore((s) => s.openUrlTab);
+
+  useEffect(() => {
+    if (activeMainTab === "browser") return;
+    if (window.electronAPI?.browserView?.hideAll) {
+      window.electronAPI.browserView.hideAll().catch(() => {});
+    }
+  }, [activeMainTab]);
 
   const handleProxySelect = useCallback((id) => {
     setSelectedProxyId(id);
