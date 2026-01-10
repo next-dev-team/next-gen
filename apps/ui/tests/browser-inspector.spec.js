@@ -4,6 +4,10 @@ import path from "path";
 test.describe("Browser inspector", () => {
   let electronApp;
 
+  function getBrowserToolTab(window) {
+    return window.getByLabel("Browser", { exact: true });
+  }
+
   async function openInspectorTool(window) {
     const toggleDevPanel = window.getByRole("button", {
       name: "Toggle dev panel",
@@ -30,26 +34,29 @@ test.describe("Browser inspector", () => {
   }
 
   test.beforeAll(async () => {
+    const entryPoint = path.join(__dirname, "../out/main/index.js");
     electronApp = await electron.launch({
-      args: [path.join(__dirname, "../out/main/index.js")],
+      args: ["--no-sandbox", "--disable-setuid-sandbox", entryPoint],
       env: {
         NODE_ENV: "development",
+        NEXTGEN_NO_SANDBOX: "1",
+        NEXTGEN_DISABLE_SINGLE_INSTANCE: "1",
       },
     });
   });
 
   test.afterAll(async () => {
-    await electronApp.close();
+    if (electronApp) {
+      await electronApp.close();
+    }
   });
 
   test("should copy selected element HTML", async () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,
@@ -81,6 +88,27 @@ test.describe("Browser inspector", () => {
       return parsed?.state?.activeTabId || null;
     });
     expect(activeTabId).toBeTruthy();
+
+    const backgroundThrottling = await electronApp.evaluate(
+      async ({ BrowserWindow }) => {
+        const win = BrowserWindow.getAllWindows()[0];
+        if (!win) return null;
+
+        const deadline = Date.now() + 15000;
+        while (Date.now() < deadline) {
+          const views =
+            typeof win.getBrowserViews === "function"
+              ? win.getBrowserViews()
+              : [];
+          const view = views[0] || (win.getBrowserView?.() ?? null);
+          const wc = view?.webContents;
+          if (wc && !wc.isDestroyed()) return wc.backgroundThrottling;
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        return null;
+      }
+    );
+    expect(backgroundThrottling).toBe(false);
 
     await openInspectorTool(window);
 
@@ -115,10 +143,8 @@ test.describe("Browser inspector", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,
@@ -292,10 +318,8 @@ test.describe("Browser inspector", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,
@@ -384,10 +408,8 @@ test.describe("Browser inspector", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,
@@ -455,10 +477,8 @@ test.describe("Browser inspector", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,
@@ -499,10 +519,8 @@ test.describe("Browser inspector", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,
@@ -536,10 +554,8 @@ test.describe("Browser inspector", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,
@@ -618,7 +634,7 @@ test.describe("Browser inspector", () => {
       timeout: 15000,
     });
 
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await getBrowserToolTab(window).click();
     await expect(window.getByRole("button", { name: "Reload" })).toBeVisible({
       timeout: 15000,
     });
@@ -706,10 +722,8 @@ test.describe("Browser inspector", () => {
     const window = await electronApp.firstWindow();
     await window.reload();
 
-    await expect(
-      window.getByRole("tab", { name: "Browser", exact: true })
-    ).toBeVisible({ timeout: 15000 });
-    await window.getByRole("tab", { name: "Browser", exact: true }).click();
+    await expect(getBrowserToolTab(window)).toBeVisible({ timeout: 15000 });
+    await getBrowserToolTab(window).click();
 
     await expect(window.getByRole("button", { name: "New tab" })).toBeVisible({
       timeout: 15000,

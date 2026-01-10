@@ -11,6 +11,7 @@ import {
   Search,
   Settings,
   Table,
+  Terminal,
   TestTube,
 } from "lucide-react";
 import React from "react";
@@ -909,24 +910,24 @@ export default function MainLayout({
     <TooltipProvider>
       <div className="flex h-screen flex-col bg-[var(--color-bg-base)] text-[var(--color-text-primary)] transition-colors duration-300">
         <div
-          className="flex h-16 items-center justify-between border-b bg-[var(--color-bg-container)] px-6 transition-colors duration-300"
+          className="flex h-14 items-center justify-between border-b bg-[var(--color-bg-container)] px-6 transition-colors duration-300"
           style={{ WebkitAppRegion: "drag", paddingRight: 150 }}
         >
           <div
             className="flex min-w-0 flex-1 items-center gap-3"
             style={{ WebkitAppRegion: "no-drag" }}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-indigo-600 to-indigo-500">
-              <Rocket className="h-[18px] w-[18px] text-white" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 shadow-lg shadow-indigo-500/20">
+              <Terminal className="h-[18px] w-[18px] text-white" />
             </div>
-            <h1 className="truncate text-sm font-medium text-[var(--color-text-primary)]">
+            <h1 className="truncate text-sm font-semibold tracking-tight text-[var(--color-text-primary)]">
               {activeTab === "ui"
                 ? "UI Builder"
                 : activeTab === "resources"
                   ? "Resources"
                   : activeTab === "launchpad"
                     ? "Launchpad"
-                    : "Next Gen"}
+                    : "Next Gen Dev"}
             </h1>
             <div className="rounded bg-[var(--color-bg-elevated)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]">
               v1.0
@@ -1131,7 +1132,7 @@ export default function MainLayout({
         <div
           className={
             "flex flex-1 flex-col overflow-hidden " +
-            (activeTab === "launchpad" ? "p-0" : "p-12")
+            (activeTab === "launchpad" ? "p-0" : "p-4")
           }
           style={{ WebkitAppRegion: "no-drag" }}
         >

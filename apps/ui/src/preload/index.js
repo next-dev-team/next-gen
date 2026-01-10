@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setQuickToggleEnabled: (enabled) =>
     ipcRenderer.invoke("set-quick-toggle-enabled", enabled),
   getQuickToggleShortcut: () => ipcRenderer.invoke("get-quick-toggle-shortcut"),
+  getExternalLinkTarget: () => ipcRenderer.invoke("get-external-link-target"),
+  setExternalLinkTarget: (value) =>
+    ipcRenderer.invoke("set-external-link-target", value),
+  isDefaultBrowser: () => ipcRenderer.invoke("is-default-browser"),
+  setAsDefaultBrowser: (value) =>
+    ipcRenderer.invoke("set-as-default-browser", value),
   getAppVisibility: () => ipcRenderer.invoke("get-app-visibility"),
   showApp: () => ipcRenderer.invoke("app-show-window"),
   hideApp: () => ipcRenderer.invoke("app-hide-window"),
@@ -262,4 +268,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // External links
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
+  onOpenInAppBrowser: (callback) => {
+    const handler = (event, payload) => callback(payload);
+    ipcRenderer.on("open-in-app-browser", handler);
+    return () => ipcRenderer.removeListener("open-in-app-browser", handler);
+  },
 });

@@ -1,4 +1,4 @@
-# Next Gen
+# Next Gen Dev
 
 the next generation of template
 
@@ -24,6 +24,9 @@ the next generation of template
 - [ ] Release VirusTotal scan results for security verification.
 - [ ] Auto update
 - [ ] Https for mcp
+- [ ] wallpapers app and system
+- [ ] System app
+- [ ] Uninstall system external app
 
 The issue is that Turborepo expects a specific structure. Here's the correct setup:
 
@@ -179,3 +182,4 @@ npm link turbo-generators
 <https://github.com/olliethedev/ui-builder>
 <https://github.com/AndyMik90/Auto-Claude/>
 <https://github.com/ShareX/ShareX>
+<https://github.com/lbjlaq/Antigravity-Manager>

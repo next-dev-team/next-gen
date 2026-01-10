@@ -1,9 +1,17 @@
-import { Globe, Network, Settings2, Shield, Users } from "lucide-react";
-import React, { useCallback, useState } from "react";
+import { Globe, Network, Settings2, Shield, ShieldCheck, Users } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import BrowserProfilesPanel from "../components/BrowserProfilesPanel";
 import ProxyManagementPanel from "../components/ProxyManagementPanel";
+import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
 import {
   Tabs,
   TabsContent,
@@ -17,6 +25,7 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import { cn } from "../lib/utils";
+import { getSecurityScore } from "../lib/securityScore";
 import { useBrowserProfileStore } from "../stores/browserProfileStore";
 import { useBrowserTabsStore } from "../stores/browserTabsStore";
 import { useProxyStore } from "../stores/proxyStore";
@@ -33,6 +42,13 @@ export function AntiBrowserView({ children }) {
   const profiles = useBrowserProfileStore((s) => s.profiles);
   const proxies = useProxyStore((s) => s.proxies);
   const openUrlTab = useBrowserTabsStore((s) => s.openUrlTab);
+
+  useEffect(() => {
+    if (activeMainTab === "browser") return;
+    if (window.electronAPI?.browserView?.hideAll) {
+      window.electronAPI.browserView.hideAll().catch(() => {});
+    }
+  }, [activeMainTab]);
 
   const handleProxySelect = useCallback((id) => {
     setSelectedProxyId(id);
@@ -62,12 +78,17 @@ export function AntiBrowserView({ children }) {
     [openUrlTab, profiles, setActiveProfile]
   );
 
-  const stats = {
-    proxies: proxies.length,
-    activeProxies: proxies.filter((p) => p.status === "active").length,
-    profiles: profiles.length,
-    runningProfiles: profiles.filter((p) => p.status === "running").length,
-  };
+  const {
+    stats,
+    activeProxy,
+    protectionChecks,
+    protectionScore,
+    checklistItems,
+    improvementItems,
+    normalizedScore,
+    scoreLabel,
+    scoreTone,
+  } = getSecurityScore({ profiles, proxies, activeProfileId });
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
@@ -132,6 +153,14 @@ export function AntiBrowserView({ children }) {
                   {stats.runningProfiles}
                 </span>
               )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="score"
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Security Score</span>
+              <span className="sm:hidden">Score</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -202,6 +231,201 @@ export function AntiBrowserView({ children }) {
 
         {activeMainTab === "browser" && (
           <div className="h-full">{children}</div>
+        )}
+
+        {activeMainTab === "score" && (
+          <div className="h-full overflow-auto p-6">
+            <div className="grid gap-6 xl:grid-cols-[2fr_1fr]">
+              <Card className="border-muted/60">
+                <CardHeader>
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-xl">
+                        Anti-Browser Security Score
+                      </CardTitle>
+                      <CardDescription>
+                        Confidence indicator for your current protection setup.
+                      </CardDescription>
+                    </div>
+                    <Badge variant="outline" className="text-xs uppercase">
+                      {scoreLabel} Trust
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-end justify-between">
+                    <div>
+                      <p className="text-4xl font-semibold">
+                        {normalizedScore}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        of 100 secure points
+                      </p>
+                    </div>
+                    <div className="text-right text-sm text-muted-foreground">
+                      <p>Based on proxy routing and profile protections.</p>
+                      <p>Enable more safeguards to improve trust.</p>
+                    </div>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-muted">
+                    <div
+                      className={cn("h-full rounded-full transition-all", scoreTone)}
+                      style={{ width: `${normalizedScore}%` }}
+                    />
+                  </div>
+                  <div className="grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Profiles configured</span>
+                      <span className="font-medium text-foreground">
+                        {stats.profiles}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Active proxies</span>
+                      <span className="font-medium text-foreground">
+                        {stats.activeProxies}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Running profiles</span>
+                      <span className="font-medium text-foreground">
+                        {stats.runningProfiles}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Active profile</span>
+                      <span className="font-medium text-foreground">
+                        {activeProfileId ? "Selected" : "None"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Protection checks enabled</span>
+                      <span className="font-medium text-foreground">
+                        {protectionScore}/{protectionChecks.length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Active proxy status</span>
+                      <span className="font-medium text-foreground">
+                        {activeProxy?.status || "Not set"}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="grid gap-6">
+                <Card className="border-muted/60">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Network identity</CardTitle>
+                    <CardDescription>
+                      Basic IP and routing details for the active profile.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Exit IP / Host</span>
+                      <span className="font-medium text-foreground">
+                        {activeProxy?.host || "Not set"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Proxy type</span>
+                      <span className="font-medium text-foreground">
+                        {activeProxy?.type || "Not set"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>Location</span>
+                      <span className="font-medium text-foreground">
+                        {activeProxy?.country || activeProxy?.city
+                          ? `${activeProxy?.city || "Unknown"}, ${
+                              activeProxy?.country || "Unknown"
+                            }`
+                          : "Unknown"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between rounded-md border border-muted/50 px-3 py-2">
+                      <span>ISP</span>
+                      <span className="font-medium text-foreground">
+                        {activeProxy?.isp || "Unknown"}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-muted/60">
+                  <CardHeader>
+                    <CardTitle className="text-lg">Protection coverage</CardTitle>
+                    <CardDescription>
+                      Shows which anti-fingerprint checks are active.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3 text-sm">
+                      {protectionChecks.map((check) => (
+                        <li
+                          key={check.id}
+                          className="flex items-center justify-between"
+                        >
+                          <span>{check.label}</span>
+                          <Badge variant={check.enabled ? "default" : "outline"}>
+                            {check.enabled ? "Enabled" : "Disabled"}
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <Card className="border-muted/60">
+                <CardHeader>
+                  <CardTitle className="text-lg">Next improvements</CardTitle>
+                  <CardDescription>
+                    Follow these steps to raise your security score.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-3 text-sm">
+                    {improvementItems.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between"
+                      >
+                        <span>{item.label}</span>
+                        <Badge variant={item.done ? "default" : "outline"}>
+                          {item.done ? item.doneLabel : item.pendingLabel}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+              <Card className="border-muted/60">
+                <CardHeader>
+                  <CardTitle className="text-lg">Score checklist</CardTitle>
+                  <CardDescription>
+                    Improve trust by completing these safeguards.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ul className="space-y-3 text-sm">
+                    {checklistItems.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between"
+                      >
+                        <span>{item.label}</span>
+                        <Badge variant={item.done ? "default" : "outline"}>
+                          {item.done ? item.doneLabel : item.pendingLabel}
+                        </Badge>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         )}
       </div>
     </div>

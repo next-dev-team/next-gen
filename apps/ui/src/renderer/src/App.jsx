@@ -116,6 +116,15 @@ function App() {
     localStorage.setItem("theme", designMode);
   }, [designMode, isDarkMode]);
 
+  useEffect(() => {
+    if (!window.electronAPI?.onOpenInAppBrowser) return;
+    return window.electronAPI.onOpenInAppBrowser(({ url } = {}) => {
+      const raw = String(url || "").trim();
+      if (!raw) return;
+      window.location.hash = `#/browser?url=${encodeURIComponent(raw)}`;
+    });
+  }, []);
+
   return (
     <ConfigProvider
       theme={{

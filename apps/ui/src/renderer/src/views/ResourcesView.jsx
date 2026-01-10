@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
   Input,
   Modal,
+  message,
   Popconfirm,
   Segmented,
   Select,
@@ -10,8 +10,8 @@ import {
   Table,
   Tag,
   Tooltip,
-  message,
 } from "antd";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useResourceStore } from "../stores/resourceStore";
 
@@ -19,11 +19,11 @@ const COLUMN_LAYOUT = {
   table: {
     background: "var(--color-bg-container)",
     borderRadius: 12,
-    padding: 16,
+    padding: 12,
     border: "1px solid var(--color-border)",
   },
   header: {
-    marginBottom: 16,
+    marginBottom: 12,
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
@@ -433,8 +433,8 @@ export default function ResourcesView() {
   return (
     <div
       style={{
-        paddingTop: 24,
-        paddingBottom: 24,
+        paddingTop: 0,
+        paddingBottom: 0,
         display: "flex",
         flexDirection: "column",
         gap: 16,

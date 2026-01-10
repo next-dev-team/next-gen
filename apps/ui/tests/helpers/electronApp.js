@@ -2,10 +2,13 @@ import { _electron as electron, expect } from "@playwright/test";
 import path from "path";
 
 export async function launchElectronApp() {
+  const entryPoint = path.join(__dirname, "../../out/main/index.js");
   return await electron.launch({
-    args: [path.join(__dirname, "../../out/main/index.js")],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", entryPoint],
     env: {
       NODE_ENV: "development",
+      NEXTGEN_NO_SANDBOX: "1",
+      NEXTGEN_DISABLE_SINGLE_INSTANCE: "1",
     },
   });
 }
@@ -126,4 +129,3 @@ export async function waitForVisibleBrowserViewUrl(
   }
   return null;
 }
-

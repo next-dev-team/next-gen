@@ -21,6 +21,36 @@ const { spawn, fork } = require("child_process");
 const fs = require("fs");
 const Conf = require("conf");
 
+// Set app name explicitly for system dialogs and notifications
+app.name = "Next Gen Dev";
+
+const isPlaywrightRun =
+  process.execArgv.some((arg) => /playwright/i.test(String(arg || ""))) ||
+  process.argv.some((arg) => /playwright/i.test(String(arg || ""))) ||
+  process.env.PW_TEST === "1" ||
+  process.env.PLAYWRIGHT === "1";
+
+if (isPlaywrightRun || process.env.NEXTGEN_NO_SANDBOX === "1") {
+  try {
+    app.commandLine.appendSwitch("no-sandbox");
+  } catch {}
+  try {
+    app.commandLine.appendSwitch("disable-setuid-sandbox");
+  } catch {}
+}
+
+// Configure About panel for macOS
+if (process.platform === "darwin") {
+  app.setAboutPanelOptions({
+    applicationName: "Next Gen Dev",
+    applicationVersion: app.getVersion(),
+    copyright: "Copyright © 2026 Next Dev Team",
+    version: "1.0.1",
+    website: "https://next-dev.team",
+    iconPath: path.resolve(__dirname, "../../resources/icon.svg"),
+  });
+}
+
 // Anti-detection module for browser fingerprinting protection
 const antiDetection = require("./anti-detection");
 
@@ -41,14 +71,29 @@ process.on("unhandledRejection", (reason, promise) => {
   // Don't crash on unhandled rejections
 });
 
+let scheduleActiveBrowserViewRecovery = null;
+
 // Handle GPU process crashes
 app.on("gpu-process-crashed", (event, killed) => {
   console.error("[GPU] GPU process crashed, killed:", killed);
+  if (typeof scheduleActiveBrowserViewRecovery === "function") {
+    scheduleActiveBrowserViewRecovery({ type: "gpu", killed });
+  }
 });
 
 // Handle child process crashes
 app.on("child-process-gone", (event, details) => {
   console.error("[Process] Child process gone:", details.type, details.reason);
+  if (
+    details &&
+    (details.type === "GPU" || details.type === "Utility") &&
+    typeof scheduleActiveBrowserViewRecovery === "function"
+  ) {
+    scheduleActiveBrowserViewRecovery({
+      type: details.type,
+      reason: details.reason,
+    });
+  }
 });
 
 const scrumStore = new Conf({ projectName: "next-gen-scrum" });
@@ -99,6 +144,45 @@ let trayClickTimer = null;
 
 const DEFAULT_QUICK_TOGGLE_SHORTCUT = "CommandOrControl+Shift+Space";
 
+// ============================================
+// SINGLE INSTANCE LOCK & DEEP LINKING
+// ============================================
+
+const shouldUseSingleInstanceLock =
+  !isPlaywrightRun && process.env.NEXTGEN_DISABLE_SINGLE_INSTANCE !== "1";
+
+if (shouldUseSingleInstanceLock) {
+  const gotTheLock = app.requestSingleInstanceLock();
+  if (!gotTheLock) {
+    app.quit();
+  } else {
+    app.on("second-instance", (event, commandLine) => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+
+        const url = commandLine.find(
+          (arg) => arg.startsWith("http://") || arg.startsWith("https://")
+        );
+        if (url) {
+          openUrlWithTarget(url, true).catch(console.error);
+        }
+      }
+    });
+
+    app.on("open-url", (event, url) => {
+      event.preventDefault();
+      openUrlWithTarget(url, true).catch(console.error);
+    });
+  }
+} else {
+  app.on("open-url", (event, url) => {
+    event.preventDefault();
+    openUrlWithTarget(url, true).catch(console.error);
+  });
+}
+
 const browserViews = new Map();
 let activeBrowserTabId = null;
 const browserBoundsCache = new Map();
@@ -106,6 +190,20 @@ const browserPopupStatsByTabId = new Map();
 
 let adblockEnabledCache = null;
 let adblockerPromise = null;
+
+scheduleActiveBrowserViewRecovery = () => {
+  const tabId = activeBrowserTabId;
+  if (!tabId) return;
+  const view = browserViews.get(tabId);
+  if (!view || !view.webContents || view.webContents.isDestroyed()) return;
+
+  setTimeout(() => {
+    if (!view || !view.webContents || view.webContents.isDestroyed()) return;
+    try {
+      view.webContents.reload();
+    } catch {}
+  }, 750);
+};
 
 async function ensureAdblocker() {
   if (adblockerPromise) return adblockerPromise;
@@ -521,6 +619,11 @@ function safeHideWindow(windowInstance) {
 
 function createWindow({ show = true } = {}) {
   const shouldShow = Boolean(show);
+  const trayIcon = resolveAppIcon({
+    size: process.platform === "darwin" ? 18 : 16,
+  });
+  const windowIcon = resolveAppIcon({ size: 256 });
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -528,6 +631,7 @@ function createWindow({ show = true } = {}) {
     minHeight: 600,
     backgroundColor: "#0f172a",
     show: false,
+    icon: windowIcon,
     skipTaskbar: true,
     titleBarStyle: "hidden",
     titleBarOverlay: {
@@ -584,39 +688,17 @@ function createWindow({ show = true } = {}) {
   });
 }
 
-function resolveTrayIcon() {
+function resolveAppIcon({ size = 16 } = {}) {
   const packagedCandidates = [
-    path.join(
-      process.resourcesPath,
-      "turbo",
-      "generators",
-      "templates",
-      "rnr-expo",
-      "assets",
-      "images",
-      "favicon.png"
-    ),
-    path.join(
-      process.resourcesPath,
-      "turbo",
-      "generators",
-      "templates",
-      "rnr-uniwind",
-      "assets",
-      "images",
-      "favicon.png"
-    ),
+    path.join(process.resourcesPath, "icon.png"),
+    path.join(process.resourcesPath, "icon.ico"),
+    path.join(process.resourcesPath, "resources", "icon.png"),
+    path.join(process.resourcesPath, "resources", "icon.svg"),
   ];
 
   const devCandidates = [
-    path.resolve(
-      __dirname,
-      "../../../turbo/generators/templates/rnr-expo/assets/images/favicon.png"
-    ),
-    path.resolve(
-      __dirname,
-      "../../../turbo/generators/templates/rnr-uniwind/assets/images/favicon.png"
-    ),
+    path.resolve(__dirname, "../../resources/icon.png"),
+    path.resolve(__dirname, "../../resources/icon.svg"),
   ];
 
   const candidates = app.isPackaged
@@ -628,12 +710,12 @@ function resolveTrayIcon() {
       if (!fs.existsSync(candidate)) continue;
       const image = nativeImage.createFromPath(candidate);
       if (image && !image.isEmpty()) {
-        const size = process.platform === "darwin" ? 18 : 16;
         return image.resize({ width: size, height: size });
       }
     } catch {}
   }
 
+  // Fallback to a simple data URL if no icon found
   return nativeImage.createFromDataURL(
     "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAABmSURBVHgB7ZKxDYAwCENzJ3EFd3AEZ3AEZ3AEZ7DgQi1KM3pZVj9kqUQy4X5y0KcQ7mGdR1gHQQQyQq0v7z0yWmWcX4q8WwWQjT2QbC7a0g6y9mYp+Qb9b7QxQy2lQAAAABJRU5ErkJggg=="
   );
@@ -698,9 +780,11 @@ async function updateTrayMenu() {
 function ensureTray() {
   if (tray) return tray;
 
-  const icon = resolveTrayIcon();
+  const icon = resolveAppIcon({
+    size: process.platform === "darwin" ? 18 : 16,
+  });
   tray = new Tray(icon);
-  tray.setToolTip("Next Gen");
+  tray.setToolTip("Next Gen Dev");
 
   updateTrayMenu().catch(() => {});
 
@@ -828,6 +912,7 @@ function notifyBrowserState(tabId) {
     url: view.webContents.getURL(),
     canGoBack: view.webContents.canGoBack(),
     canGoForward: view.webContents.canGoForward(),
+    isLoading: view.webContents.isLoading(),
   });
 }
 
@@ -877,6 +962,10 @@ async function ensureBrowserView(tabId, options = {}) {
 
   const view = new BrowserView({ webPreferences });
 
+  try {
+    view.webContents.backgroundThrottling = false;
+  } catch {}
+
   applyAdblockToSession(view.webContents.session).catch(() => {});
 
   try {
@@ -895,6 +984,9 @@ async function ensureBrowserView(tabId, options = {}) {
 
   view.webContents.on("did-navigate", () => notifyBrowserState(tabId));
   view.webContents.on("did-navigate-in-page", () => notifyBrowserState(tabId));
+  view.webContents.on("did-start-loading", () => notifyBrowserState(tabId));
+  view.webContents.on("did-stop-loading", () => notifyBrowserState(tabId));
+  view.webContents.on("did-fail-load", () => notifyBrowserState(tabId));
 
   // Inject anti-detection stealth script after page load
   view.webContents.on("did-finish-load", async () => {
@@ -1046,7 +1138,7 @@ async function ensureBrowserView(tabId, options = {}) {
       });
 
       if (!adblockEnabledCache) {
-        shell.openExternal(url).catch(() => {});
+        openUrlWithTarget(url).catch(() => {});
       }
       return { action: "deny" };
     } catch {
@@ -2081,6 +2173,52 @@ ipcMain.handle("get-quick-toggle-shortcut", async () => {
   return currentStore.get("quickToggleShortcut", DEFAULT_QUICK_TOGGLE_SHORTCUT);
 });
 
+ipcMain.handle("get-external-link-target", async () => {
+  const currentStore = await getStore();
+  const value = String(
+    currentStore.get("externalLinkTarget", "system") || "system"
+  );
+  return value === "app" ? "app" : "system";
+});
+
+ipcMain.handle("set-external-link-target", async (event, value) => {
+  const currentStore = await getStore();
+  const normalized = value === "app" ? "app" : "system";
+  currentStore.set("externalLinkTarget", normalized);
+  sendSettingsChanged("externalLinkTarget", normalized);
+  return true;
+});
+
+ipcMain.handle("is-default-browser", async () => {
+  // Check if both http and https are handled by this app
+  return (
+    app.isDefaultProtocolClient("http") && app.isDefaultProtocolClient("https")
+  );
+});
+
+ipcMain.handle("set-as-default-browser", async (event, value) => {
+  let success = false;
+  if (value) {
+    const successHttp = app.setAsDefaultProtocolClient("http");
+    const successHttps = app.setAsDefaultProtocolClient("https");
+    success = successHttp && successHttps;
+  } else {
+    const successHttp = app.removeAsDefaultProtocolClient("http");
+    const successHttps = app.removeAsDefaultProtocolClient("https");
+    success = successHttp && successHttps;
+  }
+
+  if (success) {
+    // Notify renderer about the change
+    const isDefault =
+      app.isDefaultProtocolClient("http") &&
+      app.isDefaultProtocolClient("https");
+    sendSettingsChanged("isDefaultBrowser", isDefault);
+  }
+
+  return success;
+});
+
 // Select folder dialog
 ipcMain.handle("select-folder", async (event, { title, defaultPath }) => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -2112,6 +2250,48 @@ async function ensureAbsolutePath(targetPath) {
   return path.resolve(rootPath, targetPath);
 }
 
+async function openUrlWithTarget(url, forceApp = false) {
+  const raw = String(url || "").trim();
+  if (!raw) return false;
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  if (!/^https?:$/.test(parsed.protocol)) return false;
+
+  const currentStore = await getStore();
+  const target = String(
+    currentStore.get("externalLinkTarget", "system") || "system"
+  );
+
+  // If forced (e.g. from deep link) or if the app is the system default browser,
+  // we should open it in the app's internal browser view.
+  const isDefault =
+    app.isDefaultProtocolClient("http") && app.isDefaultProtocolClient("https");
+
+  if (forceApp || isDefault || target === "app") {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("open-in-app-browser", {
+        url: parsed.toString(),
+      });
+      return true;
+    }
+    return false;
+  }
+
+  try {
+    await shell.openExternal(parsed.toString());
+    return true;
+  } catch (err) {
+    console.error("Failed to open external URL:", err);
+    return false;
+  }
+}
+
 // Open folder in file explorer
 ipcMain.handle("open-folder", async (event, folderPath) => {
   if (folderPath) {
@@ -2124,16 +2304,7 @@ ipcMain.handle("open-folder", async (event, folderPath) => {
 
 // Open external URL
 ipcMain.handle("open-external", async (event, url) => {
-  if (url) {
-    try {
-      await shell.openExternal(url);
-      return true;
-    } catch (err) {
-      console.error("Failed to open external URL:", err);
-      return false;
-    }
-  }
-  return false;
+  return await openUrlWithTarget(url);
 });
 
 // Write text to clipboard
@@ -2162,13 +2333,75 @@ ipcMain.handle("app-uninstall", async () => {
 
   if (result.response === 1) {
     try {
+      // 1. Clear stores
       const currentStore = await getStore();
       currentStore.clear();
       if (scrumStore && typeof scrumStore.clear === "function") {
         scrumStore.clear();
       }
 
-      // Quit the application
+      // 2. Clear login settings (prevent auto-start after uninstall)
+      try {
+        app.setLoginItemSettings({
+          openAtLogin: false,
+          path: app.getPath("exe"),
+        });
+      } catch (e) {
+        console.warn("[Uninstall] Failed to clear login settings:", e);
+      }
+
+      // 3. Clear session data (cookies, cache, etc.)
+      try {
+        const { session } = require("electron");
+        await session.defaultSession.clearStorageData();
+        await session.defaultSession.clearCache();
+      } catch (e) {
+        console.warn("[Uninstall] Failed to clear session data:", e);
+      }
+
+      // 4. Clear userData directory contents (best effort)
+      const userDataPath = app.getPath("userData");
+      console.log(`[Uninstall] Clearing userData at: ${userDataPath}`);
+
+      // We can't delete the folder itself easily while running, but we can try to delete contents
+      try {
+        const files = fs.readdirSync(userDataPath);
+        for (const file of files) {
+          const filePath = path.join(userDataPath, file);
+          try {
+            // Skip the log file or current process files if they might be locked
+            if (file === "logs" || file.includes("Singleton")) continue;
+            fs.rmSync(filePath, { recursive: true, force: true });
+          } catch (e) {
+            console.warn(`[Uninstall] Could not remove ${file}:`, e.message);
+          }
+        }
+      } catch (e) {
+        console.error("[Uninstall] Failed to clear userData contents:", e);
+      }
+
+      // 5. On macOS, try to move the app bundle to trash if packaged
+      if (process.platform === "darwin" && app.isPackaged) {
+        try {
+          // app.getPath('exe') is typically .../Next Gen Dev.app/Contents/MacOS/Next Gen Dev
+          const exePath = app.getPath("exe");
+          const appBundlePath = exePath.replace(
+            /\.app\/Contents\/MacOS\/.*$/,
+            ".app"
+          );
+
+          if (appBundlePath.endsWith(".app")) {
+            console.log(
+              `[Uninstall] Moving app bundle to trash: ${appBundlePath}`
+            );
+            await shell.trashItem(appBundlePath);
+          }
+        } catch (e) {
+          console.error("[Uninstall] Failed to move app to trash:", e);
+        }
+      }
+
+      // 6. Quit the application
       isQuitting = true;
       app.quit();
       return true;
@@ -3912,7 +4145,9 @@ app.whenReady().then(async () => {
   // Initialize anti-detection IPC handlers
   antiDetection.initAntiDetectionIPC();
 
-  ensureTray();
+  if (!isPlaywrightRun) {
+    ensureTray();
+  }
 
   // Auto-start MCP Server
   startMcpServer();
@@ -3988,14 +4223,19 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (mainWindow === null) {
+    if (process.platform === "win32" && process.argv.length > 1) {
+      const url = process.argv.find(
+        (arg) => arg.startsWith("http://") || arg.startsWith("https://")
+      );
+      if (url) {
+        openUrlWithTarget(url, true).catch(console.error);
+      }
+    }
     createWindow();
   }
 });
 
-// Handle external links
-ipcMain.on("open-external", (event, url) => {
-  shell.openExternal(url);
-});
+// Handle external links removed - using ipcMain.handle("open-external") instead
 
 ipcMain.handle("run-e2e-test", async (event, { testFile, options = {} }) => {
   const { spawn } = require("child_process");
