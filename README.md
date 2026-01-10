@@ -182,3 +182,4 @@ npm link turbo-generators
 <https://github.com/olliethedev/ui-builder>
 <https://github.com/AndyMik90/Auto-Claude/>
 <https://github.com/ShareX/ShareX>
+<https://github.com/lbjlaq/Antigravity-Manager>
