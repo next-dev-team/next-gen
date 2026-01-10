@@ -183,17 +183,18 @@ async function setupSessionAntiDetection(ses, profile) {
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8";
     }
 
-    // Add SEC headers for Chromium browsers
     if (userAgent && userAgent.includes("Chrome")) {
       const profileWithUserAgent = { ...profile, userAgent };
-      headers["Sec-CH-UA"] = generateSecChUa(profileWithUserAgent);
-      headers["Sec-CH-UA-Mobile"] =
-        profile?.category === "mobile" ? "?1" : "?0";
-      headers["Sec-CH-UA-Platform"] = getPlatformHint(profileWithUserAgent);
-      headers["Sec-Fetch-Dest"] = headers["Sec-Fetch-Dest"] || "document";
-      headers["Sec-Fetch-Mode"] = headers["Sec-Fetch-Mode"] || "navigate";
-      headers["Sec-Fetch-Site"] = headers["Sec-Fetch-Site"] || "none";
-      headers["Sec-Fetch-User"] = "?1";
+      if (!headers["Sec-CH-UA"]) {
+        headers["Sec-CH-UA"] = generateSecChUa(profileWithUserAgent);
+      }
+      if (!headers["Sec-CH-UA-Mobile"]) {
+        headers["Sec-CH-UA-Mobile"] =
+          profile?.category === "mobile" ? "?1" : "?0";
+      }
+      if (!headers["Sec-CH-UA-Platform"]) {
+        headers["Sec-CH-UA-Platform"] = getPlatformHint(profileWithUserAgent);
+      }
     }
 
     // Remove Electron-specific headers

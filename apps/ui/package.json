@@ -151,6 +151,11 @@
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": true
     }
   }
 }

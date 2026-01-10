@@ -24,6 +24,21 @@ const Conf = require("conf");
 // Set app name explicitly for system dialogs and notifications
 app.name = "Next Gen Dev";
 
+const isPlaywrightRun =
+  process.execArgv.some((arg) => /playwright/i.test(String(arg || ""))) ||
+  process.argv.some((arg) => /playwright/i.test(String(arg || ""))) ||
+  process.env.PW_TEST === "1" ||
+  process.env.PLAYWRIGHT === "1";
+
+if (isPlaywrightRun || process.env.NEXTGEN_NO_SANDBOX === "1") {
+  try {
+    app.commandLine.appendSwitch("no-sandbox");
+  } catch {}
+  try {
+    app.commandLine.appendSwitch("disable-setuid-sandbox");
+  } catch {}
+}
+
 // Configure About panel for macOS
 if (process.platform === "darwin") {
   app.setAboutPanelOptions({
@@ -56,14 +71,29 @@ process.on("unhandledRejection", (reason, promise) => {
   // Don't crash on unhandled rejections
 });
 
+let scheduleActiveBrowserViewRecovery = null;
+
 // Handle GPU process crashes
 app.on("gpu-process-crashed", (event, killed) => {
   console.error("[GPU] GPU process crashed, killed:", killed);
+  if (typeof scheduleActiveBrowserViewRecovery === "function") {
+    scheduleActiveBrowserViewRecovery({ type: "gpu", killed });
+  }
 });
 
 // Handle child process crashes
 app.on("child-process-gone", (event, details) => {
   console.error("[Process] Child process gone:", details.type, details.reason);
+  if (
+    details &&
+    (details.type === "GPU" || details.type === "Utility") &&
+    typeof scheduleActiveBrowserViewRecovery === "function"
+  ) {
+    scheduleActiveBrowserViewRecovery({
+      type: details.type,
+      reason: details.reason,
+    });
+  }
 });
 
 const scrumStore = new Conf({ projectName: "next-gen-scrum" });
@@ -118,28 +148,35 @@ const DEFAULT_QUICK_TOGGLE_SHORTCUT = "CommandOrControl+Shift+Space";
 // SINGLE INSTANCE LOCK & DEEP LINKING
 // ============================================
 
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
-  app.quit();
-} else {
-  app.on("second-instance", (event, commandLine) => {
-    // Someone tried to run a second instance, we should focus our window.
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      if (!mainWindow.isVisible()) mainWindow.show();
-      mainWindow.focus();
+const shouldUseSingleInstanceLock =
+  !isPlaywrightRun && process.env.NEXTGEN_DISABLE_SINGLE_INSTANCE !== "1";
 
-      // On Windows/Linux, URLs come through command line
-      const url = commandLine.find(
-        (arg) => arg.startsWith("http://") || arg.startsWith("https://")
-      );
-      if (url) {
-        openUrlWithTarget(url, true).catch(console.error);
+if (shouldUseSingleInstanceLock) {
+  const gotTheLock = app.requestSingleInstanceLock();
+  if (!gotTheLock) {
+    app.quit();
+  } else {
+    app.on("second-instance", (event, commandLine) => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+
+        const url = commandLine.find(
+          (arg) => arg.startsWith("http://") || arg.startsWith("https://")
+        );
+        if (url) {
+          openUrlWithTarget(url, true).catch(console.error);
+        }
       }
-    }
-  });
+    });
 
-  // Handle URLs on macOS
+    app.on("open-url", (event, url) => {
+      event.preventDefault();
+      openUrlWithTarget(url, true).catch(console.error);
+    });
+  }
+} else {
   app.on("open-url", (event, url) => {
     event.preventDefault();
     openUrlWithTarget(url, true).catch(console.error);
@@ -153,6 +190,20 @@ const browserPopupStatsByTabId = new Map();
 
 let adblockEnabledCache = null;
 let adblockerPromise = null;
+
+scheduleActiveBrowserViewRecovery = () => {
+  const tabId = activeBrowserTabId;
+  if (!tabId) return;
+  const view = browserViews.get(tabId);
+  if (!view || !view.webContents || view.webContents.isDestroyed()) return;
+
+  setTimeout(() => {
+    if (!view || !view.webContents || view.webContents.isDestroyed()) return;
+    try {
+      view.webContents.reload();
+    } catch {}
+  }, 750);
+};
 
 async function ensureAdblocker() {
   if (adblockerPromise) return adblockerPromise;
@@ -910,6 +961,10 @@ async function ensureBrowserView(tabId, options = {}) {
   };
 
   const view = new BrowserView({ webPreferences });
+
+  try {
+    view.webContents.backgroundThrottling = false;
+  } catch {}
 
   applyAdblockToSession(view.webContents.session).catch(() => {});
 
@@ -2278,13 +2333,75 @@ ipcMain.handle("app-uninstall", async () => {
 
   if (result.response === 1) {
     try {
+      // 1. Clear stores
       const currentStore = await getStore();
       currentStore.clear();
       if (scrumStore && typeof scrumStore.clear === "function") {
         scrumStore.clear();
       }
 
-      // Quit the application
+      // 2. Clear login settings (prevent auto-start after uninstall)
+      try {
+        app.setLoginItemSettings({
+          openAtLogin: false,
+          path: app.getPath("exe"),
+        });
+      } catch (e) {
+        console.warn("[Uninstall] Failed to clear login settings:", e);
+      }
+
+      // 3. Clear session data (cookies, cache, etc.)
+      try {
+        const { session } = require("electron");
+        await session.defaultSession.clearStorageData();
+        await session.defaultSession.clearCache();
+      } catch (e) {
+        console.warn("[Uninstall] Failed to clear session data:", e);
+      }
+
+      // 4. Clear userData directory contents (best effort)
+      const userDataPath = app.getPath("userData");
+      console.log(`[Uninstall] Clearing userData at: ${userDataPath}`);
+
+      // We can't delete the folder itself easily while running, but we can try to delete contents
+      try {
+        const files = fs.readdirSync(userDataPath);
+        for (const file of files) {
+          const filePath = path.join(userDataPath, file);
+          try {
+            // Skip the log file or current process files if they might be locked
+            if (file === "logs" || file.includes("Singleton")) continue;
+            fs.rmSync(filePath, { recursive: true, force: true });
+          } catch (e) {
+            console.warn(`[Uninstall] Could not remove ${file}:`, e.message);
+          }
+        }
+      } catch (e) {
+        console.error("[Uninstall] Failed to clear userData contents:", e);
+      }
+
+      // 5. On macOS, try to move the app bundle to trash if packaged
+      if (process.platform === "darwin" && app.isPackaged) {
+        try {
+          // app.getPath('exe') is typically .../Next Gen Dev.app/Contents/MacOS/Next Gen Dev
+          const exePath = app.getPath("exe");
+          const appBundlePath = exePath.replace(
+            /\.app\/Contents\/MacOS\/.*$/,
+            ".app"
+          );
+
+          if (appBundlePath.endsWith(".app")) {
+            console.log(
+              `[Uninstall] Moving app bundle to trash: ${appBundlePath}`
+            );
+            await shell.trashItem(appBundlePath);
+          }
+        } catch (e) {
+          console.error("[Uninstall] Failed to move app to trash:", e);
+        }
+      }
+
+      // 6. Quit the application
       isQuitting = true;
       app.quit();
       return true;
@@ -4028,7 +4145,9 @@ app.whenReady().then(async () => {
   // Initialize anti-detection IPC handlers
   antiDetection.initAntiDetectionIPC();
 
-  ensureTray();
+  if (!isPlaywrightRun) {
+    ensureTray();
+  }
 
   // Auto-start MCP Server
   startMcpServer();
