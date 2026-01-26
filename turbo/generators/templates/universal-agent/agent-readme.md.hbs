@@ -1,0 +1,72 @@
+# Agent Configuration for {{projectName}}
+
+This directory contains the universal agent configuration for your project.
+
+## Structure
+
+```
+.agent/
+├── skills/           # Skills repository (from antigravity-awesome-skills)
+│   ├── brainstorming/
+│   │   └── SKILL.md
+│   ├── clean-code/
+│   │   └── SKILL.md
+│   └── ...
+└── README.md         # This file
+```
+
+## Configured Agents
+
+{{#each agents}}
+- **{{this}}**
+{{/each}}
+
+## Installed Skills
+
+{{#if skills.length}}
+{{#each skills}}
+- {{this}}
+{{/each}}
+{{else}}
+No specific skills selected. Run `./setup-agents.sh` to clone the full skills repository.
+{{/if}}
+
+## Usage
+
+### Run Setup Script
+
+**Linux/macOS:**
+```bash
+chmod +x setup-agents.sh
+./setup-agents.sh
+```
+
+**Windows:**
+```cmd
+setup-agents.bat
+```
+
+### Using Skills
+
+Reference skills in your prompts:
+```
+Use @skill-name to help me with...
+```
+
+Or use the skill command syntax:
+```
+>> /skill-name help me...
+```
+
+## References
+
+- [AGENTS.md Standard](https://agents.md/)
+- [Agent Skills Specification](https://agentskills.io/)
+- [Antigravity Awesome Skills](https://github.com/sickn33/antigravity-awesome-skills)
+
+## Updating Skills
+
+```bash
+cd .agent/skills
+git pull
+```

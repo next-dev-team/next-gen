@@ -1,0 +1,37 @@
+# AGENTS.md (Universal Team Rules)
+> **Single Source of Truth for {{agentsList}}**
+
+## 1. Project Context
+- **Project**: {{projectName}}
+- **Generated**: {{generatedDate}}
+- **Skills**: {{skillsCount}} installed
+
+## 2. Installed Skills
+{{skillsList}}
+
+## 3. Coding Standards
+- Follow project conventions defined in individual skill files
+- Use TypeScript where possible
+- Write clean, maintainable code
+- Add meaningful comments for complex logic
+
+## 4. Skill Usage
+To use a skill, reference it by name:
+```
+Use @skill-name to help me with...
+```
+
+## 5. File Structure
+```
+project/
+├── AGENTS.md                    # This file - Universal brain
+├── .agent/
+│   └── skills/                  # Central skills repository
+│       └── ...
+└── [agent-specific folders]     # Configured automatically
+```
+
+## 6. References
+- [AGENTS.md Standard](https://agents.md/)
+- [Agent Skills Specification](https://agentskills.io/)
+- [Antigravity Awesome Skills](https://github.com/sickn33/antigravity-awesome-skills)

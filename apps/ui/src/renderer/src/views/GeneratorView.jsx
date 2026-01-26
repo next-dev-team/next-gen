@@ -82,11 +82,16 @@ export default function GeneratorView() {
     // Initialize default values
     const initialAnswers = {};
     gen.prompts.forEach((p) => {
-      if (p.default !== undefined && typeof p.default !== "function")
+      // For checkbox type, initialize with default array or empty array
+      if (p.type === "checkbox") {
+        initialAnswers[p.name] = Array.isArray(p.default) ? [...p.default] : [];
+      } else if (p.type === "list" && p.choices && p.choices.length > 0) {
+        // For list type, use default if provided, otherwise first choice
+        initialAnswers[p.name] = p.default !== undefined ? p.default : p.choices[0].value;
+      } else if (p.default !== undefined && typeof p.default !== "function") {
+        // For other types with defaults
         initialAnswers[p.name] = p.default;
-      if (p.type === "checkbox") initialAnswers[p.name] = [];
-      if (p.type === "list" && p.choices && p.choices.length > 0)
-        initialAnswers[p.name] = p.choices[0].value;
+      }
     });
     setAnswers(initialAnswers);
   }, []);
@@ -253,18 +258,28 @@ export default function GeneratorView() {
   };
 
   return (
-    <>
+    <div
+      className="generator-view-container"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0, // Important for flex children
+        overflow: "hidden",
+      }}
+    >
       {/* Steps Progress */}
       <div
         style={{
           background: "var(--color-bg-container)",
           borderRadius: 16,
-          padding: "24px 32px",
-          marginBottom: 24,
+          padding: "20px 28px",
+          marginBottom: 16,
           border: "1px solid var(--color-border)",
+          flexShrink: 0,
         }}
       >
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           {steps.map((step, index) => {
             const isActive = index === currentStep;
             const isCompleted = index < currentStep;
@@ -275,7 +290,7 @@ export default function GeneratorView() {
                 className="flex flex-1 items-center gap-3"
               >
                 <div
-                  className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-medium transition-colors ${
+                  className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-medium transition-colors ${
                     isCompleted
                       ? "border-emerald-500 bg-emerald-500/10 text-emerald-400"
                       : isActive
@@ -328,25 +343,31 @@ export default function GeneratorView() {
         </div>
       </div>
 
-      {/* Step Content */}
+      {/* Step Content - Scrollable */}
       <div
         style={{
           background: "var(--color-bg-container)",
           borderRadius: 16,
-          padding: 32,
-          minHeight: 400,
+          padding: 24,
           border: "1px solid var(--color-border)",
-          marginBottom: 24,
+          marginBottom: 16,
+          flex: 1,
+          minHeight: 0, // Important for flex overflow
+          overflow: "auto",
         }}
       >
         {renderStepContent()}
       </div>
 
+      {/* Footer - Fixed at bottom */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          flexShrink: 0,
+          paddingTop: 8,
+          paddingBottom: 8,
         }}
       >
         <Button
@@ -395,6 +416,7 @@ export default function GeneratorView() {
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }
+

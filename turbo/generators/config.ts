@@ -4,6 +4,7 @@ import {
   agentRulesGenerator,
   appScaffoldGenerator,
   electronFloatGenerator,
+  universalAgentGenerator,
 } from "./generators";
 
 export default function generator(plop: PlopTypes.NodePlopAPI): void {
@@ -11,4 +12,5 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
   agentRulesGenerator(plop);
   appScaffoldGenerator(plop);
   electronFloatGenerator(plop);
+  universalAgentGenerator(plop);
 }

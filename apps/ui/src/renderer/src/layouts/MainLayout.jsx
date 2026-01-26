@@ -1130,8 +1130,8 @@ export default function MainLayout({
 
         <div
           className={
-            "flex flex-1 flex-col overflow-hidden " +
-            (activeTab === "launchpad" ? "p-0" : "p-12")
+            "flex flex-1 flex-col min-h-0 " +
+            (activeTab === "launchpad" ? "p-0 overflow-hidden" : "p-6 overflow-auto")
           }
           style={{ WebkitAppRegion: "no-drag" }}
         >

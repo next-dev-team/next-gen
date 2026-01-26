@@ -1,5 +1,51 @@
 export const generators = [
   {
+    name: "universal-agent",
+    description: "🤖 Universal Agent Skills - Configure AI agents with SKILL.md & AGENTS.md standards",
+    category: "AI Agents",
+    featured: true,
+    icon: "🌌",
+    prompts: [
+      {
+        type: "input",
+        name: "projectName",
+        message: "Project Name",
+        default: "my-project",
+      },
+      {
+        type: "input",
+        name: "destination",
+        message: "Destination path",
+        default: "temps/",
+      },
+      {
+        type: "skill-selector",
+        name: "skills",
+        message: "Select Skills from antigravity-awesome-skills",
+        default: [],
+      },
+      {
+        type: "agent-selector",
+        name: "agents",
+        message: "Select Target Agents",
+        default: ["antigravity", "cursor"],
+      },
+      {
+        type: "checkbox",
+        name: "options",
+        message: "Additional Options",
+        choices: [
+          { name: "Clone skills repository", value: "clone-skills" },
+          { name: "Generate setup script", value: "setup-script" },
+          { name: "Run setup automatically (OS based)", value: "run-setup" },
+          { name: "Create symlinks (for Trae)", value: "symlinks" },
+          { name: "Initialize Git repository", value: "git-init" },
+        ],
+        default: ["clone-skills", "setup-script"],
+      },
+    ],
+  },
+  {
     name: "electron-float",
     description: "Scaffold an Electron app with Float DevTools",
     prompts: [

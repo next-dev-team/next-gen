@@ -1,6 +1,7 @@
 import React from "react";
 import {
   AppWindow,
+  Brain,
   CheckCircle2,
   Code,
   Eye,
@@ -11,6 +12,7 @@ import {
   PlayCircle,
   Rocket,
   Settings as SettingsIcon,
+  Sparkles,
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -21,6 +23,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { SkillSelector } from "./SkillSelector";
+import { AgentSelector, AgentPreview } from "./AgentSelector";
 
 const Title = ({ level = 3, style, children }) => {
   const Tag = `h${level}`;
@@ -137,7 +141,10 @@ export const TemplateSelector = ({
   selectedGenerator,
   onSelect,
 }) => {
-  const getCategoryIcon = (name) => {
+  const getCategoryIcon = (gen) => {
+    if (gen.icon) return gen.icon;
+    const name = gen.name || gen;
+    if (name.includes("universal")) return "🌌";
     if (name.includes("electron")) return "⚡";
     if (name.includes("tron")) return "🔌";
     if (name.includes("agent")) return "🤖";
@@ -146,12 +153,17 @@ export const TemplateSelector = ({
   };
 
   const getCategoryColor = (name) => {
+    if (name.includes("universal")) return "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)";
     if (name.includes("electron")) return "#f59e0b";
     if (name.includes("tron")) return "#10b981";
     if (name.includes("agent")) return "#8b5cf6";
     if (name.includes("scaffold") || name.includes("app")) return "#3b82f6";
     return "#6366f1";
   };
+
+  // Separate featured generators
+  const featuredGenerators = generators.filter((g) => g.featured);
+  const regularGenerators = generators.filter((g) => !g.featured);
 
   return (
     <div className="template-selector">
@@ -168,8 +180,129 @@ export const TemplateSelector = ({
         </Text>
       </div>
 
+      {/* Featured Templates */}
+      {featuredGenerators.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <Sparkles style={{ color: "#f59e0b" }} />
+            <Text style={{ color: "var(--color-text-secondary)", fontSize: 12, textTransform: "uppercase", letterSpacing: 1 }}>
+              Featured
+            </Text>
+          </div>
+          <div className="grid gap-4" style={{ WebkitAppRegion: "no-drag" }}>
+            {featuredGenerators.map((gen) => {
+              const selected = selectedGenerator?.name === gen.name;
+              return (
+                <button
+                  key={gen.name}
+                  type="button"
+                  aria-pressed={selected}
+                  className={`template-card w-full text-left rounded-xl border-2 transition-all ${
+                    selected
+                      ? "border-indigo-400 bg-gradient-to-br from-indigo-600 to-purple-600 shadow-xl shadow-indigo-500/20"
+                      : "border-indigo-500/30 bg-gradient-to-br from-indigo-600/10 to-purple-600/10 hover:border-indigo-400 hover:shadow-lg"
+                  }`}
+                  onClick={() => onSelect(gen)}
+                  style={{ padding: 24 }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 16 }}>
+                    <div
+                      style={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 14,
+                        background: selected
+                          ? "rgba(255,255,255,0.2)"
+                          : "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: 28,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {getCategoryIcon(gen)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Text
+                          style={{
+                            fontSize: 18,
+                            color: selected ? "#fff" : "var(--color-text-primary)",
+                            display: "block",
+                            marginBottom: 4,
+                            fontWeight: 700,
+                          }}
+                        >
+                          {gen.name}
+                        </Text>
+                        <Badge 
+                          variant="outline" 
+                          className="border-amber-500 bg-amber-500/10 text-amber-400 text-[10px]"
+                        >
+                          NEW
+                        </Badge>
+                      </div>
+                      <Text
+                        style={{
+                          color: selected
+                            ? "rgba(255,255,255,0.85)"
+                            : "var(--color-text-secondary)",
+                          fontSize: 14,
+                        }}
+                      >
+                        {gen.description}
+                      </Text>
+                      <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
+                        <Tag
+                          color={selected ? "white" : "purple"}
+                          style={{
+                            borderRadius: 6,
+                            color: selected ? "#4f46e5" : undefined,
+                          }}
+                        >
+                          SKILL.md
+                        </Tag>
+                        <Tag
+                          color={selected ? "white" : "blue"}
+                          style={{
+                            borderRadius: 6,
+                            color: selected ? "#4f46e5" : undefined,
+                          }}
+                        >
+                          AGENTS.md
+                        </Tag>
+                        <Tag
+                          color={selected ? "white" : "orange"}
+                          style={{
+                            borderRadius: 6,
+                            color: selected ? "#4f46e5" : undefined,
+                          }}
+                        >
+                          253+ Skills
+                        </Tag>
+                      </div>
+                    </div>
+                    {selected && (
+                      <CheckCircle2
+                        style={{
+                          fontSize: 28,
+                          color: "#fff",
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Regular Templates */}
       <div className="grid gap-4 md:grid-cols-2" style={{ WebkitAppRegion: "no-drag" }}>
-        {generators.map((gen) => {
+        {regularGenerators.map((gen) => {
           const selected = selectedGenerator?.name === gen.name;
           return (
             <button
@@ -450,6 +583,24 @@ export const ConfigureOptions = ({
                           })}
                         </div>
                       )}
+
+                      {prompt.type === "skill-selector" && (
+                        <SkillSelector
+                          selectedSkills={answers[prompt.name] || []}
+                          onSkillsChange={(skills) =>
+                            onInputChange(prompt.name, skills)
+                          }
+                        />
+                      )}
+
+                      {prompt.type === "agent-selector" && (
+                        <AgentSelector
+                          selectedAgents={answers[prompt.name] || []}
+                          onAgentsChange={(agents) =>
+                            onInputChange(prompt.name, agents)
+                          }
+                        />
+                      )}
                     </div>
                   </div>
                 );
@@ -470,6 +621,35 @@ export const PreviewStep = ({
   const frontendKey = answers.frontend;
   const preview = frontendKey ? templatePreviews[frontendKey] : null;
   const selectedUIs = answers.ui || [];
+
+  // Check if this is the universal-agent generator
+  const isUniversalAgent = selectedGenerator?.name === "universal-agent";
+
+  // For universal-agent, show special preview
+  if (isUniversalAgent) {
+    return (
+      <div className="preview-step">
+        <div style={{ marginBottom: 24, textAlign: "center" }}>
+          <Title
+            level={3}
+            style={{ color: "var(--color-text-primary)", marginBottom: 8 }}
+          >
+            <Eye style={{ marginRight: 12, color: "#6366f1" }} />
+            Preview Agent Configuration
+          </Title>
+          <Text type="secondary">
+            Review the files that will be generated for your agents
+          </Text>
+        </div>
+
+        <AgentPreview
+          selectedAgents={answers.agents || []}
+          selectedSkills={answers.skills || []}
+          projectName={answers.projectName || "my-project"}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="preview-step">
