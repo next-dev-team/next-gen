@@ -37,8 +37,8 @@
   "devDependencies": {
     "@turbo/gen": "^2.6.3",
     "node-plop": "^0.32.3",
-    "turbo": "^2.6.3",
     "tsx": "^4.21.0",
+    "turbo": "^2.7.6",
     "typescript": "^5.9.3"
   }
 }
