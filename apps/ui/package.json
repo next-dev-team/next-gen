@@ -49,6 +49,7 @@
     "vite": "^7.3.0"
   },
   "dependencies": {
+    "@nde/llm": "workspace:*",
     "@ant-design/cssinjs": "^2.0.1",
     "@ant-design/icons": "^6.1.0",
     "@ghostery/adblocker-electron": "^2.5.0",

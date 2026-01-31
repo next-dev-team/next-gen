@@ -57,7 +57,7 @@ function App() {
   }, [dockSettings]);
 
   const [systemDarkMode, setSystemDarkMode] = useState(
-    window.matchMedia?.("(prefers-color-scheme: dark)")?.matches || false
+    window.matchMedia?.("(prefers-color-scheme: dark)")?.matches || false,
   );
 
   useEffect(() => {

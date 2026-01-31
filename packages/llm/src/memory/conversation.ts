@@ -5,9 +5,9 @@
  * using gpt-tokenizer for accurate token counting.
  */
 
-import { encode } from 'gpt-tokenizer';
-import type { ChatMessage } from './types.js';
-import { CONTEXT_TOKEN_LIMITS, DEFAULT_MAX_CONTEXT_TOKENS } from './config.js';
+import { encode } from "gpt-tokenizer";
+import type { ChatMessage } from "../types.js";
+import { CONTEXT_TOKEN_LIMITS, DEFAULT_MAX_CONTEXT_TOKENS } from "../config.js";
 
 /**
  * Count tokens for a message using gpt-tokenizer
@@ -41,8 +41,8 @@ export function optimizeMessagesForContext(
   maxTokens: number = DEFAULT_MAX_CONTEXT_TOKENS,
 ): ChatMessage[] {
   // Separate system messages (always keep) from conversation
-  const systemMessages = messages.filter((m) => m.role === 'system');
-  const conversationMessages = messages.filter((m) => m.role !== 'system');
+  const systemMessages = messages.filter((m) => m.role === "system");
+  const conversationMessages = messages.filter((m) => m.role !== "system");
 
   // Count system message tokens
   const systemTokens = countTotalTokens(systemMessages);
@@ -51,7 +51,7 @@ export function optimizeMessagesForContext(
   const conversationBudget = maxTokens - systemTokens - 100; // Reserve 100 for formatting
 
   if (conversationBudget <= 0) {
-    console.warn('[Memory] Token budget exceeded by system messages alone');
+    console.warn("[Memory] Token budget exceeded by system messages alone");
     return systemMessages;
   }
 
@@ -76,7 +76,9 @@ export function optimizeMessagesForContext(
       optimizedConversation.unshift(msg);
     } else {
       const droppedCount = i + 1;
-      console.log(`[Memory] Dropped ${droppedCount} oldest messages to fit context window`);
+      console.log(
+        `[Memory] Dropped ${droppedCount} oldest messages to fit context window`,
+      );
       break;
     }
   }
@@ -91,36 +93,36 @@ export function formatMessagesAsPrompt(messages: ChatMessage[]): string {
   const parts: string[] = [];
 
   // Add system messages as initial context
-  const systemMessages = messages.filter((m) => m.role === 'system');
+  const systemMessages = messages.filter((m) => m.role === "system");
   if (systemMessages.length > 0) {
-    parts.push('System Instructions:');
-    parts.push(systemMessages.map((m) => m.content).join('\n'));
-    parts.push('');
+    parts.push("System Instructions:");
+    parts.push(systemMessages.map((m) => m.content).join("\n"));
+    parts.push("");
   }
 
   // Add conversation history (non-system messages)
-  const conversationMessages = messages.filter((m) => m.role !== 'system');
+  const conversationMessages = messages.filter((m) => m.role !== "system");
   if (conversationMessages.length > 1) {
-    parts.push('Conversation History:');
+    parts.push("Conversation History:");
     for (const msg of conversationMessages.slice(0, -1)) {
-      const roleLabel = msg.role === 'user' ? 'User' : 'Assistant';
+      const roleLabel = msg.role === "user" ? "User" : "Assistant";
       parts.push(`${roleLabel}: ${msg.content}`);
     }
-    parts.push('');
+    parts.push("");
   }
 
   // Add the current user message
   const lastMessage = conversationMessages[conversationMessages.length - 1];
   if (lastMessage) {
-    parts.push('Current Message:');
+    parts.push("Current Message:");
     parts.push(lastMessage.content);
-    parts.push('');
+    parts.push("");
     parts.push(
-      'Please respond to the current message, considering the conversation history above.',
+      "Please respond to the current message, considering the conversation history above.",
     );
   }
 
-  return parts.join('\n');
+  return parts.join("\n");
 }
 
 /**
@@ -133,7 +135,33 @@ export function getProviderTokenLimit(provider: string): number {
 /**
  * Prepare messages for a provider with automatic optimization
  */
-export function prepareMessages(messages: ChatMessage[], provider: string): ChatMessage[] {
+export function prepareMessages(
+  messages: ChatMessage[],
+  provider: string,
+): ChatMessage[] {
   const tokenLimit = getProviderTokenLimit(provider);
   return optimizeMessagesForContext(messages, tokenLimit);
+}
+
+/**
+ * Summarize a long text to fit within token limit
+ */
+export function summarizeForContext(
+  text: string,
+  maxTokens: number = 2000,
+): string {
+  const tokens = encode(text);
+  if (tokens.length <= maxTokens) {
+    return text;
+  }
+
+  // Simple truncation with ellipsis - in practice, you'd use LLM for summarization
+  const truncatedTokens = tokens.slice(0, maxTokens - 10);
+  // Note: gpt-tokenizer doesn't have a direct decode, so we'll truncate by characters
+  const ratio = maxTokens / tokens.length;
+  const targetLength = Math.floor(text.length * ratio);
+  return (
+    text.slice(0, targetLength) +
+    "\n\n[... content truncated for context limit ...]"
+  );
 }

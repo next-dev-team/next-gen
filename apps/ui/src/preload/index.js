@@ -123,6 +123,51 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("bmad-cli-log", handler);
   },
 
+  // ======= BMAD SETUP & CONTEXT =======
+  bmad: {
+    // Check if BMAD is installed in a project
+    checkInstall: (projectPath) =>
+      ipcRenderer.invoke("bmad:check-install", { projectPath }),
+
+    // Install BMAD in a project
+    install: (options) => ipcRenderer.invoke("bmad:install", options),
+
+    // Get BMAD status
+    getStatus: () => ipcRenderer.invoke("bmad:get-status"),
+
+    // Read a context file (_bmad-output/prd.md, etc.)
+    readContext: (projectPath, contextType) =>
+      ipcRenderer.invoke("bmad:read-context", { projectPath, contextType }),
+
+    // Write a context file
+    writeContext: (projectPath, contextType, content) =>
+      ipcRenderer.invoke("bmad:write-context", {
+        projectPath,
+        contextType,
+        content,
+      }),
+
+    // List available modules
+    listModules: () => ipcRenderer.invoke("bmad:list-modules"),
+
+    // Configure IDE
+    configureIde: (ide, projectPath) =>
+      ipcRenderer.invoke("bmad:configure-ide", { ide, projectPath }),
+  },
+
+  // ======= FILE OPERATIONS =======
+  readFile: (filePath) => ipcRenderer.invoke("read-file", { filePath }),
+  writeFile: (filePath, content) =>
+    ipcRenderer.invoke("write-file", { filePath, content }),
+  copyFile: (src, dest) => ipcRenderer.invoke("copy-file", { src, dest }),
+  selectFile: (options) => ipcRenderer.invoke("select-file", options),
+  saveFile: (options) => ipcRenderer.invoke("save-file", options),
+
+  // ======= ELECTRON STORE (for LLM package) =======
+  storeGet: (key) => ipcRenderer.invoke("store-get", { key }),
+  storeSet: (key, value) => ipcRenderer.invoke("store-set", { key, value }),
+  storeDelete: (key) => ipcRenderer.invoke("store-delete", { key }),
+
   browserView: {
     create: (tabId, url, profileId) =>
       ipcRenderer.invoke("browserview-create", { tabId, url, profileId }),

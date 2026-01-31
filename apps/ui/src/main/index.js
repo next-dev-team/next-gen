@@ -132,7 +132,7 @@ async function ensureAdblocker() {
 
     const enginePath = path.join(
       app.getPath("userData"),
-      "adblocker-engine.bin"
+      "adblocker-engine.bin",
     );
     const fsPromises = fs.promises;
 
@@ -251,7 +251,7 @@ function ensureNodePtySpawnHelpersExecutable() {
     candidates.push(
       path.join(prebuildsDir, `darwin-${process.arch}`, "spawn-helper"),
       path.join(prebuildsDir, "darwin-arm64", "spawn-helper"),
-      path.join(prebuildsDir, "darwin-x64", "spawn-helper")
+      path.join(prebuildsDir, "darwin-x64", "spawn-helper"),
     );
   }
 
@@ -291,14 +291,14 @@ function buildAugmentedPath(rawPath) {
       "/opt/homebrew/bin",
       "/opt/homebrew/sbin",
       "/usr/local/bin",
-      "/usr/local/sbin"
+      "/usr/local/sbin",
     );
   }
 
   if (home) {
     prepend.push(
       path.join(home, ".volta", "bin"),
-      path.join(home, ".asdf", "shims")
+      path.join(home, ".asdf", "shims"),
     );
   }
 
@@ -594,7 +594,7 @@ function resolveTrayIcon() {
       "rnr-expo",
       "assets",
       "images",
-      "favicon.png"
+      "favicon.png",
     ),
     path.join(
       process.resourcesPath,
@@ -604,18 +604,18 @@ function resolveTrayIcon() {
       "rnr-uniwind",
       "assets",
       "images",
-      "favicon.png"
+      "favicon.png",
     ),
   ];
 
   const devCandidates = [
     path.resolve(
       __dirname,
-      "../../../turbo/generators/templates/rnr-expo/assets/images/favicon.png"
+      "../../../turbo/generators/templates/rnr-expo/assets/images/favicon.png",
     ),
     path.resolve(
       __dirname,
-      "../../../turbo/generators/templates/rnr-uniwind/assets/images/favicon.png"
+      "../../../turbo/generators/templates/rnr-uniwind/assets/images/favicon.png",
     ),
   ];
 
@@ -635,7 +635,7 @@ function resolveTrayIcon() {
   }
 
   return nativeImage.createFromDataURL(
-    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAABmSURBVHgB7ZKxDYAwCENzJ3EFd3AEZ3AEZ3AEZ7DgQi1KM3pZVj9kqUQy4X5y0KcQ7mGdR1gHQQQyQq0v7z0yWmWcX4q8WwWQjT2QbC7a0g6y9mYp+Qb9b7QxQy2lQAAAABJRU5ErkJggg=="
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAABmSURBVHgB7ZKxDYAwCENzJ3EFd3AEZ3AEZ3AEZ7DgQi1KM3pZVj9kqUQy4X5y0KcQ7mGdR1gHQQQyQq0v7z0yWmWcX4q8WwWQjT2QbC7a0g6y9mYp+Qb9b7QxQy2lQAAAABJRU5ErkJggg==",
   );
 }
 
@@ -849,12 +849,12 @@ async function ensureBrowserView(tabId, options = {}) {
 
   const antiDetectSession = await antiDetection.createAntiDetectionSession(
     tabId,
-    options.profileId || null
+    options.profileId || null,
   );
 
   if (antiDetectSession) {
     console.log(
-      `[Main] Session created for tab ${tabId}: ${antiDetectSession.getStoragePath() || "memory"}`
+      `[Main] Session created for tab ${tabId}: ${antiDetectSession.getStoragePath() || "memory"}`,
     );
   } else {
     console.error(`[Main] FAILED to create session for tab ${tabId}`);
@@ -890,7 +890,7 @@ async function ensureBrowserView(tabId, options = {}) {
       if (isMainFrame) {
         notifyBrowserState(tabId);
       }
-    }
+    },
   );
 
   view.webContents.on("did-navigate", () => notifyBrowserState(tabId));
@@ -909,7 +909,7 @@ async function ensureBrowserView(tabId, options = {}) {
       if (!String(err?.message || "").includes("destroyed")) {
         console.warn(
           "[Anti-Detection] Failed to inject stealth script:",
-          err.message
+          err.message,
         );
       }
     }
@@ -934,7 +934,7 @@ async function ensureBrowserView(tabId, options = {}) {
   view.webContents.on("render-process-gone", (event, details) => {
     console.error(
       `[BrowserView ${tabId}] Render process gone:`,
-      details.reason
+      details.reason,
     );
 
     // Notify renderer about the crash
@@ -999,7 +999,7 @@ async function ensureBrowserView(tabId, options = {}) {
         // In production, use default behavior (reject)
         callback(false);
       }
-    }
+    },
   );
 
   // Prevent navigation to dangerous protocols
@@ -1063,7 +1063,7 @@ async function ensureBrowserView(tabId, options = {}) {
           // Warning or error
           console.log(`[BrowserView ${tabId}] Console:`, message);
         }
-      }
+      },
     );
   }
 
@@ -1219,7 +1219,7 @@ ipcMain.handle(
       }
     }
     return true;
-  }
+  },
 );
 
 ipcMain.handle("browserview-show", async (event, { tabId, visible = true }) => {
@@ -1282,7 +1282,7 @@ ipcMain.handle(
       view.webContents.reload();
     }
     return true;
-  }
+  },
 );
 
 ipcMain.handle(
@@ -1296,14 +1296,14 @@ ipcMain.handle(
       tabId,
     });
     return true;
-  }
+  },
 );
 
 ipcMain.handle("browserview-get-page-html", async (event, { tabId }) => {
   const view = browserViews.get(tabId);
   if (!view || view.webContents.isDestroyed()) return { ok: false };
   const html = await view.webContents.executeJavaScript(
-    "document.documentElement.outerHTML"
+    "document.documentElement.outerHTML",
   );
   return { ok: true, html };
 });
@@ -1691,11 +1691,11 @@ ipcMain.handle("external-capture-primary-screen", async () => {
 
     const expectedW = Math.max(
       1,
-      Math.floor(Number(thumbnailSize?.width) || 0)
+      Math.floor(Number(thumbnailSize?.width) || 0),
     );
     const expectedH = Math.max(
       1,
-      Math.floor(Number(thumbnailSize?.height) || 0)
+      Math.floor(Number(thumbnailSize?.height) || 0),
     );
     const tolerance = 3;
     const bySize = list.find((source) => {
@@ -1809,11 +1809,11 @@ ipcMain.handle("external-capture-primary-screen-region", async () => {
 
     const expectedW = Math.max(
       1,
-      Math.floor(Number(thumbnailSize?.width) || 0)
+      Math.floor(Number(thumbnailSize?.width) || 0),
     );
     const expectedH = Math.max(
       1,
-      Math.floor(Number(thumbnailSize?.height) || 0)
+      Math.floor(Number(thumbnailSize?.height) || 0),
     );
     const tolerance = 3;
     const bySize = list.find((source) => {
@@ -1870,7 +1870,7 @@ ipcMain.handle("external-capture-primary-screen-region", async () => {
       const dw = Math.abs(size.width - expW);
       const dh = Math.abs(size.height - expH);
       const dr = Math.abs(
-        ratioOf(size.width, size.height) - ratioOf(rectW, rectH)
+        ratioOf(size.width, size.height) - ratioOf(rectW, rectH),
       );
       return dw + dh + dr * 2000;
     };
@@ -2288,8 +2288,8 @@ ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
             if (index >= macOptions.length) {
               return reject(
                 new Error(
-                  `Could not find VS Code. Please install the 'code' command in your PATH.`
-                )
+                  `Could not find VS Code. Please install the 'code' command in your PATH.`,
+                ),
               );
             }
 
@@ -2327,12 +2327,12 @@ ipcMain.handle("open-in-ide", async (event, { projectPath, ide }) => {
               (err2) => {
                 if (err2) {
                   reject(
-                    new Error(`Failed to open in ${ide}: ${error.message}`)
+                    new Error(`Failed to open in ${ide}: ${error.message}`),
                   );
                 } else {
                   resolve({ success: true });
                 }
-              }
+              },
             );
           } else {
             reject(new Error(`Failed to open in ${ide}: ${error.message}`));
@@ -2398,7 +2398,7 @@ ipcMain.handle(
 
     await fs.promises.writeFile(target, String(content || ""), "utf8");
     return { success: true, path: target };
-  }
+  },
 );
 
 ipcMain.handle(
@@ -2457,7 +2457,7 @@ ipcMain.handle(
         code: code || undefined,
       };
     }
-  }
+  },
 );
 
 ipcMain.handle(
@@ -2473,7 +2473,7 @@ ipcMain.handle(
       extraArgs,
       interactive,
       autoAcceptDefaults: autoAcceptDefaultsOption,
-    } = {}
+    } = {},
   ) => {
     const fs = require("fs");
     const workingDir = String(cwd || "").trim();
@@ -2513,7 +2513,7 @@ ipcMain.handle(
           } catch {
             return { folder, exists: false, target };
           }
-        })
+        }),
       );
 
       const installed = results.every((r) => r.exists);
@@ -2523,7 +2523,7 @@ ipcMain.handle(
       }
       if (!installed) {
         lines.push(
-          "BMAD appears not installed (expected _bmad and _config directories)."
+          "BMAD appears not installed (expected _bmad and _config directories).",
         );
       }
 
@@ -2659,7 +2659,7 @@ ipcMain.handle(
             "",
             "## Differentiators",
             "- (fill in)",
-            ""
+            "",
           );
         } else if (workflowName === "prd") {
           blocks.push(
@@ -2674,7 +2674,7 @@ ipcMain.handle(
             "",
             "## Epics & Stories",
             "- (fill in)",
-            ""
+            "",
           );
         } else if (workflowName === "ux-design" || workflowName === "ux-spec") {
           blocks.push(
@@ -2689,7 +2689,7 @@ ipcMain.handle(
             "",
             "## Accessibility",
             "- (fill in)",
-            ""
+            "",
           );
         } else if (
           workflowName === "architecture" ||
@@ -2710,7 +2710,7 @@ ipcMain.handle(
             "",
             "## Key Decisions",
             "- (fill in)",
-            ""
+            "",
           );
         } else if (workflowName === "research") {
           blocks.push(
@@ -2722,7 +2722,7 @@ ipcMain.handle(
             "",
             "## Risks",
             "- (fill in)",
-            ""
+            "",
           );
         } else if (workflowName === "brainstorm") {
           blocks.push(
@@ -2734,7 +2734,7 @@ ipcMain.handle(
             "",
             "## Constraints",
             "- (fill in)",
-            ""
+            "",
           );
         } else if (workflowName === "stories") {
           blocks.push(
@@ -2743,7 +2743,7 @@ ipcMain.handle(
             "",
             "## Stories",
             "- (fill in)",
-            ""
+            "",
           );
         } else if (workflowName === "implementation-readiness") {
           blocks.push(
@@ -2752,7 +2752,7 @@ ipcMain.handle(
             "- [ ] UX ready (if applicable)",
             "- [ ] Architecture ready (if applicable)",
             "- [ ] Stories ready",
-            ""
+            "",
           );
         } else {
           blocks.push("## Output", "(fill in)", "");
@@ -2763,7 +2763,7 @@ ipcMain.handle(
             const content = await readIfExists(item.abs);
             if (!content) return null;
             return { label: item.raw, content };
-          })
+          }),
         );
 
         const dataContent = await Promise.all(
@@ -2771,7 +2771,7 @@ ipcMain.handle(
             const content = await readIfExists(item.abs);
             if (!content) return null;
             return { label: item.raw, content };
-          })
+          }),
         );
 
         const referenced = [...inputContent, ...dataContent].filter(Boolean);
@@ -2899,7 +2899,7 @@ ipcMain.handle(
       if (!isVerbose) return result;
       if (!Array.isArray(runArgs) || !runArgs.includes("-v")) return result;
       const combined = `${String(result?.stdout || "")}\n${String(
-        result?.stderr || ""
+        result?.stderr || "",
       )}`;
       if (!/unknown option ['"]-v['"]/i.test(combined)) return result;
       const nextArgs = runArgs.filter((a) => a !== "-v");
@@ -2909,7 +2909,7 @@ ipcMain.handle(
     const maybeFallbackStatus = async (result) => {
       if (selectedAction !== "status") return null;
       const combined = `${String(result?.stdout || "")}\n${String(
-        result?.stderr || ""
+        result?.stderr || "",
       )}`;
       if (!/unknown command ['"]status['"]/i.test(combined)) return null;
       return await getBmadFolderStatus();
@@ -3019,7 +3019,7 @@ ipcMain.handle(
         } catch (error) {
           sendBmadLog(
             "error",
-            `Process error: ${error?.message || String(error)}`
+            `Process error: ${error?.message || String(error)}`,
           );
           resolve({
             success: false,
@@ -3149,13 +3149,13 @@ ipcMain.handle(
       if (created.includes("_bmad")) {
         sendBmadLog(
           "warning",
-          "BMAD installer completed but _bmad folder was missing. Created it to unblock project setup."
+          "BMAD installer completed but _bmad folder was missing. Created it to unblock project setup.",
         );
       }
       if (created.length > 0 && !created.includes("_bmad")) {
         sendBmadLog(
           "info",
-          `Created missing folders: ${created.map((d) => d).join(", ")}`
+          `Created missing folders: ${created.map((d) => d).join(", ")}`,
         );
       }
       if (created.length === 0) {
@@ -3226,7 +3226,7 @@ ipcMain.handle(
     ) {
       sendBmadLog(
         "warning",
-        `bmad CLI not found in PATH. Falling back to npx ${BMAD_NPX_PACKAGE}.`
+        `bmad CLI not found in PATH. Falling back to npx ${BMAD_NPX_PACKAGE}.`,
       );
       const fallbackCommand = process.platform === "win32" ? "npx.cmd" : "npx";
       const fallbackArgs = ["-y", "--package", BMAD_NPX_PACKAGE];
@@ -3266,7 +3266,7 @@ ipcMain.handle(
 
     sendBmadLog("error", `❌ BMAD command failed (exit ${first.code})`);
     return first;
-  }
+  },
 );
 
 ipcMain.handle("bmad-cli-stop", async () => {
@@ -3302,7 +3302,7 @@ ipcMain.handle("bmad-cli-input", async (event, payload) => {
   if (bmadPtyProcess && typeof bmadPtyProcess.write === "function") {
     try {
       bmadPtyProcess.write(
-        `${String(input || "")}${appendNewline ? "\r" : ""}`
+        `${String(input || "")}${appendNewline ? "\r" : ""}`,
       );
       return true;
     } catch {
@@ -3313,7 +3313,7 @@ ipcMain.handle("bmad-cli-input", async (event, payload) => {
   if (bmadChildProcess?.stdin?.writable) {
     try {
       bmadChildProcess.stdin.write(
-        `${String(input || "")}${appendNewline ? "\n" : ""}`
+        `${String(input || "")}${appendNewline ? "\n" : ""}`,
       );
       return true;
     } catch {
@@ -3395,7 +3395,7 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
     sendLog("info", `📁 Working directory: ${cwd}`);
     sendLog(
       "info",
-      `📋 Configuration: ${Object.keys(answers).length} options set`
+      `📋 Configuration: ${Object.keys(answers).length} options set`,
     );
     sendLog("info", "─".repeat(50));
 
@@ -3406,7 +3406,7 @@ ipcMain.handle("run-generator", async (event, { generatorName, answers }) => {
         cwd,
         shell: true,
         env: { ...process.env, FORCE_COLOR: "1" },
-      }
+      },
     );
 
     let stdout = "";
@@ -3805,7 +3805,7 @@ async function ensureAutoUpdater() {
     }
 
     promptUpdateAvailable(info, { mandatory: Boolean(mandatory) }).catch(
-      () => {}
+      () => {},
     );
   });
 
@@ -4005,7 +4005,7 @@ ipcMain.handle("run-e2e-test", async (event, { testFile, options = {} }) => {
 
   console.log(
     `[Test] Running test: ${testFile} in ${cwd} with options:`,
-    options
+    options,
   );
 
   const cmd = "npx";
@@ -4066,4 +4066,248 @@ ipcMain.handle("run-e2e-test", async (event, { testFile, options = {} }) => {
       resolve({ code: 1, error: err.message });
     });
   });
+});
+
+// ======= BMAD SETUP IPC HANDLERS =======
+
+// Check if BMAD is installed in a project
+ipcMain.handle("bmad:check-install", async (event, { projectPath }) => {
+  try {
+    const bmadDir = path.join(projectPath || "", "_bmad");
+    const exists = fs.existsSync(bmadDir);
+    return {
+      installed: exists,
+      path: exists ? bmadDir : null,
+      version: exists ? "v6" : null,
+    };
+  } catch (err) {
+    return { installed: false, error: err.message };
+  }
+});
+
+// Install BMAD in a project
+ipcMain.handle("bmad:install", async (event, options) => {
+  try {
+    const { projectPath, modules = ["core"] } = options || {};
+    if (!projectPath) {
+      throw new Error("Project path is required");
+    }
+
+    // Create _bmad directory structure
+    const bmadDir = path.join(projectPath, "_bmad");
+    const outputDir = path.join(projectPath, "_bmad-output");
+
+    await fs.promises.mkdir(bmadDir, { recursive: true });
+    await fs.promises.mkdir(outputDir, { recursive: true });
+    await fs.promises.mkdir(path.join(bmadDir, "agents"), { recursive: true });
+    await fs.promises.mkdir(path.join(bmadDir, "workflows"), {
+      recursive: true,
+    });
+
+    // Create basic config
+    const configPath = path.join(bmadDir, "config.json");
+    await fs.promises.writeFile(
+      configPath,
+      JSON.stringify(
+        {
+          version: "6.0",
+          modules,
+          createdAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+    );
+
+    return { success: true, path: bmadDir, version: "v6" };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// Get BMAD status
+ipcMain.handle("bmad:get-status", async () => {
+  return {
+    installed: false,
+    version: null,
+    path: null,
+  };
+});
+
+// Read a context file
+ipcMain.handle(
+  "bmad:read-context",
+  async (event, { projectPath, contextType }) => {
+    try {
+      const fileNames = {
+        prd: "prd.md",
+        architecture: "architecture.md",
+        productBrief: "product-brief.md",
+      };
+      const fileName = fileNames[contextType];
+      if (!fileName) {
+        throw new Error(`Unknown context type: ${contextType}`);
+      }
+
+      const filePath = path.join(projectPath, "_bmad-output", fileName);
+      if (!fs.existsSync(filePath)) {
+        return { content: null, exists: false };
+      }
+
+      const content = await fs.promises.readFile(filePath, "utf-8");
+      return { content, exists: true, path: filePath };
+    } catch (err) {
+      return { content: null, exists: false, error: err.message };
+    }
+  },
+);
+
+// Write a context file
+ipcMain.handle(
+  "bmad:write-context",
+  async (event, { projectPath, contextType, content }) => {
+    try {
+      const fileNames = {
+        prd: "prd.md",
+        architecture: "architecture.md",
+        productBrief: "product-brief.md",
+      };
+      const fileName = fileNames[contextType];
+      if (!fileName) {
+        throw new Error(`Unknown context type: ${contextType}`);
+      }
+
+      const outputDir = path.join(projectPath, "_bmad-output");
+      await fs.promises.mkdir(outputDir, { recursive: true });
+
+      const filePath = path.join(outputDir, fileName);
+      await fs.promises.writeFile(filePath, content, "utf-8");
+
+      return { success: true, path: filePath };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+);
+
+// List available BMAD modules
+ipcMain.handle("bmad:list-modules", async () => {
+  return [
+    { id: "core", name: "BMAD Core", required: true },
+    { id: "ux", name: "UX Design", required: false },
+    { id: "testing", name: "Testing & QA", required: false },
+    { id: "docs", name: "Documentation", required: false },
+    { id: "solo", name: "Solo Dev Mode", required: false },
+  ];
+});
+
+// Configure IDE
+ipcMain.handle("bmad:configure-ide", async (event, { ide, projectPath }) => {
+  try {
+    // TODO: Implement IDE-specific configuration
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ======= FILE OPERATIONS IPC HANDLERS =======
+
+// Read file
+ipcMain.handle("read-file", async (event, { filePath }) => {
+  try {
+    const content = await fs.promises.readFile(filePath, "utf-8");
+    return content;
+  } catch (err) {
+    throw new Error(`Failed to read file: ${err.message}`);
+  }
+});
+
+// Write file
+ipcMain.handle("write-file", async (event, { filePath, content }) => {
+  try {
+    const dir = path.dirname(filePath);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.writeFile(filePath, content, "utf-8");
+    return { success: true };
+  } catch (err) {
+    throw new Error(`Failed to write file: ${err.message}`);
+  }
+});
+
+// Copy file
+ipcMain.handle("copy-file", async (event, { src, dest }) => {
+  try {
+    const dir = path.dirname(dest);
+    await fs.promises.mkdir(dir, { recursive: true });
+    await fs.promises.copyFile(src, dest);
+    return { success: true };
+  } catch (err) {
+    throw new Error(`Failed to copy file: ${err.message}`);
+  }
+});
+
+// Select file dialog
+ipcMain.handle("select-file", async (event, options = {}) => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openFile"],
+    filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  const filePath = result.filePaths[0];
+  try {
+    const content = await fs.promises.readFile(filePath, "utf-8");
+    return { path: filePath, content };
+  } catch {
+    return { path: filePath, content: null };
+  }
+});
+
+// Save file dialog
+ipcMain.handle("save-file", async (event, options = {}) => {
+  const result = await dialog.showSaveDialog({
+    defaultPath: options.defaultPath,
+    filters: options.filters || [{ name: "All Files", extensions: ["*"] }],
+  });
+
+  if (result.canceled || !result.filePath) {
+    return { success: false, canceled: true };
+  }
+
+  try {
+    await fs.promises.writeFile(
+      result.filePath,
+      options.content || "",
+      "utf-8",
+    );
+    return { success: true, path: result.filePath };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+// ======= ELECTRON STORE IPC HANDLERS (for @nde/llm package) =======
+
+// Store get
+ipcMain.handle("store-get", async (event, { key }) => {
+  const currentStore = await getStore();
+  return currentStore.get(key);
+});
+
+// Store set
+ipcMain.handle("store-set", async (event, { key, value }) => {
+  const currentStore = await getStore();
+  currentStore.set(key, value);
+  return { success: true };
+});
+
+// Store delete
+ipcMain.handle("store-delete", async (event, { key }) => {
+  const currentStore = await getStore();
+  currentStore.delete(key);
+  return { success: true };
 });

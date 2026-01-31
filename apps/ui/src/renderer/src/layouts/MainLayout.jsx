@@ -10,6 +10,7 @@ import {
   Rocket,
   Search,
   Settings,
+  Sparkles,
   Table,
   TestTube,
 } from "lucide-react";
@@ -97,14 +98,14 @@ export default function MainLayout({
     Boolean(
       window.electronAPI?.appCapture?.capturePage &&
       window.electronAPI?.appCapture?.captureRegion &&
-      window.electronAPI?.clipboardWriteImageDataUrl
+      window.electronAPI?.clipboardWriteImageDataUrl,
     );
 
   const canExternalCapture =
     !isWeb &&
     Boolean(
       window.electronAPI?.externalCapture?.capturePrimaryScreen &&
-      window.electronAPI?.clipboardWriteImageDataUrl
+      window.electronAPI?.clipboardWriteImageDataUrl,
     );
 
   const canCapture = canAppCapture || canExternalCapture;
@@ -136,7 +137,7 @@ export default function MainLayout({
         } catch {}
       }
     },
-    [isWeb]
+    [isWeb],
   );
 
   const addScreenshot = useResourceStore((s) => s.addScreenshot);
@@ -272,7 +273,7 @@ export default function MainLayout({
 
       const ts = new Date().toISOString().replaceAll(":", "-");
       const fileName = `${String(source || "capture")}-${String(
-        mode || "full"
+        mode || "full",
       )}-${ts}.png`;
 
       addScreenshot({
@@ -300,7 +301,7 @@ export default function MainLayout({
         },
       });
     },
-    [addScreenshot, navigate]
+    [addScreenshot, navigate],
   );
 
   const captureAndCopy = React.useCallback(
@@ -338,7 +339,7 @@ export default function MainLayout({
         toast.error(String(err?.message || err || "Capture failed"));
       }
     },
-    [canAppCapture, saveCapture]
+    [canAppCapture, saveCapture],
   );
 
   const captureExternalFull = React.useCallback(async () => {
@@ -528,7 +529,7 @@ export default function MainLayout({
       : location.pathname.substring(1).split("/")[0];
 
   const [isDockVisible, setIsDockVisible] = React.useState(
-    !dockSettings.autoHide
+    !dockSettings.autoHide,
   );
 
   React.useEffect(() => {
@@ -595,7 +596,7 @@ export default function MainLayout({
         gradient: "bg-gradient-to-br from-zinc-500 via-slate-600 to-stone-700",
       },
     ],
-    []
+    [],
   );
 
   const appByKey = React.useMemo(() => {
@@ -606,7 +607,7 @@ export default function MainLayout({
 
   const pinnedAppKeys = React.useMemo(
     () => ["launchpad", "generator", "projects", "resources"],
-    []
+    [],
   );
 
   const [recentAppKeys, setRecentAppKeys] = React.useState(() => {
@@ -648,7 +649,7 @@ export default function MainLayout({
     (key) => {
       navigate(`/${key}`);
     },
-    [navigate]
+    [navigate],
   );
 
   const loadRecentDockActions = React.useCallback(() => {
@@ -673,7 +674,7 @@ export default function MainLayout({
   }, []);
 
   const [recentDockActions, setRecentDockActions] = React.useState(() =>
-    loadRecentDockActions()
+    loadRecentDockActions(),
   );
 
   React.useEffect(() => {
@@ -695,8 +696,9 @@ export default function MainLayout({
       test: TestTube,
       settings: Settings,
       camera: Camera,
+      sparkles: Sparkles,
     }),
-    []
+    [],
   );
 
   const runLaunchpadAction = React.useCallback(
@@ -718,7 +720,7 @@ export default function MainLayout({
         }
         try {
           await window.electronAPI.openExternal(
-            "https://github.com/next-dev-team/next-gen"
+            "https://github.com/next-dev-team/next-gen",
           );
         } catch (err) {
           toast.error(String(err?.message || err || "Failed to open"));
@@ -766,7 +768,7 @@ export default function MainLayout({
       setDockSettings,
       startAreaCapture,
       startExternalAreaCapture,
-    ]
+    ],
   );
 
   React.useEffect(() => {
@@ -789,7 +791,7 @@ export default function MainLayout({
       { key: "scrum-board", label: "Scrum Board", icon: Table },
       { key: "browser", label: "Browser", icon: Globe },
     ],
-    []
+    [],
   );
 
   const segmentedValue = tabOptions.some((t) => t.key === activeTab)
@@ -800,7 +802,7 @@ export default function MainLayout({
     (value) => {
       openApp(value);
     },
-    [openApp]
+    [openApp],
   );
 
   const handleTabsKeyDown = React.useCallback(
@@ -816,7 +818,7 @@ export default function MainLayout({
 
       e.preventDefault();
       const currentIndex = tabOptions.findIndex(
-        (t) => t.key === segmentedValue
+        (t) => t.key === segmentedValue,
       );
       if (currentIndex < 0) return;
 
@@ -837,7 +839,7 @@ export default function MainLayout({
       if (!next) return;
       handleTabChange(next.key);
     },
-    [handleTabChange, segmentedValue, tabOptions]
+    [handleTabChange, segmentedValue, tabOptions],
   );
 
   const dockItemRefs = React.useRef([]);
@@ -863,7 +865,7 @@ export default function MainLayout({
         }
       }
     },
-    [dockSettings.position]
+    [dockSettings.position],
   );
 
   const onDockMouseMove = React.useCallback(
@@ -871,7 +873,7 @@ export default function MainLayout({
       dockPointerRef.current = { x: e.clientX, y: e.clientY };
       scheduleDockPointerUpdate();
     },
-    [scheduleDockPointerUpdate]
+    [scheduleDockPointerUpdate],
   );
 
   const onDockMouseLeave = React.useCallback(() => {
@@ -902,7 +904,7 @@ export default function MainLayout({
       const t = 1 - clamp(distance / 120, 0, 1);
       return 1 + t * 0.35;
     },
-    [dockPointer, dockSettings.position]
+    [dockPointer, dockSettings.position],
   );
 
   return (
@@ -1088,7 +1090,7 @@ export default function MainLayout({
                     onClick={() => {
                       if (window.electronAPI?.openExternal) {
                         window.electronAPI.openExternal(
-                          "https://github.com/next-dev-team/next-gen"
+                          "https://github.com/next-dev-team/next-gen",
                         );
                       }
                     }}
@@ -1131,7 +1133,9 @@ export default function MainLayout({
         <div
           className={
             "flex flex-1 flex-col min-h-0 " +
-            (activeTab === "launchpad" ? "p-0 overflow-hidden" : "p-6 overflow-auto")
+            (activeTab === "launchpad"
+              ? "p-0 overflow-hidden"
+              : "p-6 overflow-auto")
           }
           style={{ WebkitAppRegion: "no-drag" }}
         >
@@ -1207,7 +1211,7 @@ export default function MainLayout({
               const remainingSlots = maxItems - displayedApps.length;
               const displayedActions = recentDockActions.slice(
                 0,
-                remainingSlots
+                remainingSlots,
               );
 
               return (
@@ -1330,7 +1334,7 @@ export default function MainLayout({
                             type="button"
                             onClick={() => {
                               runLaunchpadAction(action.actionKey).catch(
-                                () => {}
+                                () => {},
                               );
                               try {
                                 const raw =
@@ -1349,10 +1353,10 @@ export default function MainLayout({
                                 ].slice(0, 6);
                                 localStorage.setItem(
                                   "dockRecentActions",
-                                  JSON.stringify(next)
+                                  JSON.stringify(next),
                                 );
                                 window.dispatchEvent(
-                                  new Event("dock:recentActionsUpdated")
+                                  new Event("dock:recentActionsUpdated"),
                                 );
                               } catch {}
                             }}
@@ -1563,11 +1567,11 @@ export default function MainLayout({
               const rect = img.getBoundingClientRect();
               const x2 = Math.min(
                 Math.max(0, e.clientX - rect.left),
-                rect.width
+                rect.width,
               );
               const y2 = Math.min(
                 Math.max(0, e.clientY - rect.top),
-                rect.height
+                rect.height,
               );
               const x1 = externalCropDragRef.current.startX;
               const y1 = externalCropDragRef.current.startY;
@@ -1630,11 +1634,11 @@ export default function MainLayout({
                   const rect = img.getBoundingClientRect();
                   const x = Math.min(
                     Math.max(0, e.clientX - rect.left),
-                    rect.width
+                    rect.width,
                   );
                   const y = Math.min(
                     Math.max(0, e.clientY - rect.top),
-                    rect.height
+                    rect.height,
                   );
                   externalCropDragRef.current.active = true;
                   externalCropDragRef.current.startX = x;

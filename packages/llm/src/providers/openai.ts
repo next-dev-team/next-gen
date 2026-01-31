@@ -5,8 +5,13 @@
  * Features dynamic provider registry for adding multiple endpoints.
  */
 
-import type { ChatMessage, ProviderContext, ProviderResult, ChatResponse } from '../types.js';
-import { prepareMessages } from '../memory.js';
+import type {
+  ChatMessage,
+  ProviderContext,
+  ProviderResult,
+  ChatResponse,
+} from "../types.js";
+import { prepareMessages } from "../memory/conversation.js";
 
 interface OpenAiParams {
   baseUrl: string;
@@ -39,7 +44,7 @@ const dynamicProviders: Record<string, OpenAiProviderConfig> = {};
  */
 export function addOpenAiProvider(config: OpenAiProviderConfig): void {
   if (!config.name || !config.baseUrl) {
-    throw new Error('Provider name and baseUrl are required');
+    throw new Error("Provider name and baseUrl are required");
   }
   dynamicProviders[config.name] = { ...config };
 }
@@ -58,7 +63,9 @@ export function removeOpenAiProvider(name: string): boolean {
 /**
  * Get a specific dynamic provider by name
  */
-export function getOpenAiProvider(name: string): OpenAiProviderConfig | undefined {
+export function getOpenAiProvider(
+  name: string,
+): OpenAiProviderConfig | undefined {
   return dynamicProviders[name];
 }
 
@@ -98,38 +105,49 @@ export function clearOpenAiProviders(): void {
 export function initDefaultOpenAiProviders(): void {
   // OpenAI official
   addOpenAiProvider({
-    name: 'openai',
-    baseUrl: 'https://api.openai.com',
-    defaultModel: 'gpt-4o',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
-    description: 'OpenAI Official API',
+    name: "openai",
+    baseUrl: "https://api.openai.com",
+    defaultModel: "gpt-4o",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
+    description: "OpenAI Official API",
   });
 
   // Groq
   addOpenAiProvider({
-    name: 'groq',
-    baseUrl: 'https://api.groq.com/openai',
-    defaultModel: 'llama-3.3-70b-versatile',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'],
-    description: 'Groq Cloud - Ultra-fast inference',
+    name: "groq",
+    baseUrl: "https://api.groq.com/openai",
+    defaultModel: "llama-3.3-70b-versatile",
+    models: [
+      "llama-3.3-70b-versatile",
+      "llama-3.1-8b-instant",
+      "mixtral-8x7b-32768",
+    ],
+    description: "Groq Cloud - Ultra-fast inference",
   });
 
   // Together AI
   addOpenAiProvider({
-    name: 'together',
-    baseUrl: 'https://api.together.xyz',
-    defaultModel: 'meta-llama/Llama-3.3-70B-Instruct-Turbo',
-    models: ['meta-llama/Llama-3.3-70B-Instruct-Turbo', 'mistralai/Mixtral-8x7B-Instruct-v0.1'],
-    description: 'Together AI - Open source models',
+    name: "together",
+    baseUrl: "https://api.together.xyz",
+    defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    models: [
+      "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+      "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    ],
+    description: "Together AI - Open source models",
   });
 
   // OpenRouter
   addOpenAiProvider({
-    name: 'openrouter',
-    baseUrl: 'https://openrouter.ai/api',
-    defaultModel: 'anthropic/claude-3.5-sonnet',
-    models: ['anthropic/claude-3.5-sonnet', 'openai/gpt-4o', 'google/gemini-pro-1.5'],
-    description: 'OpenRouter - Multi-provider gateway',
+    name: "openrouter",
+    baseUrl: "https://openrouter.ai/api",
+    defaultModel: "anthropic/claude-3.5-sonnet",
+    models: [
+      "anthropic/claude-3.5-sonnet",
+      "openai/gpt-4o",
+      "google/gemini-pro-1.5",
+    ],
+    description: "OpenRouter - Multi-provider gateway",
   });
 }
 
@@ -138,16 +156,18 @@ export function initDefaultOpenAiProviders(): void {
  */
 export async function runOpenAiCompatible(
   params: OpenAiParams,
-): Promise<{ text: string; usage?: ChatResponse['usage'] }> {
+): Promise<{ text: string; usage?: ChatResponse["usage"] }> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 120_000);
 
   try {
-    const base = params.baseUrl.replace(/\/+$/, '');
-    const url = base.endsWith('/v1') ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+    const base = params.baseUrl.replace(/\/+$/, "");
+    const url = base.endsWith("/v1")
+      ? `${base}/chat/completions`
+      : `${base}/v1/chat/completions`;
 
     const headers: Record<string, string> = {
-      'content-type': 'application/json',
+      "content-type": "application/json",
     };
     if (params.apiKey) {
       headers.authorization = `Bearer ${params.apiKey}`;
@@ -163,7 +183,7 @@ export async function runOpenAiCompatible(
     }
 
     const res = await fetch(url, {
-      method: 'POST',
+      method: "POST",
       headers,
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -176,8 +196,10 @@ export async function runOpenAiCompatible(
 
     const json = JSON.parse(text) as any;
     const content = json?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string' || !content.trim()) {
-      throw new Error('OpenAI-compatible response missing choices[0].message.content');
+    if (typeof content !== "string" || !content.trim()) {
+      throw new Error(
+        "OpenAI-compatible response missing choices[0].message.content",
+      );
     }
     return { text: content.trim(), usage: json?.usage };
   } finally {
@@ -188,16 +210,18 @@ export async function runOpenAiCompatible(
 /**
  * OpenAI-compatible provider handler
  */
-export async function handleOpenAiCompatible(ctx: ProviderContext): Promise<ProviderResult> {
+export async function handleOpenAiCompatible(
+  ctx: ProviderContext,
+): Promise<ProviderResult> {
   if (!ctx.baseUrl) {
-    throw new Error('Missing base_url for openai_compatible');
+    throw new Error("Missing base_url for openai_compatible");
   }
   if (!ctx.model) {
-    throw new Error('Missing model for openai_compatible');
+    throw new Error("Missing model for openai_compatible");
   }
 
   // Optimize messages for context window
-  const optimizedMessages = prepareMessages(ctx.messages, 'openai_compatible');
+  const optimizedMessages = prepareMessages(ctx.messages, "openai_compatible");
 
   const result = await runOpenAiCompatible({
     baseUrl: ctx.baseUrl,
@@ -244,7 +268,7 @@ export async function handleDynamicOpenAiProvider(
   }
 
   // Optimize messages for context window
-  const optimizedMessages = prepareMessages(ctx.messages, 'openai_compatible');
+  const optimizedMessages = prepareMessages(ctx.messages, "openai_compatible");
 
   const result = await runOpenAiCompatible({
     baseUrl,
@@ -265,5 +289,6 @@ export async function handleDynamicOpenAiProvider(
 export function createDynamicProviderHandler(
   providerName: string,
 ): (ctx: ProviderContext) => Promise<ProviderResult> {
-  return (ctx: ProviderContext) => handleDynamicOpenAiProvider(providerName, ctx);
+  return (ctx: ProviderContext) =>
+    handleDynamicOpenAiProvider(providerName, ctx);
 }

@@ -4,8 +4,8 @@
  * Connects to local Ollama server for LLM inference.
  */
 
-import type { ChatMessage, ProviderContext, ProviderResult } from '../types.js';
-import { prepareMessages } from '../memory.js';
+import type { ChatMessage, ProviderContext, ProviderResult } from "../types.js";
+import { prepareMessages } from "../memory/conversation.js";
 
 interface OllamaParams {
   baseUrl: string;
@@ -22,12 +22,12 @@ export async function runOllama(params: OllamaParams): Promise<string> {
   const timeout = setTimeout(() => controller.abort(), 120_000);
 
   try {
-    const base = params.baseUrl.replace(/\/+$/, '');
+    const base = params.baseUrl.replace(/\/+$/, "");
     const url = `${base}/api/chat`;
 
     const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({
         model: params.model,
         messages: params.messages,
@@ -46,8 +46,8 @@ export async function runOllama(params: OllamaParams): Promise<string> {
 
     const json = JSON.parse(text) as any;
     const response = json?.message?.content;
-    if (typeof response !== 'string' || !response.trim()) {
-      throw new Error('Ollama response missing message content');
+    if (typeof response !== "string" || !response.trim()) {
+      throw new Error("Ollama response missing message content");
     }
     return response.trim();
   } finally {
@@ -58,16 +58,18 @@ export async function runOllama(params: OllamaParams): Promise<string> {
 /**
  * Ollama provider handler
  */
-export async function handleOllama(ctx: ProviderContext): Promise<ProviderResult> {
+export async function handleOllama(
+  ctx: ProviderContext,
+): Promise<ProviderResult> {
   if (!ctx.baseUrl) {
-    throw new Error('Missing base_url for ollama');
+    throw new Error("Missing base_url for ollama");
   }
   if (!ctx.model) {
-    throw new Error('Missing model for ollama');
+    throw new Error("Missing model for ollama");
   }
 
   // Optimize messages for context window
-  const optimizedMessages = prepareMessages(ctx.messages, 'ollama');
+  const optimizedMessages = prepareMessages(ctx.messages, "ollama");
 
   const text = await runOllama({
     baseUrl: ctx.baseUrl,

@@ -26,6 +26,7 @@ import {
   Search,
   Settings,
   Sparkles,
+  Table,
   Tag,
   Target,
   Trash2,
@@ -81,6 +82,15 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import { cn } from "../lib/utils";
+
+// Import new BMAD components
+import {
+  AgentChat,
+  PhaseProgress,
+  StoryGenerator,
+  ContextManager,
+  SetupWizard,
+} from "../components/bmad";
 
 import useKanbanStore, {
   EPIC_STATUSES,
@@ -510,7 +520,7 @@ const ALL_BMAD_CONTEXT_ITEMS = BMAD_CONTEXT_CATEGORIES.flatMap((cat) =>
     ...item,
     category: cat.id,
     categoryLabel: cat.label,
-  }))
+  })),
 );
 
 const MCP_KANBAN_TOOL_OPTIONS = [
@@ -964,7 +974,7 @@ const CardEditorDialog = ({
   const nextId = React.useMemo(() => {
     if (initial?.id) return initial.id;
     const allCards = (state?.boards || []).flatMap((b) =>
-      b.lists.flatMap((l) => l.cards)
+      b.lists.flatMap((l) => l.cards),
     );
     const maxId = allCards.reduce((max, c) => {
       const numericId = parseInt(c.id, 10);
@@ -975,20 +985,20 @@ const CardEditorDialog = ({
 
   const [title, setTitle] = React.useState(initial?.title || "");
   const [description, setDescription] = React.useState(
-    initial?.description || ""
+    initial?.description || "",
   );
   const [assignee, setAssignee] = React.useState(initial?.assignee || "");
   const [points, setPoints] = React.useState(
-    typeof initial?.points === "number" ? String(initial.points) : ""
+    typeof initial?.points === "number" ? String(initial.points) : "",
   );
   const [labels, setLabels] = React.useState(
-    Array.isArray(initial?.labels) ? initial.labels.join(", ") : ""
+    Array.isArray(initial?.labels) ? initial.labels.join(", ") : "",
   );
   const [priority, setPriority] = React.useState(initial?.priority || "medium");
   const [epicId, setEpicId] = React.useState(initial?.epicId || "");
   const [sprintId, setSprintId] = React.useState(initial?.sprintId || "");
   const [attachments, setAttachments] = React.useState(
-    Array.isArray(initial?.attachments) ? initial.attachments : []
+    Array.isArray(initial?.attachments) ? initial.attachments : [],
   );
   const [previewAttachment, setPreviewAttachment] = React.useState(null);
 
@@ -997,14 +1007,14 @@ const CardEditorDialog = ({
     setDescription(initial?.description || "");
     setAssignee(initial?.assignee || "");
     setPoints(
-      typeof initial?.points === "number" ? String(initial.points) : ""
+      typeof initial?.points === "number" ? String(initial.points) : "",
     );
     setLabels(Array.isArray(initial?.labels) ? initial.labels.join(", ") : "");
     setPriority(initial?.priority || "medium");
     setEpicId(initial?.epicId || "");
     setSprintId(initial?.sprintId || "");
     setAttachments(
-      Array.isArray(initial?.attachments) ? initial.attachments : []
+      Array.isArray(initial?.attachments) ? initial.attachments : [],
     );
   }, [initial]);
 
@@ -1029,7 +1039,7 @@ const CardEditorDialog = ({
           };
           reader.readAsDataURL(file);
         });
-      })
+      }),
     );
 
     setAttachments((prev) => [...prev, ...newAttachments]);
@@ -1068,7 +1078,7 @@ const CardEditorDialog = ({
             };
             reader.readAsDataURL(file);
           });
-        })
+        }),
       );
       setAttachments((prev) => [...prev, ...newAttachments]);
     }
@@ -1492,7 +1502,7 @@ const EpicManagerDialog = ({
   const [selectedEpicId, setSelectedEpicId] = React.useState("");
   const selectedEpic = React.useMemo(
     () => (epics || []).find((e) => e.id === selectedEpicId) || null,
-    [epics, selectedEpicId]
+    [epics, selectedEpicId],
   );
 
   const [name, setName] = React.useState("");
@@ -1530,7 +1540,7 @@ const EpicManagerDialog = ({
       const epicId = await onCreateEpic(
         name.trim(),
         description.trim(),
-        projectKey.trim() || null
+        projectKey.trim() || null,
       );
       if (epicId) {
         if (sprintId) {
@@ -1608,7 +1618,7 @@ const EpicManagerDialog = ({
                         const payload = { type: "scrum-epic", epicId: epic.id };
                         e.dataTransfer.setData(
                           "application/json",
-                          JSON.stringify(payload)
+                          JSON.stringify(payload),
                         );
                         e.dataTransfer.effectAllowed = "move";
                       }}
@@ -1617,7 +1627,7 @@ const EpicManagerDialog = ({
                         "w-full text-left rounded-md px-3 py-2 transition-colors",
                         "hover:bg-muted/40",
                         selectedEpicId === epic.id &&
-                          "bg-primary/10 ring-1 ring-primary/20"
+                          "bg-primary/10 ring-1 ring-primary/20",
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -1787,7 +1797,7 @@ const SprintManagerDialog = ({
   const [selectedSprintId, setSelectedSprintId] = React.useState("");
   const selectedSprint = React.useMemo(
     () => (sprints || []).find((s) => s.id === selectedSprintId) || null,
-    [sprints, selectedSprintId]
+    [sprints, selectedSprintId],
   );
 
   const [name, setName] = React.useState("");
@@ -1817,7 +1827,7 @@ const SprintManagerDialog = ({
     setCapacityPoints(
       typeof selectedSprint.capacityPoints === "number"
         ? String(selectedSprint.capacityPoints)
-        : ""
+        : "",
     );
     setStatus(String(selectedSprint.status || "planned"));
   }, [open, selectedSprint]);
@@ -1920,7 +1930,7 @@ const SprintManagerDialog = ({
                   (sprints || [])
                     .slice()
                     .sort((a, b) =>
-                      String(a.name || "").localeCompare(String(b.name || ""))
+                      String(a.name || "").localeCompare(String(b.name || "")),
                     )
                     .map((sprint) => (
                       <button
@@ -1931,7 +1941,7 @@ const SprintManagerDialog = ({
                           "w-full text-left rounded-md px-3 py-2 transition-colors",
                           "hover:bg-muted/40",
                           selectedSprintId === sprint.id &&
-                            "bg-primary/10 ring-1 ring-primary/20"
+                            "bg-primary/10 ring-1 ring-primary/20",
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -2119,7 +2129,7 @@ const SprintTrackingView = ({
 
   const selectedSprint = React.useMemo(
     () => (sprints || []).find((s) => s.id === selectedSprintId) || null,
-    [sprints, selectedSprintId]
+    [sprints, selectedSprintId],
   );
 
   const isDoneList = React.useCallback((list) => {
@@ -2258,7 +2268,7 @@ const SprintTrackingView = ({
       perSprint.length > 0
         ? Math.round(
             perSprint.reduce((sum, row) => sum + row.donePoints, 0) /
-              perSprint.length
+              perSprint.length,
           )
         : 0;
 
@@ -2273,7 +2283,7 @@ const SprintTrackingView = ({
     const max = Math.max(
       1,
       ...burndown.points.map((p) => p.remaining),
-      ...burndown.ideal.map((p) => p.remaining)
+      ...burndown.ideal.map((p) => p.remaining),
     );
     const xFor = (day) =>
       padding + (day / (burndown.points.length - 1)) * (width - padding * 2);
@@ -2285,8 +2295,8 @@ const SprintTrackingView = ({
         .map(
           (p, idx) =>
             `${idx === 0 ? "M" : "L"}${xFor(p.day).toFixed(1)},${yFor(
-              p.remaining
-            ).toFixed(1)}`
+              p.remaining,
+            ).toFixed(1)}`,
         )
         .join(" ");
 
@@ -2370,12 +2380,12 @@ const McpToolsUsage = ({ activeBoard, projectRoot }) => {
 
   const toolMeta = React.useMemo(
     () => MCP_KANBAN_TOOL_OPTIONS.find((t) => t.id === toolId) || null,
-    [toolId]
+    [toolId],
   );
 
   const usageText = React.useMemo(
     () => getMcpToolUsageText({ toolId, activeBoard, projectRoot }),
-    [toolId, activeBoard, projectRoot]
+    [toolId, activeBoard, projectRoot],
   );
 
   const handleCopyUsage = React.useCallback(
@@ -2394,7 +2404,7 @@ const McpToolsUsage = ({ activeBoard, projectRoot }) => {
         toast.error("Failed to copy to clipboard");
       }
     },
-    [usageText]
+    [usageText],
   );
 
   const onToolChange = (val) => {
@@ -2503,15 +2513,15 @@ const ScrumCard = ({
         setTimeout(() => setCopied(false), 2000);
       } catch {}
     },
-    [storyKey]
+    [storyKey],
   );
 
   const coverImage = card.attachments?.find((a) =>
-    a.type?.startsWith("image/")
+    a.type?.startsWith("image/"),
   );
   const otherImages =
     card.attachments?.filter(
-      (a) => a.type?.startsWith("image/") && a.id !== coverImage?.id
+      (a) => a.type?.startsWith("image/") && a.id !== coverImage?.id,
     ) || [];
 
   return (
@@ -2525,7 +2535,7 @@ const ScrumCard = ({
         "bg-card/50 backdrop-blur-sm border-border/50 overflow-hidden",
         isLocked && "opacity-60 cursor-not-allowed ring-2 ring-amber-500/50",
         isDragging &&
-          "opacity-20 scale-95 border-primary/40 grayscale shadow-none"
+          "opacity-20 scale-95 border-primary/40 grayscale shadow-none",
       )}
     >
       {coverImage && (
@@ -2683,7 +2693,7 @@ const ScrumCard = ({
                 variant="secondary"
                 className={cn(
                   "text-[10px] px-1.5 py-0",
-                  priorityConfig.textColor
+                  priorityConfig.textColor,
                 )}
               >
                 {card.priority}
@@ -2744,7 +2754,7 @@ const DropZone = ({ isActive, onDrop }) => {
           ? over
             ? "h-24 bg-primary/15 border-2 border-dashed border-primary/40 shadow-sm my-2"
             : "h-6 bg-primary/5 hover:h-24 hover:bg-primary/10 my-1"
-          : "h-0 opacity-0 overflow-hidden m-0"
+          : "h-0 opacity-0 overflow-hidden m-0",
       )}
       onDragOver={(e) => {
         e.preventDefault();
@@ -2761,7 +2771,7 @@ const DropZone = ({ isActive, onDrop }) => {
         <div
           className={cn(
             "absolute inset-0 flex items-center justify-center text-[10px] font-medium uppercase tracking-wider transition-opacity duration-200",
-            over ? "text-primary/60 opacity-100" : "opacity-0"
+            over ? "text-primary/60 opacity-100" : "opacity-0",
           )}
         >
           {over ? "Drop here" : ""}
@@ -2820,7 +2830,7 @@ const ListColumn = ({
       className={cn(
         "relative w-[320px] rounded-xl border bg-background/50 backdrop-blur-sm flex flex-col h-full min-h-0",
         "border-border/50 hover:border-border transition-all duration-300",
-        isListDropTarget && "ring-2 ring-primary/30"
+        isListDropTarget && "ring-2 ring-primary/30",
       )}
       onDragOver={disableDnd ? undefined : onDragOverList}
       onDrop={disableDnd ? undefined : onDropList}
@@ -2830,7 +2840,7 @@ const ListColumn = ({
           aria-hidden="true"
           className={cn(
             "absolute inset-y-2 w-1 rounded bg-primary/50",
-            listDrop?.position === "after" ? "right-0" : "left-0"
+            listDrop?.position === "after" ? "right-0" : "left-0",
           )}
         />
       )}
@@ -2851,7 +2861,7 @@ const ListColumn = ({
             "shrink-0 rounded p-1 -ml-1 text-muted-foreground",
             isEditingName
               ? "cursor-not-allowed opacity-40"
-              : "cursor-grab active:cursor-grabbing hover:text-foreground"
+              : "cursor-grab active:cursor-grabbing hover:text-foreground",
           )}
           onDragStart={disableDnd ? undefined : onDragStartList}
           onDragEnd={disableDnd ? undefined : onDragEndList}
@@ -3186,7 +3196,7 @@ const CreateBoardDialog = ({ open, onOpenChange, onCreateBoard }) => {
                       "hover:bg-accent/50",
                       selectedTemplate === template.id
                         ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                        : "border-border/50 bg-background/30"
+                        : "border-border/50 bg-background/30",
                     )}
                     onClick={() => {
                       setSelectedTemplate(template.id);
@@ -3201,7 +3211,7 @@ const CreateBoardDialog = ({ open, onOpenChange, onCreateBoard }) => {
                           "p-2 rounded-lg",
                           selectedTemplate === template.id
                             ? "bg-primary/20 text-primary"
-                            : "bg-muted text-muted-foreground"
+                            : "bg-muted text-muted-foreground",
                         )}
                       >
                         <Icon className="h-5 w-5" />
@@ -3345,7 +3355,7 @@ const SettingsDialog = ({ open, onOpenChange }) => {
                       "w-2.5 h-2.5 rounded-full shrink-0 transition-colors",
                       connected
                         ? "bg-green-500 animate-pulse"
-                        : "bg-destructive"
+                        : "bg-destructive",
                     )}
                   />
                   <div className="flex flex-col">
@@ -3410,7 +3420,7 @@ const SettingsDialog = ({ open, onOpenChange }) => {
                             ? "text-red-400"
                             : log.type === "success"
                               ? "text-green-400"
-                              : "text-gray-300"
+                              : "text-gray-300",
                         )}
                       >
                         {log.message}
@@ -3506,7 +3516,7 @@ const AgentAssistDialog = ({
 
   // BMAD v6 Installation and Phase Management
   const [bmadInstallStatus, setBmadInstallStatus] = React.useState(
-    BMAD_INSTALL_STATUS.NOT_CHECKED
+    BMAD_INSTALL_STATUS.NOT_CHECKED,
   );
   const [detectedBmadModules, setDetectedBmadModules] = React.useState({
     core: false,
@@ -3577,7 +3587,7 @@ const AgentAssistDialog = ({
           },
         },
         null,
-        2
+        2,
       );
     }
 
@@ -3593,7 +3603,7 @@ const AgentAssistDialog = ({
         },
       },
       null,
-      2
+      2,
     );
   }, [scriptPath, serverBaseUrl, useRemoteServer]);
 
@@ -3614,7 +3624,7 @@ const AgentAssistDialog = ({
       if (copiedTimerRef.current) window.clearTimeout(copiedTimerRef.current);
       copiedTimerRef.current = window.setTimeout(
         () => setCopiedKey(null),
-        1200
+        1200,
       );
       return true;
     } catch {
@@ -3653,7 +3663,7 @@ const AgentAssistDialog = ({
         setBmadBusy(false);
       }
     },
-    [hasProjectRoot, projectRoot, setup.bmadMode, setup.bmadVerbose]
+    [hasProjectRoot, projectRoot, setup.bmadMode, setup.bmadVerbose],
   );
 
   const stopBmad = React.useCallback(async () => {
@@ -3721,7 +3731,7 @@ const AgentAssistDialog = ({
         setContextBusy(false);
       }
     },
-    [projectRoot, setContextDraft]
+    [projectRoot, setContextDraft],
   );
 
   const saveContextDoc = React.useCallback(
@@ -3762,7 +3772,7 @@ const AgentAssistDialog = ({
         setContextBusy(false);
       }
     },
-    [contextDrafts, projectRoot]
+    [contextDrafts, projectRoot],
   );
 
   React.useEffect(() => {
@@ -3831,10 +3841,10 @@ const AgentAssistDialog = ({
         core: await window.electronAPI.checkPathExists(`${root}/_bmad/core`),
         bmm: await window.electronAPI.checkPathExists(`${root}/_bmad/bmm`),
         _config: await window.electronAPI.checkPathExists(
-          `${root}/_bmad/_config`
+          `${root}/_bmad/_config`,
         ),
         _bmadOutput: await window.electronAPI.checkPathExists(
-          `${root}/_bmad-output`
+          `${root}/_bmad-output`,
         ),
       };
 
@@ -3869,7 +3879,7 @@ const AgentAssistDialog = ({
       const existingOutputs = [];
       for (const output of phase.outputs) {
         const exists = await window.electronAPI.checkPathExists(
-          `${root}/_bmad-output/${output}`
+          `${root}/_bmad-output/${output}`,
         );
         if (exists) existingOutputs.push(output);
       }
@@ -3883,7 +3893,7 @@ const AgentAssistDialog = ({
 
     // Special case: PRD.md is the key requirement for phase-2
     const prdExists = await window.electronAPI.checkPathExists(
-      `${root}/_bmad-output/PRD.md`
+      `${root}/_bmad-output/PRD.md`,
     );
     if (prdExists) {
       newCompletion["phase-2"] = {
@@ -3995,7 +4005,7 @@ const AgentAssistDialog = ({
       });
       setActiveContextId(id);
     },
-    [onChangeSetup, setup]
+    [onChangeSetup, setup],
   );
 
   const removeContextDoc = React.useCallback(
@@ -4014,7 +4024,7 @@ const AgentAssistDialog = ({
       });
       if (activeContextId === id) setActiveContextId("prd");
     },
-    [activeContextId, onChangeSetup, setup]
+    [activeContextId, onChangeSetup, setup],
   );
 
   const workflowDataPath = React.useMemo(() => {
@@ -4061,7 +4071,7 @@ const AgentAssistDialog = ({
 
   const wizardWorkflowOptions = React.useMemo(() => {
     const flows = BMAD_V6_WORKFLOWS.filter(
-      (w) => w.phase === wizardPhase || w.phase === "all"
+      (w) => w.phase === wizardPhase || w.phase === "all",
     );
     return flows.map((f) => ({ value: f.id, label: f.name }));
   }, [wizardPhase]);
@@ -4175,7 +4185,7 @@ const AgentAssistDialog = ({
     if (!rel) return;
     if (/^(?:[a-zA-Z]:\\|\/)/.test(rel)) {
       setWorkflowPreviewError(
-        "Preview supports files inside the selected project root"
+        "Preview supports files inside the selected project root",
       );
       setWorkflowPreviewContent(null);
       return;
@@ -4404,8 +4414,11 @@ const AgentAssistDialog = ({
           onValueChange={setActiveTab}
           className="flex-1 flex flex-col min-h-0"
         >
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="bmad">BMAD</TabsTrigger>
+            <TabsTrigger value="ai-chat">AI Chat</TabsTrigger>
+            <TabsTrigger value="story-gen">Stories</TabsTrigger>
+            <TabsTrigger value="context">Context</TabsTrigger>
             <TabsTrigger value="team">Team</TabsTrigger>
             <TabsTrigger value="project">Project</TabsTrigger>
             <TabsTrigger value="actions">Actions</TabsTrigger>
@@ -4492,7 +4505,7 @@ const AgentAssistDialog = ({
                           className={cn(
                             "h-4 w-4",
                             bmadInstallStatus ===
-                              BMAD_INSTALL_STATUS.CHECKING && "animate-spin"
+                              BMAD_INSTALL_STATUS.CHECKING && "animate-spin",
                           )}
                         />
                         Sync
@@ -4515,7 +4528,7 @@ const AgentAssistDialog = ({
                               "rounded-lg border p-2 text-center transition-colors",
                               detectedBmadModules[mod.key]
                                 ? "border-green-500/30 bg-green-500/5"
-                                : "border-border/30 bg-background/30"
+                                : "border-border/30 bg-background/30",
                             )}
                           >
                             <div className="text-lg">{mod.icon}</div>
@@ -4527,7 +4540,7 @@ const AgentAssistDialog = ({
                                 "text-[9px]",
                                 detectedBmadModules[mod.key]
                                   ? "text-green-400"
-                                  : "text-muted-foreground"
+                                  : "text-muted-foreground",
                               )}
                             >
                               {detectedBmadModules[mod.key]
@@ -4560,7 +4573,7 @@ const AgentAssistDialog = ({
                                 "border-green-500/50 bg-green-500/5",
                               !isActive &&
                                 !completion?.completed &&
-                                "border-border/30 bg-background/30"
+                                "border-border/30 bg-background/30",
                             )}
                             onClick={() => setCurrentPhase(phase.id)}
                           >
@@ -4585,14 +4598,14 @@ const AgentAssistDialog = ({
                   {/* Current Phase Details */}
                   {(() => {
                     const phase = BMAD_V6_PHASES.find(
-                      (p) => p.id === currentPhase
+                      (p) => p.id === currentPhase,
                     );
                     if (!phase) return null;
                     const agent = BMAD_V6_AGENTS.find(
-                      (a) => a.id === phase.agent
+                      (a) => a.id === phase.agent,
                     );
                     const workflows = BMAD_V6_WORKFLOWS.filter(
-                      (w) => w.phase === currentPhase || w.phase === "all"
+                      (w) => w.phase === currentPhase || w.phase === "all",
                     );
                     return (
                       <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
@@ -4647,11 +4660,11 @@ const AgentAssistDialog = ({
                         {selectedWorkflow &&
                           (() => {
                             const wf = BMAD_V6_WORKFLOWS.find(
-                              (w) => w.id === selectedWorkflow
+                              (w) => w.id === selectedWorkflow,
                             );
                             if (!wf) return null;
                             const wfAgent = BMAD_V6_AGENTS.find(
-                              (a) => a.id === wf.agent
+                              (a) => a.id === wf.agent,
                             );
                             const command = `@${wf.agent} *${wf.id}`;
                             return (
@@ -5162,7 +5175,7 @@ const AgentAssistDialog = ({
                             ? "bg-green-500 animate-pulse"
                             : serverRunning
                               ? "bg-amber-500"
-                              : "bg-destructive"
+                              : "bg-destructive",
                         )}
                       />
                       <div className="text-sm font-medium">
@@ -5470,7 +5483,7 @@ const AgentAssistDialog = ({
                           "hover:bg-accent/50",
                           agent.isSelected
                             ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                            : "border-border/50 bg-background/30"
+                            : "border-border/50 bg-background/30",
                         )}
                         onClick={() => {
                           onChangeSetup({ ...setup, agent: agent.id });
@@ -5727,7 +5740,7 @@ const AgentAssistDialog = ({
                         "mt-3 text-xs rounded-md border p-2",
                         prdResult.ok
                           ? "border-green-500/30 bg-green-500/10 text-green-200"
-                          : "border-destructive/30 bg-destructive/10 text-destructive"
+                          : "border-destructive/30 bg-destructive/10 text-destructive",
                       )}
                     >
                       {prdResult.ok
@@ -5760,7 +5773,7 @@ const AgentAssistDialog = ({
                         <RefreshCw
                           className={cn(
                             "h-4 w-4",
-                            detectingFiles && "animate-spin"
+                            detectingFiles && "animate-spin",
                           )}
                         />
                         Scan
@@ -5824,7 +5837,7 @@ const AgentAssistDialog = ({
                               const detected = detectedContextFiles[item.id];
                               const exists = detected?.exists;
                               const isAdded = contextDocs.some(
-                                (d) => d.path === item.path
+                                (d) => d.path === item.path,
                               );
                               const isIdeSpecific = !!item.ide;
                               const selectedIdes = Array.isArray(setup.ides)
@@ -5842,7 +5855,7 @@ const AgentAssistDialog = ({
                                     exists
                                       ? "border-green-500/30 bg-green-500/5"
                                       : "border-border/30 bg-background/30",
-                                    !isIdeSelected && "opacity-50"
+                                    !isIdeSelected && "opacity-50",
                                   )}
                                 >
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -5851,7 +5864,7 @@ const AgentAssistDialog = ({
                                         "w-2 h-2 rounded-full shrink-0",
                                         exists
                                           ? "bg-green-500"
-                                          : "bg-muted-foreground/30"
+                                          : "bg-muted-foreground/30",
                                       )}
                                     />
                                     <div className="flex-1 min-w-0">
@@ -5967,7 +5980,7 @@ const AgentAssistDialog = ({
                         <TabsList className="w-full overflow-x-auto justify-start mb-3">
                           {contextDocs.map((doc) => {
                             const catDef = BMAD_CONTEXT_CATEGORIES.find(
-                              (c) => c.id === doc.category
+                              (c) => c.id === doc.category,
                             );
                             return (
                               <TabsTrigger
@@ -6080,7 +6093,7 @@ const AgentAssistDialog = ({
                                         "mt-2 text-[10px] rounded-md border px-2 py-1",
                                         statusForDoc.ok
                                           ? "border-green-500/30 bg-green-500/10 text-green-200"
-                                          : "border-destructive/30 bg-destructive/10 text-destructive"
+                                          : "border-destructive/30 bg-destructive/10 text-destructive",
                                       )}
                                     >
                                       {statusForDoc.message}
@@ -6118,7 +6131,7 @@ const AgentAssistDialog = ({
                                         onChange={(e) =>
                                           setContextDraft(
                                             doc.id,
-                                            e.target.value
+                                            e.target.value,
                                           )
                                         }
                                       />
@@ -6229,6 +6242,30 @@ const AgentAssistDialog = ({
                 </div>
               </div>
             </ScrollArea>
+          </TabsContent>
+
+          {/* AI Chat Tab - Uses new AgentChat component */}
+          <TabsContent value="ai-chat" className="flex-1 min-h-0">
+            <div className="h-full">
+              <AgentChat storyId={activeBoard?.id || "dialog"} />
+            </div>
+          </TabsContent>
+
+          {/* Story Generator Tab - Uses new StoryGenerator component */}
+          <TabsContent value="story-gen" className="flex-1 min-h-0">
+            <div className="h-full">
+              <StoryGenerator
+                onAddStory={onCreateStory}
+                projectPath={setup.projectRoot || ""}
+              />
+            </div>
+          </TabsContent>
+
+          {/* Context Manager Tab - Uses new ContextManager component */}
+          <TabsContent value="context" className="flex-1 min-h-0">
+            <div className="h-full">
+              <ContextManager projectPath={setup.projectRoot || ""} />
+            </div>
           </TabsContent>
         </Tabs>
 
@@ -6347,6 +6384,21 @@ export default function ScrumBoardView() {
     }
   });
 
+  // Main view tab - BMAD or SCRUM
+  const [mainViewTab, setMainViewTab] = React.useState(() => {
+    try {
+      const v = localStorage.getItem("scrum-main-view-tab");
+      if (v === "bmad" || v === "scrum") return v;
+      return "scrum";
+    } catch {
+      return "scrum";
+    }
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem("scrum-main-view-tab", mainViewTab);
+  }, [mainViewTab]);
+
   const [agentSetup, setAgentSetup] = React.useState(() => {
     const defaults = {
       ides: ["cursor"],
@@ -6375,7 +6427,7 @@ export default function ScrumBoardView() {
     let raw = null;
     try {
       raw = safeJsonParse(
-        localStorage.getItem(BMAD_AGENT_SETUP_STORAGE_KEY) || ""
+        localStorage.getItem(BMAD_AGENT_SETUP_STORAGE_KEY) || "",
       );
     } catch {
       raw = null;
@@ -6393,7 +6445,7 @@ export default function ScrumBoardView() {
     try {
       localStorage.setItem(
         BMAD_AGENT_SETUP_STORAGE_KEY,
-        JSON.stringify(agentSetup)
+        JSON.stringify(agentSetup),
       );
     } catch {}
   }, [agentSetup]);
@@ -6402,7 +6454,7 @@ export default function ScrumBoardView() {
     let raw = null;
     try {
       raw = safeJsonParse(
-        localStorage.getItem(SCRUM_RECENT_PROJECTS_STORAGE_KEY) || ""
+        localStorage.getItem(SCRUM_RECENT_PROJECTS_STORAGE_KEY) || "",
       );
     } catch {
       raw = null;
@@ -6420,12 +6472,12 @@ export default function ScrumBoardView() {
     setRecentProjects((prev) => {
       const next = [root, ...prev.filter((p) => p !== root)].slice(
         0,
-        SCRUM_MAX_RECENT_PROJECTS
+        SCRUM_MAX_RECENT_PROJECTS,
       );
       try {
         localStorage.setItem(
           SCRUM_RECENT_PROJECTS_STORAGE_KEY,
-          JSON.stringify(next)
+          JSON.stringify(next),
         );
       } catch {}
       return next;
@@ -6493,7 +6545,7 @@ export default function ScrumBoardView() {
         confirmText: confirmText || "Delete",
       });
     },
-    []
+    [],
   );
 
   // Initialize connection
@@ -6610,7 +6662,7 @@ export default function ScrumBoardView() {
     allCards.sort((a, b) =>
       a.createdAtMs !== b.createdAtMs
         ? a.createdAtMs - b.createdAtMs
-        : String(a.cardId).localeCompare(String(b.cardId))
+        : String(a.cardId).localeCompare(String(b.cardId)),
     );
 
     const map = {};
@@ -6648,7 +6700,7 @@ export default function ScrumBoardView() {
       setCardDialogContext({ boardId: activeBoardId, listId, card: null });
       setCardDialogOpen(true);
     },
-    [activeBoardId]
+    [activeBoardId],
   );
 
   const openEditCard = React.useCallback(
@@ -6657,7 +6709,7 @@ export default function ScrumBoardView() {
       setCardDialogContext({ boardId: activeBoardId, listId, card });
       setCardDialogOpen(true);
     },
-    [acquireLock, activeBoardId]
+    [acquireLock, activeBoardId],
   );
 
   const handleCardDialogClose = async (open) => {
@@ -6743,7 +6795,7 @@ export default function ScrumBoardView() {
       if (!activeBoardId || !listId || !card) return;
       openEditCard(listId, card);
     },
-    [activeBoardId, openEditCard]
+    [activeBoardId, openEditCard],
   );
 
   const startAgentStory = React.useCallback(
@@ -6755,7 +6807,7 @@ export default function ScrumBoardView() {
       await moveCard(activeBoardId, cardId, fromListId, inProgressListId, 0);
       openEditCard(inProgressListId, readyInfo.card);
     },
-    [activeBoardId, moveCard, openEditCard]
+    [activeBoardId, moveCard, openEditCard],
   );
 
   // Drag and drop
@@ -6926,371 +6978,458 @@ export default function ScrumBoardView() {
         </div>
       )}
 
-      {activeBoard && (
-        <Tabs
-          value={overviewTab}
-          onValueChange={setOverviewTab}
-          className="w-full"
-        >
-          {/* Combined Header & Tabs */}
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <TabsList className="h-8 bg-muted/50 p-0.5 gap-0.5">
-              <TabsTrigger
-                value="mcp"
-                className="h-7 px-3 text-xs data-[state=active]:bg-background"
-              >
-                MCP
-              </TabsTrigger>
-              <TabsTrigger
-                value="sprints"
-                className="h-7 px-3 text-xs data-[state=active]:bg-background"
-              >
-                Scrum
-              </TabsTrigger>
-              <TabsTrigger
-                value="stats"
-                className="h-7 px-3 text-xs data-[state=active]:bg-background"
-              >
-                Stats
-              </TabsTrigger>
-            </TabsList>
+      {/* Main View Tabs - BMAD / SCRUM */}
+      <Tabs
+        value={mainViewTab}
+        onValueChange={setMainViewTab}
+        className="flex-1 flex flex-col min-h-0"
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <TabsList className="h-10 bg-muted/50 p-1">
+            <TabsTrigger
+              value="bmad"
+              className="h-8 px-4 text-sm data-[state=active]:bg-background gap-2"
+            >
+              <Sparkles className="h-4 w-4" />
+              BMAD
+            </TabsTrigger>
+            <TabsTrigger
+              value="scrum"
+              className="h-8 px-4 text-sm data-[state=active]:bg-background gap-2"
+            >
+              <Table className="h-4 w-4" />
+              SCRUM
+            </TabsTrigger>
+          </TabsList>
 
-            <div className="h-4 w-[1px] bg-border mx-1" />
+          {/* Project Selector - shown in both tabs */}
+          <Select
+            value={String(agentSetup.projectRoot || "").trim() || ""}
+            onValueChange={(next) => {
+              if (next === "__browse__") {
+                handleBrowseProjectRoot();
+                return;
+              }
+              setAgentSetup((s) => ({ ...s, projectRoot: next }));
+            }}
+          >
+            <SelectTrigger className="w-[200px] bg-background/50 h-8 text-xs">
+              <SelectValue placeholder="Select Project" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__browse__">
+                {window.electronAPI?.selectFolder
+                  ? "Browse..."
+                  : "Add project..."}
+              </SelectItem>
+              {projectOptions.map((root) => (
+                <SelectItem key={root} value={root}>
+                  {getProjectLabel(root)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
-            <div className="flex flex-wrap gap-1.5 items-center">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setSettingsOpen(true)}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSettingsOpen(true)}
+            className="h-8"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* BMAD Tab Content */}
+        <TabsContent value="bmad" className="flex-1 min-h-0 mt-0">
+          <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Left Column - Phase Progress & Agent Chat */}
+            <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
+              <PhaseProgress variant="compact" />
+              <div className="flex-1 min-h-0">
+                <AgentChat storyId={activeBoardId || "dashboard"} />
+              </div>
+            </div>
+
+            {/* Right Column - Stories & Context */}
+            <div className="flex flex-col gap-4 min-h-0">
+              <Tabs
+                defaultValue="stories"
+                className="flex-1 flex flex-col min-h-0"
               >
-                <Settings className="h-4 w-4 text-muted-foreground" />
-              </Button>
-
-              <Select
-                value={String(agentSetup.projectRoot || "").trim() || ""}
-                onValueChange={(next) => {
-                  if (next === "__browse__") {
-                    handleBrowseProjectRoot();
-                    return;
-                  }
-                  setAgentSetup((s) => ({ ...s, projectRoot: next }));
-                }}
-              >
-                <SelectTrigger className="w-[140px] bg-background/50 h-8 text-[11px] px-2">
-                  <SelectValue placeholder="Project" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__browse__">
-                    {window.electronAPI?.selectFolder
-                      ? "Browse..."
-                      : "Add project..."}
-                  </SelectItem>
-                  {projectOptions.map((root) => (
-                    <SelectItem key={root} value={root}>
-                      {getProjectLabel(root)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={activeBoardId || ""}
-                onValueChange={setActiveBoard}
-              >
-                <SelectTrigger className="w-[140px] bg-background/50 h-8 text-[11px] px-2">
-                  <SelectValue placeholder="Board" />
-                </SelectTrigger>
-                <SelectContent>
-                  {state?.boards?.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      <div className="flex items-center gap-2 text-xs">
-                        {b.type === "bmad" && (
-                          <Sparkles className="h-3 w-3 text-primary" />
-                        )}
-                        {b.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateBoardOpen(true)}
-                className="h-8 px-2 text-[11px] bg-background/50"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                New
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 px-2 text-[11px] bg-background/50"
-                onClick={() => setAgentAssistOpen(true)}
-              >
-                <Sparkles className="h-3.5 w-3.5 mr-1 text-primary" />
-                Assist
-              </Button>
-
-              {activeBoard && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => {
-                    openConfirm({
-                      title: "Delete board?",
-                      description: "This action cannot be undone.",
-                      confirmText: "Delete",
-                      onConfirm: async () => {
-                        await deleteBoard(activeBoard.id);
-                      },
-                    });
-                  }}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="stories">Stories</TabsTrigger>
+                  <TabsTrigger value="context">Context</TabsTrigger>
+                </TabsList>
+                <TabsContent value="stories" className="flex-1 min-h-0 mt-2">
+                  <StoryGenerator
+                    onAddStory={(story) => {
+                      if (!activeBoard) return;
+                      const backlog = activeBoard.lists.find(
+                        (l) => l.statusId === "backlog",
+                      );
+                      if (backlog) {
+                        addCard(activeBoard.id, backlog.id, story);
+                      }
+                    }}
+                    projectPath={agentSetup.projectRoot || ""}
+                  />
+                </TabsContent>
+                <TabsContent value="context" className="flex-1 min-h-0 mt-2">
+                  <ContextManager projectPath={agentSetup.projectRoot || ""} />
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
+        </TabsContent>
 
-          <TabsContent value="mcp" className="mt-3">
-            <McpToolsUsage
-              activeBoard={activeBoard}
-              projectRoot={agentSetup.projectRoot}
-            />
-          </TabsContent>
+        {/* SCRUM Tab Content */}
+        <TabsContent value="scrum" className="flex-1 min-h-0 mt-0">
+          {activeBoard && (
+            <Tabs
+              value={overviewTab}
+              onValueChange={setOverviewTab}
+              className="w-full h-full flex flex-col"
+            >
+              {/* Combined Header & Tabs */}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <TabsList className="h-8 bg-muted/50 p-0.5 gap-0.5">
+                  <TabsTrigger
+                    value="mcp"
+                    className="h-7 px-3 text-xs data-[state=active]:bg-background"
+                  >
+                    MCP
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="sprints"
+                    className="h-7 px-3 text-xs data-[state=active]:bg-background"
+                  >
+                    Scrum
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="stats"
+                    className="h-7 px-3 text-xs data-[state=active]:bg-background"
+                  >
+                    Stats
+                  </TabsTrigger>
+                </TabsList>
 
-          <TabsContent value="sprints" className="mt-3">
-            <div className="grid gap-4">
-              <SprintTrackingView
-                board={activeBoard}
-                sprints={sprints}
-                sprintNameById={sprintNameById}
-                selectedSprintId={sprintFilter}
-                sprintSelector={
-                  sprintOptions.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        Sprints
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          data-testid="sprint-drop-none"
-                          className={cn(
-                            "px-3 py-2 rounded-lg border text-sm bg-background/50",
-                            sprintDropId === "__none__" &&
-                              "ring-2 ring-primary/30"
-                          )}
-                          onDragOver={(e) => {
-                            if (!dragState) return;
-                            e.preventDefault();
-                            setSprintDropId("__none__");
-                          }}
-                          onDragLeave={() => setSprintDropId(null)}
-                          onDrop={(e) => onDropToSprint(e, null)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">No sprint</span>
-                            <Badge variant="outline" className="text-[10px]">
-                              {(sprintItemCounts["__none__"]?.cards || 0) +
-                                (sprintItemCounts["__none__"]?.epics || 0)}
-                            </Badge>
-                          </div>
-                        </button>
+                <div className="flex-1" />
 
-                        {sprintOptions.map((s) => (
-                          <button
-                            type="button"
-                            key={s.id}
-                            data-testid={`sprint-drop-${s.id}`}
-                            className={cn(
-                              "px-3 py-2 rounded-lg border text-sm bg-background/50",
-                              sprintDropId === s.id && "ring-2 ring-primary/30"
+                {/* Board-specific controls */}
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <Select
+                    value={activeBoardId || ""}
+                    onValueChange={setActiveBoard}
+                  >
+                    <SelectTrigger className="w-[140px] bg-background/50 h-8 text-[11px] px-2">
+                      <SelectValue placeholder="Board" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {state?.boards?.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          <div className="flex items-center gap-2 text-xs">
+                            {b.type === "bmad" && (
+                              <Sparkles className="h-3 w-3 text-primary" />
                             )}
-                            onDragOver={(e) => {
-                              if (!dragState) return;
-                              e.preventDefault();
-                              setSprintDropId(s.id);
-                            }}
-                            onDragLeave={() => setSprintDropId(null)}
-                            onDrop={(e) => onDropToSprint(e, s.id)}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{s.name}</span>
-                              <Badge variant="outline" className="text-[10px]">
-                                {(sprintItemCounts[s.id]?.cards || 0) +
-                                  (sprintItemCounts[s.id]?.epics || 0)}
-                              </Badge>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                }
-                filters={
-                  <div className="flex flex-col gap-2">
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 h-8 text-xs bg-background/50"
-                        onClick={() => setEpicManagerOpen(true)}
-                      >
-                        <GitBranch className="h-3.5 w-3.5 mr-1 text-primary" />
-                        Manage Epics
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="flex-1 h-8 text-xs bg-background/50"
-                        onClick={() => setSprintManagerOpen(true)}
-                      >
-                        <Calendar className="h-3.5 w-3.5 mr-1 text-primary" />
-                        Manage Sprints
-                      </Button>
-                    </div>
-                    <div className="mt-1 grid grid-cols-3 gap-2">
-                      <div className="grid gap-2">
-                        <Label htmlFor="scrum-filter-assignee">Assignee</Label>
-                        <Select
-                          value={assigneeFilter}
-                          onValueChange={(value) =>
-                            setAssigneeFilter(value === "__all__" ? "" : value)
-                          }
-                        >
-                          <SelectTrigger
-                            id="scrum-filter-assignee"
-                            className="bg-background/50"
-                          >
-                            <SelectValue placeholder="Select Assignee" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__all__">All</SelectItem>
-                            {assigneeOptions.map((name) => (
-                              <SelectItem key={name} value={name}>
-                                {name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                            {b.name}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                      <div className="grid gap-2">
-                        <Label htmlFor="scrum-filter-epic">Epic</Label>
-                        <Select
-                          value={epicFilter}
-                          onValueChange={(value) =>
-                            setEpicFilter(value === "__all__" ? "" : value)
-                          }
-                        >
-                          <SelectTrigger
-                            id="scrum-filter-epic"
-                            className="bg-background/50"
-                          >
-                            <SelectValue placeholder="Select Epic" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__all__">All</SelectItem>
-                            <SelectItem value="__none__">No Epic</SelectItem>
-                            {epicOptions.map((epic) => (
-                              <SelectItem key={epic.id} value={epic.id}>
-                                {epic.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCreateBoardOpen(true)}
+                    className="h-8 px-2 text-[11px] bg-background/50"
+                  >
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    New
+                  </Button>
 
-                      <div className="grid gap-2">
-                        <Label htmlFor="scrum-filter-sprint">Sprint</Label>
-                        <Select
-                          value={sprintFilter}
-                          onValueChange={(value) =>
-                            setSprintFilter(value === "__all__" ? "" : value)
-                          }
-                        >
-                          <SelectTrigger
-                            id="scrum-filter-sprint"
-                            className="bg-background/50"
-                          >
-                            <SelectValue placeholder="Select Sprint" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__all__">All</SelectItem>
-                            <SelectItem value="__none__">No Sprint</SelectItem>
-                            {sprintOptions.map((sprint) => (
-                              <SelectItem key={sprint.id} value={sprint.id}>
-                                {sprint.name}
-                              </SelectItem>
+                  {activeBoard && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => {
+                        openConfirm({
+                          title: "Delete board?",
+                          description: "This action cannot be undone.",
+                          confirmText: "Delete",
+                          onConfirm: async () => {
+                            await deleteBoard(activeBoard.id);
+                          },
+                        });
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <TabsContent value="mcp" className="mt-3">
+                <McpToolsUsage
+                  activeBoard={activeBoard}
+                  projectRoot={agentSetup.projectRoot}
+                />
+              </TabsContent>
+
+              <TabsContent value="sprints" className="mt-3">
+                <div className="grid gap-4">
+                  <SprintTrackingView
+                    board={activeBoard}
+                    sprints={sprints}
+                    sprintNameById={sprintNameById}
+                    selectedSprintId={sprintFilter}
+                    sprintSelector={
+                      sprintOptions.length > 0 && (
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <Calendar className="h-4 w-4 text-muted-foreground" />
+                            Sprints
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              data-testid="sprint-drop-none"
+                              className={cn(
+                                "px-3 py-2 rounded-lg border text-sm bg-background/50",
+                                sprintDropId === "__none__" &&
+                                  "ring-2 ring-primary/30",
+                              )}
+                              onDragOver={(e) => {
+                                if (!dragState) return;
+                                e.preventDefault();
+                                setSprintDropId("__none__");
+                              }}
+                              onDragLeave={() => setSprintDropId(null)}
+                              onDrop={(e) => onDropToSprint(e, null)}
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">No sprint</span>
+                                <Badge
+                                  variant="outline"
+                                  className="text-[10px]"
+                                >
+                                  {(sprintItemCounts["__none__"]?.cards || 0) +
+                                    (sprintItemCounts["__none__"]?.epics || 0)}
+                                </Badge>
+                              </div>
+                            </button>
+
+                            {sprintOptions.map((s) => (
+                              <button
+                                type="button"
+                                key={s.id}
+                                data-testid={`sprint-drop-${s.id}`}
+                                className={cn(
+                                  "px-3 py-2 rounded-lg border text-sm bg-background/50",
+                                  sprintDropId === s.id &&
+                                    "ring-2 ring-primary/30",
+                                )}
+                                onDragOver={(e) => {
+                                  if (!dragState) return;
+                                  e.preventDefault();
+                                  setSprintDropId(s.id);
+                                }}
+                                onDragLeave={() => setSprintDropId(null)}
+                                onDrop={(e) => onDropToSprint(e, s.id)}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{s.name}</span>
+                                  <Badge
+                                    variant="outline"
+                                    className="text-[10px]"
+                                  >
+                                    {(sprintItemCounts[s.id]?.cards || 0) +
+                                      (sprintItemCounts[s.id]?.epics || 0)}
+                                  </Badge>
+                                </div>
+                              </button>
                             ))}
-                          </SelectContent>
-                        </Select>
+                          </div>
+                        </div>
+                      )
+                    }
+                    filters={
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 h-8 text-xs bg-background/50"
+                            onClick={() => setEpicManagerOpen(true)}
+                          >
+                            <GitBranch className="h-3.5 w-3.5 mr-1 text-primary" />
+                            Manage Epics
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="flex-1 h-8 text-xs bg-background/50"
+                            onClick={() => setSprintManagerOpen(true)}
+                          >
+                            <Calendar className="h-3.5 w-3.5 mr-1 text-primary" />
+                            Manage Sprints
+                          </Button>
+                        </div>
+                        <div className="mt-1 grid grid-cols-3 gap-2">
+                          <div className="grid gap-2">
+                            <Label htmlFor="scrum-filter-assignee">
+                              Assignee
+                            </Label>
+                            <Select
+                              value={assigneeFilter}
+                              onValueChange={(value) =>
+                                setAssigneeFilter(
+                                  value === "__all__" ? "" : value,
+                                )
+                              }
+                            >
+                              <SelectTrigger
+                                id="scrum-filter-assignee"
+                                className="bg-background/50"
+                              >
+                                <SelectValue placeholder="Select Assignee" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__all__">All</SelectItem>
+                                {assigneeOptions.map((name) => (
+                                  <SelectItem key={name} value={name}>
+                                    {name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="grid gap-2">
+                            <Label htmlFor="scrum-filter-epic">Epic</Label>
+                            <Select
+                              value={epicFilter}
+                              onValueChange={(value) =>
+                                setEpicFilter(value === "__all__" ? "" : value)
+                              }
+                            >
+                              <SelectTrigger
+                                id="scrum-filter-epic"
+                                className="bg-background/50"
+                              >
+                                <SelectValue placeholder="Select Epic" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__all__">All</SelectItem>
+                                <SelectItem value="__none__">
+                                  No Epic
+                                </SelectItem>
+                                {epicOptions.map((epic) => (
+                                  <SelectItem key={epic.id} value={epic.id}>
+                                    {epic.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="grid gap-2">
+                            <Label htmlFor="scrum-filter-sprint">Sprint</Label>
+                            <Select
+                              value={sprintFilter}
+                              onValueChange={(value) =>
+                                setSprintFilter(
+                                  value === "__all__" ? "" : value,
+                                )
+                              }
+                            >
+                              <SelectTrigger
+                                id="scrum-filter-sprint"
+                                className="bg-background/50"
+                              >
+                                <SelectValue placeholder="Select Sprint" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__all__">All</SelectItem>
+                                <SelectItem value="__none__">
+                                  No Sprint
+                                </SelectItem>
+                                {sprintOptions.map((sprint) => (
+                                  <SelectItem key={sprint.id} value={sprint.id}>
+                                    {sprint.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                }
-              />
+                    }
+                  />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="stats" className="mt-3">
+                <StatsCard stats={stats} />
+              </TabsContent>
+            </Tabs>
+          )}
+
+          {/* Board - moved inside scrum tab content */}
+          {mainViewTab === "scrum" && (
+            <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
+              <div className="min-w-max flex gap-4 items-stretch pb-2 h-full">
+                {activeBoard?.lists?.map((list, index) => (
+                  <ListColumn
+                    key={list.id}
+                    list={list}
+                    displayCards={displayCardsByListId[list.id]}
+                    disableDnd={filtersActive}
+                    listDrop={listDrop}
+                    dragState={dragState}
+                    onDragStartList={(e) => onDragStartList(e, list.id)}
+                    onDragEndList={onDragEndList}
+                    onDragOverList={(e) =>
+                      onDragOverListColumn(e, list.id, index)
+                    }
+                    onDropList={(e) => {
+                      if (dragState?.type === "card") {
+                        onDropCardToList(e, list.id, list.cards.length);
+                      } else {
+                        onDropListToIndex(e, list.id, index);
+                      }
+                    }}
+                    onAddCard={() => openNewCard(list.id)}
+                    onEditCard={(card) => openEditCard(list.id, card)}
+                    onRename={(name) => renameList(list.id, name)}
+                    onDelete={() => deleteList(list.id)}
+                    onDragStartCard={(e, cardId, index) =>
+                      onDragStartCard(e, list.id, cardId, index)
+                    }
+                    onDragEndCard={onDragEndCard}
+                    onDropToIndex={(e, index) =>
+                      onDropCardToList(e, list.id, index)
+                    }
+                    onDropToEnd={(e) =>
+                      onDropCardToList(e, list.id, list.cards.length)
+                    }
+                    isCardLocked={isCardLocked}
+                    getCardLock={getCardLock}
+                    storyKeyByCardId={storyKeyByCardId}
+                    sprintNameById={sprintNameById}
+                  />
+                ))}
+
+                <AddListColumn onAdd={addList} />
+              </div>
             </div>
-          </TabsContent>
-
-          <TabsContent value="stats" className="mt-3">
-            <StatsCard stats={stats} />
-          </TabsContent>
-        </Tabs>
-      )}
-
-      {/* Board */}
-      <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
-        <div className="min-w-max flex gap-4 items-stretch pb-2 h-full">
-          {activeBoard?.lists?.map((list, index) => (
-            <ListColumn
-              key={list.id}
-              list={list}
-              displayCards={displayCardsByListId[list.id]}
-              disableDnd={filtersActive}
-              listDrop={listDrop}
-              dragState={dragState}
-              onDragStartList={(e) => onDragStartList(e, list.id)}
-              onDragEndList={onDragEndList}
-              onDragOverList={(e) => onDragOverListColumn(e, list.id, index)}
-              onDropList={(e) => {
-                if (dragState?.type === "card") {
-                  onDropCardToList(e, list.id, list.cards.length);
-                } else {
-                  onDropListToIndex(e, list.id, index);
-                }
-              }}
-              onAddCard={() => openNewCard(list.id)}
-              onEditCard={(card) => openEditCard(list.id, card)}
-              onRename={(name) => renameList(list.id, name)}
-              onDelete={() => deleteList(list.id)}
-              onDragStartCard={(e, cardId, index) =>
-                onDragStartCard(e, list.id, cardId, index)
-              }
-              onDragEndCard={onDragEndCard}
-              onDropToIndex={(e, index) => onDropCardToList(e, list.id, index)}
-              onDropToEnd={(e) =>
-                onDropCardToList(e, list.id, list.cards.length)
-              }
-              isCardLocked={isCardLocked}
-              getCardLock={getCardLock}
-              storyKeyByCardId={storyKeyByCardId}
-              sprintNameById={sprintNameById}
-            />
-          ))}
-
-          <AddListColumn onAdd={addList} />
-        </div>
-      </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Dialogs */}
       <CardEditorDialog
@@ -7365,7 +7504,7 @@ export default function ScrumBoardView() {
               <Label
                 className={cn(
                   "text-xs",
-                  window.electronAPI?.selectFolder ? "" : "cursor-pointer"
+                  window.electronAPI?.selectFolder ? "" : "cursor-pointer",
                 )}
                 onClick={() => {
                   if (window.electronAPI?.selectFolder) return;

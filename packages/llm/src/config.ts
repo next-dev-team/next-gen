@@ -1,5 +1,5 @@
 /**
- * Configuration for LLM Chat API Server
+ * Configuration for LLM Chat API
  */
 
 // Server configuration

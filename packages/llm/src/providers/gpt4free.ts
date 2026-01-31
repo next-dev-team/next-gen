@@ -4,39 +4,42 @@
  * Uses the gpt4free server for free model access.
  */
 
-import * as fsSync from 'node:fs';
-import fs from 'node:fs/promises';
-import https from 'node:https';
-import http from 'node:http';
-import os from 'node:os';
-import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { pipeline } from 'node:stream/promises';
+import * as fsSync from "node:fs";
+import fs from "node:fs/promises";
+import https from "node:https";
+import os from "node:os";
+import path from "node:path";
+import { spawn } from "node:child_process";
+import { pipeline } from "node:stream/promises";
 
-import type { ProviderContext, ProviderResult, ChatResponse } from '../types.js';
-import { prepareMessages } from '../memory.js';
-import { proxyPost, buildOpenAiUrl, fetchStatus } from '../utils.js';
+import type {
+  ProviderContext,
+  ProviderResult,
+  ChatResponse,
+} from "../types.js";
+import { prepareMessages } from "../memory/conversation.js";
+import { proxyPost, buildOpenAiUrl, fetchStatus } from "../utils/http.js";
 import {
   ROOT_DIR,
   G4F_API_URL,
   G4F_STARTUP_TIMEOUT_MS,
   G4F_RELEASE_BASE,
   G4F_VERSION,
-} from '../config.js';
+} from "../config.js";
 
 // GPT4Free assets per platform
 type G4fAsset = {
   name: string;
   sha256?: string;
-  archive?: 'zip';
+  archive?: "zip";
 };
 
 const G4F_ASSETS: Record<string, G4fAsset> = {
-  'darwin-arm64': { name: 'g4f-macos-v6.9.10-arm64' },
-  'darwin-x64': { name: 'g4f-macos-v6.9.10-x64' },
-  'linux-arm64': { name: 'g4f-linux-v6.9.10-arm64' },
-  'linux-x64': { name: 'g4f-linux-v6.9.10-x64' },
-  'win32-x64': { name: 'g4f-windows-v6.9.10-x64.zip', archive: 'zip' },
+  "darwin-arm64": { name: "g4f-macos-v6.9.10-arm64" },
+  "darwin-x64": { name: "g4f-macos-v6.9.10-x64" },
+  "linux-arm64": { name: "g4f-linux-v6.9.10-arm64" },
+  "linux-x64": { name: "g4f-linux-v6.9.10-x64" },
+  "win32-x64": { name: "g4f-windows-v6.9.10-x64.zip", archive: "zip" },
 };
 
 // Server state
@@ -44,15 +47,15 @@ let g4fProcess: ReturnType<typeof spawn> | null = null;
 let g4fStartupPromise: Promise<void> | null = null;
 
 function getG4fPlatformKey(): string {
-  if (process.platform === 'darwin') return `darwin-${process.arch}`;
-  if (process.platform === 'linux') return `linux-${process.arch}`;
-  if (process.platform === 'win32') return 'win32-x64';
+  if (process.platform === "darwin") return `darwin-${process.arch}`;
+  if (process.platform === "linux") return `linux-${process.arch}`;
+  if (process.platform === "win32") return "win32-x64";
   return `${process.platform}-${process.arch}`;
 }
 
 function getG4fBinaryPath(platformKey: string): string {
-  const binaryName = process.platform === 'win32' ? 'g4f.exe' : 'g4f';
-  return path.join(ROOT_DIR, 'bin', 'gpt4free', platformKey, binaryName);
+  const binaryName = process.platform === "win32" ? "g4f.exe" : "g4f";
+  return path.join(ROOT_DIR, "bin", "gpt4free", platformKey, binaryName);
 }
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -91,12 +94,16 @@ export async function getG4fStatus(): Promise<{
   return {
     installed,
     running,
-    version: asset ? G4F_VERSION : 'unknown',
+    version: asset ? G4F_VERSION : "unknown",
     binaryPath: installed ? binaryPath : null,
   };
 }
 
-async function downloadToFile(url: string, dest: string, redirectsLeft = 5): Promise<void> {
+async function downloadToFile(
+  url: string,
+  dest: string,
+  redirectsLeft = 5,
+): Promise<void> {
   console.log(`[G4F] Downloading from: ${url}`);
   await new Promise<void>((resolve, reject) => {
     const request = https.get(url, (res) => {
@@ -104,13 +111,17 @@ async function downloadToFile(url: string, dest: string, redirectsLeft = 5): Pro
       console.log(`[G4F] Response status: ${status}`);
       if (status >= 300 && status < 400 && res.headers.location) {
         if (redirectsLeft <= 0) {
-          reject(new Error('Too many redirects'));
+          reject(new Error("Too many redirects"));
           res.resume();
           return;
         }
         res.resume();
         console.log(`[G4F] Redirecting to: ${res.headers.location}`);
-        downloadToFile(new URL(res.headers.location, url).toString(), dest, redirectsLeft - 1)
+        downloadToFile(
+          new URL(res.headers.location, url).toString(),
+          dest,
+          redirectsLeft - 1,
+        )
           .then(resolve)
           .catch(reject);
         return;
@@ -123,7 +134,7 @@ async function downloadToFile(url: string, dest: string, redirectsLeft = 5): Pro
       const fileStream = fsSync.createWriteStream(dest);
       pipeline(res, fileStream).then(resolve).catch(reject);
     });
-    request.on('error', reject);
+    request.on("error", reject);
   });
 }
 
@@ -139,34 +150,36 @@ async function downloadG4fBinary(
   if (!asset) {
     throw new Error(`Unsupported platform for gpt4free: ${platformKey}`);
   }
-  const targetDir = path.join(ROOT_DIR, 'bin', 'gpt4free', platformKey);
+  const targetDir = path.join(ROOT_DIR, "bin", "gpt4free", platformKey);
   const targetPath = getG4fBinaryPath(platformKey);
 
   // Skip download if already exists and not forcing update
   if (!forceUpdate && (await fileExists(targetPath))) {
-    console.log('[G4F] Binary already installed, skipping download');
+    console.log("[G4F] Binary already installed, skipping download");
     return { path: targetPath, wasDownloaded: false };
   }
 
   // If forcing update, remove existing binary first
   if (forceUpdate && (await fileExists(targetPath))) {
-    console.log('[G4F] Force update: removing existing binary');
+    console.log("[G4F] Force update: removing existing binary");
     await fs.rm(targetPath, { force: true });
   }
 
-  console.log('[G4F] Downloading GPT4Free binary...');
+  console.log("[G4F] Downloading GPT4Free binary...");
   await fs.mkdir(targetDir, { recursive: true });
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'g4f-download-'));
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "g4f-download-"));
   try {
     const downloadPath = path.join(tmpDir, asset.name);
     await downloadToFile(`${G4F_RELEASE_BASE}/${asset.name}`, downloadPath);
-    if (asset.archive === 'zip') {
-      throw new Error('Windows zip extraction not implemented - please extract manually');
+    if (asset.archive === "zip") {
+      throw new Error(
+        "Windows zip extraction not implemented - please extract manually",
+      );
     } else {
       await fs.rename(downloadPath, targetPath);
       await fs.chmod(targetPath, 0o755);
     }
-    console.log('[G4F] Download complete');
+    console.log("[G4F] Download complete");
     return { path: targetPath, wasDownloaded: true };
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
@@ -183,7 +196,7 @@ async function resolveG4fPath(
 
 export async function isG4fServerHealthy(): Promise<boolean> {
   try {
-    const status = await fetchStatus(buildOpenAiUrl(G4F_API_URL, '/models'));
+    const status = await fetchStatus(buildOpenAiUrl(G4F_API_URL, "/models"));
     return status >= 200 && status < 500;
   } catch {
     return false;
@@ -217,32 +230,33 @@ export async function startG4fServer(forceUpdate = false): Promise<{
 
       await new Promise<void>((resolve, reject) => {
         const child = spawn(resolved.path, [], {
-          stdio: ['ignore', 'ignore', 'pipe'],
+          stdio: ["ignore", "ignore", "pipe"],
           cwd: ROOT_DIR,
           env: process.env,
         });
         g4fProcess = child;
-        child.on('error', (err: Error) => {
+        child.on("error", (err: Error) => {
           g4fProcess = null;
           g4fStartupPromise = null;
           reject(err);
         });
-        child.on('exit', () => {
+        child.on("exit", () => {
           g4fProcess = null;
           g4fStartupPromise = null;
         });
         resolve();
       });
 
-      const deadline = G4F_STARTUP_TIMEOUT_MS > 0 ? Date.now() + G4F_STARTUP_TIMEOUT_MS : null;
+      const deadline =
+        G4F_STARTUP_TIMEOUT_MS > 0 ? Date.now() + G4F_STARTUP_TIMEOUT_MS : null;
       while (!deadline || Date.now() < deadline) {
         if (await isG4fServerHealthy()) return;
         if (!g4fProcess) {
-          throw new Error('gpt4free process exited before it became ready.');
+          throw new Error("gpt4free process exited before it became ready.");
         }
         await new Promise((r) => setTimeout(r, 250));
       }
-      throw new Error('Timed out waiting for gpt4free to start.');
+      throw new Error("Timed out waiting for gpt4free to start.");
     })();
   }
   try {
@@ -256,7 +270,9 @@ export async function startG4fServer(forceUpdate = false): Promise<{
 
 async function ensureG4fServerReady(): Promise<void> {
   if (await isG4fServerHealthy()) return;
-  throw new Error('gpt4free server is not running. POST to /api/gpt4free/connect to start it.');
+  throw new Error(
+    "gpt4free server is not running. POST to /api/gpt4free/connect to start it.",
+  );
 }
 
 /**
@@ -264,7 +280,7 @@ async function ensureG4fServerReady(): Promise<void> {
  */
 export function stopG4fServer(): void {
   if (g4fProcess) {
-    g4fProcess.kill('SIGTERM');
+    g4fProcess.kill("SIGTERM");
     g4fProcess = null;
   }
 }
@@ -272,22 +288,33 @@ export function stopG4fServer(): void {
 /**
  * GPT4Free provider handler
  */
-export async function handleGpt4free(ctx: ProviderContext): Promise<ProviderResult> {
+export async function handleGpt4free(
+  ctx: ProviderContext,
+): Promise<ProviderResult> {
   await ensureG4fServerReady();
 
   // Optimize messages for context window
-  const optimizedMessages = prepareMessages(ctx.messages, 'gpt4free');
+  const optimizedMessages = prepareMessages(ctx.messages, "gpt4free");
 
-  console.log('[G4F] Sending request to gpt4free with model:', ctx.model || 'gpt-4o');
-  const response = await proxyPost(buildOpenAiUrl(G4F_API_URL, '/chat/completions'), {
-    model: ctx.model || 'gpt-4o',
-    messages: optimizedMessages,
-    temperature: ctx.temperature ?? 0.7,
-  });
+  console.log(
+    "[G4F] Sending request to gpt4free with model:",
+    ctx.model || "gpt-4o",
+  );
+  const response = await proxyPost(
+    buildOpenAiUrl(G4F_API_URL, "/chat/completions"),
+    {
+      model: ctx.model || "gpt-4o",
+      messages: optimizedMessages,
+      temperature: ctx.temperature ?? 0.7,
+    },
+  );
 
-  console.log('[G4F] Response status:', response.status);
-  console.log('[G4F] Response data:', JSON.stringify(response.data).slice(0, 500));
+  console.log("[G4F] Response status:", response.status);
+  console.log(
+    "[G4F] Response data:",
+    JSON.stringify(response.data).slice(0, 500),
+  );
 
-  const text = response.data?.choices?.[0]?.message?.content ?? '';
+  const text = response.data?.choices?.[0]?.message?.content ?? "";
   return { text, usage: response.data?.usage };
 }

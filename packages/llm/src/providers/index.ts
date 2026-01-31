@@ -2,11 +2,16 @@
  * Provider Registry
  *
  * Central registry for all LLM providers with unified interface.
- * Supports dynamic OpenAI-compatible providers via addOpenAiProvider.
+ * Supports dynamic OpenAI-compatible providers via registerProvider.
  */
 
-import type { LlmProvider, ProviderHandler, ProviderContext, ProviderResult } from '../types.js';
-import { handleOllama } from './ollama.js';
+import type {
+  LlmProvider,
+  ProviderHandler,
+  ProviderContext,
+  ProviderResult,
+} from "../types.js";
+import { handleOllama } from "./ollama.js";
 import {
   handleOpenAiCompatible,
   handleDynamicOpenAiProvider,
@@ -19,16 +24,16 @@ import {
   clearOpenAiProviders,
   initDefaultOpenAiProviders,
   type OpenAiProviderConfig,
-} from './openai.js';
-import { handleCodex } from './codex.js';
+} from "./openai.js";
+import { handleCodex } from "./codex.js";
 import {
   handleGpt4free,
   startG4fServer,
   stopG4fServer,
   getG4fStatus,
   isG4fInstalled,
-} from './gpt4free.js';
-import { handleCommand } from './command.js';
+} from "./gpt4free.js";
+import { handleCommand } from "./command.js";
 
 /**
  * Static provider registry - maps provider names to handlers
@@ -88,7 +93,10 @@ export function isDynamicProvider(name: string): boolean {
 /**
  * Run inference with a provider (supports both static and dynamic providers)
  */
-export async function runProvider(provider: string, ctx: ProviderContext): Promise<ProviderResult> {
+export async function runProvider(
+  provider: string,
+  ctx: ProviderContext,
+): Promise<ProviderResult> {
   // First check if it's a dynamic provider
   if (hasOpenAiProvider(provider)) {
     return await handleDynamicOpenAiProvider(provider, ctx);
@@ -97,7 +105,9 @@ export async function runProvider(provider: string, ctx: ProviderContext): Promi
   // Then check static providers
   const handler = staticProviders[provider as LlmProvider];
   if (!handler) {
-    throw new Error(`Unknown provider: ${provider}. Available: ${getProviderNames().join(', ')}`);
+    throw new Error(
+      `Unknown provider: ${provider}. Available: ${getProviderNames().join(", ")}`,
+    );
   }
   return await handler(ctx);
 }
@@ -119,7 +129,9 @@ export function unregisterProvider(name: string): boolean {
 /**
  * Get a dynamic provider's configuration
  */
-export function getProviderConfig(name: string): OpenAiProviderConfig | undefined {
+export function getProviderConfig(
+  name: string,
+): OpenAiProviderConfig | undefined {
   return getOpenAiProvider(name);
 }
 
@@ -156,3 +168,13 @@ export {
   hasOpenAiProvider,
   type OpenAiProviderConfig,
 };
+
+// Re-export individual handlers for direct usage
+export { handleOllama } from "./ollama.js";
+export {
+  handleOpenAiCompatible,
+  handleDynamicOpenAiProvider,
+} from "./openai.js";
+export { handleCodex } from "./codex.js";
+export { handleGpt4free } from "./gpt4free.js";
+export { handleCommand } from "./command.js";
