@@ -22,21 +22,40 @@ const BMAD_AGENT_IDS = [
 ];
 
 // Default providers with their configurations
+// Synced with @nde/llm package providers
 const DEFAULT_PROVIDERS = {
+  // Claude via Anthropic API (not the Codex CLI)
+  codex: {
+    name: "Codex (Claude)",
+    baseUrl: "https://api.anthropic.com",
+    models: [
+      "claude-sonnet-4-20250514",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-opus-20240229",
+    ],
+    defaultModel: "claude-sonnet-4-20250514",
+    requiresApiKey: true,
+    serverProviderType: "anthropic", // Maps to LLM server provider type
+  },
+  // Local Ollama
   ollama: {
     name: "Ollama",
     baseUrl: "http://localhost:11434",
     models: ["llama3.2", "llama3.1", "qwen2.5-coder", "deepseek-r1"],
     defaultModel: "llama3.2",
     requiresApiKey: false,
+    serverProviderType: "ollama",
   },
+  // OpenAI Official
   openai: {
     name: "OpenAI",
     baseUrl: "https://api.openai.com",
     models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
     defaultModel: "gpt-4o",
     requiresApiKey: true,
+    serverProviderType: "openai_compatible",
   },
+  // Groq Cloud
   groq: {
     name: "Groq",
     baseUrl: "https://api.groq.com/openai",
@@ -47,14 +66,18 @@ const DEFAULT_PROVIDERS = {
     ],
     defaultModel: "llama-3.3-70b-versatile",
     requiresApiKey: true,
+    serverProviderType: "openai_compatible",
   },
+  // Together AI
   together: {
     name: "Together AI",
     baseUrl: "https://api.together.xyz",
     models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo"],
     defaultModel: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
     requiresApiKey: true,
+    serverProviderType: "openai_compatible",
   },
+  // OpenRouter
   openrouter: {
     name: "OpenRouter",
     baseUrl: "https://openrouter.ai/api",
@@ -65,13 +88,16 @@ const DEFAULT_PROVIDERS = {
     ],
     defaultModel: "anthropic/claude-3.5-sonnet",
     requiresApiKey: true,
+    serverProviderType: "openai_compatible",
   },
+  // GPT4Free (free, requires local server)
   gpt4free: {
     name: "GPT4Free (Free)",
     baseUrl: "http://127.0.0.1:1337",
-    models: ["gpt-4o", "gpt-3.5-turbo"],
+    models: ["deepseek"],
     defaultModel: "gpt-4o",
     requiresApiKey: false,
+    serverProviderType: "openai_compatible",
   },
 };
 
@@ -166,8 +192,8 @@ const useLlmStore = create(
   persist(
     (set, get) => ({
       // Provider settings
-      activeProvider: "ollama",
-      activeModel: "llama3.2",
+      activeProvider: "codex",
+      activeModel: "claude-sonnet-4-20250514",
       apiKeys: {}, // { providerId: apiKey }
       customProviders: {}, // User-added providers
 
@@ -286,12 +312,9 @@ ${context.architecture ? `\n## Architecture:\n${context.architecture}` : ""}
 ${context.storyContext ? `\n## Story Context:\n${context.storyContext}` : ""}`,
           };
 
-          // Build request body
+          // Build request body - use serverProviderType from provider config
           const requestBody = {
-            provider:
-              state.activeProvider === "ollama"
-                ? "ollama"
-                : "openai_compatible",
+            provider: provider.serverProviderType || "openai_compatible",
             messages: [
               systemMessage,
               ...messages,
@@ -370,10 +393,7 @@ Return ONLY the JSON array, no other text.`;
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              provider:
-                state.activeProvider === "ollama"
-                  ? "ollama"
-                  : "openai_compatible",
+              provider: provider.serverProviderType || "openai_compatible",
               messages: [
                 {
                   role: "system",

@@ -78,6 +78,31 @@ const resolveMcpServerPath = () => {
 
 const mcpServer = require(resolveMcpServerPath());
 
+// LLM Server path resolver
+const resolveLlmServerPath = () => {
+  const packagedCandidates = [
+    path.join(app.getAppPath(), "scripts", "llm-server.js"),
+    path.join(process.resourcesPath, "scripts", "llm-server.js"),
+    path.join(path.dirname(app.getAppPath()), "scripts", "llm-server.js"),
+  ];
+
+  const devCandidates = [path.join(__dirname, "../../scripts/llm-server.js")];
+
+  const candidates = app.isPackaged
+    ? [...packagedCandidates, ...devCandidates]
+    : [...devCandidates, ...packagedCandidates];
+
+  for (const candidate of candidates) {
+    try {
+      if (fs.existsSync(candidate)) return candidate;
+    } catch {}
+  }
+
+  return candidates[0];
+};
+
+const llmServer = require(resolveLlmServerPath());
+
 let store;
 
 async function getStore() {
@@ -452,6 +477,33 @@ function stopMcpServer() {
     mcpServer.stop();
     serverRunning = false;
     sendLog("warning", "MCP Server stopped");
+  }
+}
+
+// ============ LLM Server Management ============
+let llmServerRunning = false;
+
+async function startLlmServer() {
+  try {
+    console.log("[App] Starting LLM server...");
+
+    await llmServer.start(4444, (type, message) => {
+      console.log(`[LLM Server] ${message}`);
+    });
+
+    llmServerRunning = true;
+    console.log("[App] LLM server started successfully");
+  } catch (err) {
+    console.error("[App] Failed to start LLM server:", err);
+    llmServerRunning = false;
+  }
+}
+
+function stopLlmServer() {
+  if (llmServerRunning) {
+    llmServer.stop();
+    llmServerRunning = false;
+    console.log("[App] LLM server stopped");
   }
 }
 
@@ -3917,6 +3969,8 @@ app.whenReady().then(async () => {
   // Auto-start MCP Server
   startMcpServer();
 
+  // Auto-start LLM Server
+  startLlmServer();
   createWindow({ show: !backgroundLaunch && !app.isPackaged });
   updateTrayMenu().catch(() => {});
 
@@ -3981,6 +4035,7 @@ app.on("before-quit", () => {
 
 app.on("window-all-closed", () => {
   stopMcpServer();
+  stopLlmServer();
   if (process.platform !== "darwin") {
     app.quit();
   }

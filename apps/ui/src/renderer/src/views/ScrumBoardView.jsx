@@ -97,6 +97,7 @@ import useKanbanStore, {
   PRIORITY_LEVELS,
   STORY_STATUSES,
 } from "../stores/kanbanStore";
+import useLlmStore from "../stores/llmStore";
 
 // Board templates based on BMAD-Method
 const BOARD_TEMPLATES = [
@@ -3270,14 +3271,32 @@ const SettingsDialog = ({ open, onOpenChange }) => {
     checkServerStatus,
   } = useKanbanStore();
 
+  // LLM Store for AI provider settings
+  const {
+    activeProvider,
+    activeModel,
+    apiKeys,
+    getAvailableProviders,
+    setActiveProvider,
+    setActiveModel,
+    setApiKey,
+  } = useLlmStore();
+
   const [logs, setLogs] = React.useState([]);
   const logsEndRef = React.useRef(null);
+  const [tempApiKey, setTempApiKey] = React.useState("");
+
+  // Get available providers
+  const providers = getAvailableProviders();
+  const currentProvider = providers[activeProvider];
 
   React.useEffect(() => {
     if (open) {
       checkServerStatus();
+      // Load current API key for display
+      setTempApiKey(apiKeys[activeProvider] || "");
     }
-  }, [open, checkServerStatus]);
+  }, [open, checkServerStatus, activeProvider, apiKeys]);
 
   // Subscribe to logs
   React.useEffect(() => {
@@ -3304,22 +3323,27 @@ const SettingsDialog = ({ open, onOpenChange }) => {
     }
   }, [logs, open]);
 
+  const handleSaveApiKey = () => {
+    setApiKey(activeProvider, tempApiKey);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px] h-[500px] flex flex-col bg-background/95 backdrop-blur-lg">
+      <DialogContent className="sm:max-w-[600px] h-[550px] flex flex-col bg-background/95 backdrop-blur-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-primary" />
             Kanban Settings
           </DialogTitle>
           <DialogDescription>
-            Configure connection or view server logs
+            Configure connection, AI providers, or view server logs
           </DialogDescription>
         </DialogHeader>
 
         <Tabs defaultValue="general" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="llm">AI Provider</TabsTrigger>
             <TabsTrigger value="logs">Server Logs</TabsTrigger>
           </TabsList>
 
@@ -3393,6 +3417,194 @@ const SettingsDialog = ({ open, onOpenChange }) => {
                     </>
                   )}
                 </Button>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="llm" className="space-y-4 py-4 overflow-y-auto">
+            {/* Provider Selection Panel */}
+            <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <Label className="text-sm font-medium">Provider</Label>
+              </div>
+
+              {/* Built-in Providers as Buttons */}
+              <div className="mb-2 text-xs text-muted-foreground">
+                Built-in Providers
+              </div>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {Object.entries(providers).map(([id, provider]) => (
+                  <Button
+                    key={id}
+                    variant={activeProvider === id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => {
+                      setActiveProvider(id);
+                      setTempApiKey(apiKeys[id] || "");
+                    }}
+                    className="gap-1.5"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {provider.name}
+                    {!provider.requiresApiKey && (
+                      <span className="ml-1 text-[10px] text-green-500">
+                        (Free)
+                      </span>
+                    )}
+                  </Button>
+                ))}
+              </div>
+
+              {/* Selected Provider Description */}
+              <p className="mt-2 text-xs text-muted-foreground">
+                {currentProvider?.name === "Ollama" && (
+                  <>
+                    Local AI models via Ollama. Make sure Ollama is running on
+                    your machine.
+                  </>
+                )}
+                {currentProvider?.name === "Codex (Claude)" && (
+                  <>
+                    Claude models by Anthropic. Requires an API key from
+                    Anthropic.
+                  </>
+                )}
+                {currentProvider?.name === "OpenAI" && (
+                  <>GPT models by OpenAI. Requires an API key from OpenAI.</>
+                )}
+                {currentProvider?.name === "Groq" && (
+                  <>
+                    Fast inference on open models. Get a free API key from Groq.
+                  </>
+                )}
+                {currentProvider?.name === "Together AI" && (
+                  <>Open source models. Get an API key from Together AI.</>
+                )}
+                {currentProvider?.name === "OpenRouter" && (
+                  <>
+                    Access multiple providers through one API. Get an API key
+                    from OpenRouter.
+                  </>
+                )}
+                {currentProvider?.name === "GPT4Free (Free)" && (
+                  <>
+                    Free access to various models. Requires starting the
+                    GPT4Free server.
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Provider Configuration Panel */}
+            <div className="rounded-lg border border-border/50 bg-muted/30 p-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                {/* Model Selection */}
+                <div className="space-y-2">
+                  <Label htmlFor="modelSelect">Model</Label>
+                  <Select value={activeModel} onValueChange={setActiveModel}>
+                    <SelectTrigger
+                      id="modelSelect"
+                      className="bg-background/50"
+                    >
+                      <SelectValue placeholder="Select model..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentProvider?.models?.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* API Key (if required) */}
+                {currentProvider?.requiresApiKey && (
+                  <div className="space-y-2">
+                    <Label
+                      htmlFor="apiKeyInput"
+                      className="flex items-center gap-2"
+                    >
+                      API Key
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs",
+                          apiKeys[activeProvider]
+                            ? "border-green-500/30 bg-green-500/10 text-green-600"
+                            : "border-yellow-500/30 bg-yellow-500/10 text-yellow-600",
+                        )}
+                      >
+                        {apiKeys[activeProvider] ? "✓ Set" : "⚠ Required"}
+                      </Badge>
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="apiKeyInput"
+                        type="password"
+                        placeholder={`Enter ${currentProvider.name} API key`}
+                        value={tempApiKey}
+                        onChange={(e) => setTempApiKey(e.target.value)}
+                        className="bg-background/50"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={handleSaveApiKey}
+                        disabled={!tempApiKey}
+                      >
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Provider specific help text */}
+              <p className="mt-4 text-xs text-muted-foreground">
+                {activeProvider === "ollama" ? (
+                  <>
+                    Make sure Ollama is running at{" "}
+                    <code className="rounded bg-muted px-1">
+                      {currentProvider?.baseUrl}
+                    </code>
+                  </>
+                ) : activeProvider === "gpt4free" ? (
+                  <>
+                    GPT4Free server should be running at{" "}
+                    <code className="rounded bg-muted px-1">
+                      {currentProvider?.baseUrl}
+                    </code>
+                  </>
+                ) : (
+                  <>
+                    API endpoint:{" "}
+                    <code className="rounded bg-muted px-1">
+                      {currentProvider?.baseUrl}
+                    </code>
+                  </>
+                )}
+              </p>
+            </div>
+
+            {/* Provider Info Summary */}
+            <div className="p-3 rounded-lg border border-border/50 bg-secondary/20 space-y-2">
+              <h4 className="text-sm font-medium flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Current Configuration
+              </h4>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="text-muted-foreground">Provider:</div>
+                <div className="font-medium">{currentProvider?.name}</div>
+                <div className="text-muted-foreground">Model:</div>
+                <div className="font-mono">{activeModel}</div>
+                <div className="text-muted-foreground">API Key:</div>
+                <div>
+                  {currentProvider?.requiresApiKey
+                    ? apiKeys[activeProvider]
+                      ? "✓ Configured"
+                      : "❌ Missing"
+                    : "Not required"}
+                </div>
               </div>
             </div>
           </TabsContent>
@@ -7084,12 +7296,15 @@ export default function ScrumBoardView() {
         </TabsContent>
 
         {/* SCRUM Tab Content */}
-        <TabsContent value="scrum" className="flex-1 min-h-0 mt-0">
+        <TabsContent
+          value="scrum"
+          className="flex-1 min-h-0 mt-0 flex flex-col"
+        >
           {activeBoard && (
             <Tabs
               value={overviewTab}
               onValueChange={setOverviewTab}
-              className="w-full h-full flex flex-col"
+              className="w-full shrink-0"
             >
               {/* Combined Header & Tabs */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
@@ -7379,55 +7594,53 @@ export default function ScrumBoardView() {
             </Tabs>
           )}
 
-          {/* Board - moved inside scrum tab content */}
-          {mainViewTab === "scrum" && (
-            <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
-              <div className="min-w-max flex gap-4 items-stretch pb-2 h-full">
-                {activeBoard?.lists?.map((list, index) => (
-                  <ListColumn
-                    key={list.id}
-                    list={list}
-                    displayCards={displayCardsByListId[list.id]}
-                    disableDnd={filtersActive}
-                    listDrop={listDrop}
-                    dragState={dragState}
-                    onDragStartList={(e) => onDragStartList(e, list.id)}
-                    onDragEndList={onDragEndList}
-                    onDragOverList={(e) =>
-                      onDragOverListColumn(e, list.id, index)
+          {/* Board */}
+          <div className="flex-1 overflow-x-auto overflow-y-hidden min-h-0">
+            <div className="min-w-max flex gap-4 items-stretch pb-2 h-full">
+              {activeBoard?.lists?.map((list, index) => (
+                <ListColumn
+                  key={list.id}
+                  list={list}
+                  displayCards={displayCardsByListId[list.id]}
+                  disableDnd={filtersActive}
+                  listDrop={listDrop}
+                  dragState={dragState}
+                  onDragStartList={(e) => onDragStartList(e, list.id)}
+                  onDragEndList={onDragEndList}
+                  onDragOverList={(e) =>
+                    onDragOverListColumn(e, list.id, index)
+                  }
+                  onDropList={(e) => {
+                    if (dragState?.type === "card") {
+                      onDropCardToList(e, list.id, list.cards.length);
+                    } else {
+                      onDropListToIndex(e, list.id, index);
                     }
-                    onDropList={(e) => {
-                      if (dragState?.type === "card") {
-                        onDropCardToList(e, list.id, list.cards.length);
-                      } else {
-                        onDropListToIndex(e, list.id, index);
-                      }
-                    }}
-                    onAddCard={() => openNewCard(list.id)}
-                    onEditCard={(card) => openEditCard(list.id, card)}
-                    onRename={(name) => renameList(list.id, name)}
-                    onDelete={() => deleteList(list.id)}
-                    onDragStartCard={(e, cardId, index) =>
-                      onDragStartCard(e, list.id, cardId, index)
-                    }
-                    onDragEndCard={onDragEndCard}
-                    onDropToIndex={(e, index) =>
-                      onDropCardToList(e, list.id, index)
-                    }
-                    onDropToEnd={(e) =>
-                      onDropCardToList(e, list.id, list.cards.length)
-                    }
-                    isCardLocked={isCardLocked}
-                    getCardLock={getCardLock}
-                    storyKeyByCardId={storyKeyByCardId}
-                    sprintNameById={sprintNameById}
-                  />
-                ))}
+                  }}
+                  onAddCard={() => openNewCard(list.id)}
+                  onEditCard={(card) => openEditCard(list.id, card)}
+                  onRename={(name) => renameList(list.id, name)}
+                  onDelete={() => deleteList(list.id)}
+                  onDragStartCard={(e, cardId, index) =>
+                    onDragStartCard(e, list.id, cardId, index)
+                  }
+                  onDragEndCard={onDragEndCard}
+                  onDropToIndex={(e, index) =>
+                    onDropCardToList(e, list.id, index)
+                  }
+                  onDropToEnd={(e) =>
+                    onDropCardToList(e, list.id, list.cards.length)
+                  }
+                  isCardLocked={isCardLocked}
+                  getCardLock={getCardLock}
+                  storyKeyByCardId={storyKeyByCardId}
+                  sprintNameById={sprintNameById}
+                />
+              ))}
 
-                <AddListColumn onAdd={addList} />
-              </div>
+              <AddListColumn onAdd={addList} />
             </div>
-          )}
+          </div>
         </TabsContent>
       </Tabs>
 

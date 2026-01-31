@@ -199,8 +199,16 @@ export default function StoryGenerator({
   projectPath,
 }) {
   const { projectContext, loadProjectContext } = useBmadStore();
-  const { generateStories, isLoading, error, activeProvider, activeModel } =
-    useLlmStore();
+  const {
+    generateStories,
+    isLoading,
+    error,
+    activeProvider,
+    activeModel,
+    getAvailableProviders,
+    setActiveProvider,
+    setActiveModel,
+  } = useLlmStore();
   const { addCard, state, activeBoardId } = useKanbanStore();
 
   const [stories, setStories] = useState([]);
@@ -208,9 +216,14 @@ export default function StoryGenerator({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [generationError, setGenerationError] = useState(null);
+  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
 
   // Check if we're in modal mode or embedded mode
   const isModal = typeof onClose === "function";
+
+  // Get available providers
+  const providers = getAvailableProviders();
+  const currentProvider = providers[activeProvider];
 
   useEffect(() => {
     loadProjectContext();
@@ -497,13 +510,72 @@ export default function StoryGenerator({
   // Embedded mode - just the content, no modal wrapper
   return (
     <div className="h-full flex flex-col bg-slate-900/50 rounded-lg border border-slate-700 p-3">
-      {/* Header for embedded mode */}
+      {/* Header for embedded mode with provider selector */}
       <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-700">
         <Sparkles className="w-4 h-4 text-indigo-400" />
         <span className="text-sm font-medium text-white">Story Generator</span>
-        <span className="text-xs text-slate-500">
-          ({activeProvider || "LLM"})
-        </span>
+
+        {/* Provider Dropdown */}
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            onClick={() => setShowProviderDropdown(!showProviderDropdown)}
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-slate-300 transition-colors"
+          >
+            {currentProvider?.name || activeProvider}
+            <ChevronDown
+              size={12}
+              className={`transition-transform ${showProviderDropdown ? "rotate-180" : ""}`}
+            />
+          </button>
+
+          {showProviderDropdown && (
+            <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden">
+              <div className="max-h-64 overflow-y-auto">
+                {Object.entries(providers).map(([id, provider]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => {
+                      setActiveProvider(id);
+                      setShowProviderDropdown(false);
+                    }}
+                    className={`w-full px-3 py-2 text-left text-xs hover:bg-slate-700 transition-colors ${
+                      activeProvider === id
+                        ? "bg-indigo-500/20 text-indigo-400"
+                        : "text-slate-300"
+                    }`}
+                  >
+                    <div className="font-medium">{provider.name}</div>
+                    <div className="text-slate-500 text-[10px]">
+                      {provider.defaultModel}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Model selector */}
+              {currentProvider?.models && (
+                <div className="border-t border-slate-600 p-2">
+                  <div className="text-[10px] text-slate-500 mb-1 px-1">
+                    Model
+                  </div>
+                  <select
+                    value={activeModel}
+                    onChange={(e) => setActiveModel(e.target.value)}
+                    className="w-full px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-300"
+                  >
+                    {currentProvider.models.map((model) => (
+                      <option key={model} value={model}>
+                        {model}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {content}
