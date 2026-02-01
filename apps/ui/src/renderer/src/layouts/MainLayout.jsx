@@ -14,7 +14,7 @@ import {
   Table,
   TestTube,
 } from "lucide-react";
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { useLocation, useNavigate, useOutlet } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
@@ -32,6 +32,13 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import { useResourceStore } from "../stores/resourceStore";
+
+// Lazy load dialog components
+const OCRCapture = lazy(() => import("../components/OCRCapture"));
+const DeviceMockup = lazy(() => import("../components/DeviceMockup"));
+const WallpaperPicker = lazy(() => import("../components/WallpaperPicker"));
+const PluginManager = lazy(() => import("../components/PluginManager"));
+const MCPInstaller = lazy(() => import("../components/MCPInstaller"));
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
@@ -158,6 +165,13 @@ export default function MainLayout({
     startX: 0,
     startY: 0,
   });
+
+  // New feature dialogs state
+  const [ocrCaptureOpen, setOcrCaptureOpen] = React.useState(false);
+  const [deviceMockupOpen, setDeviceMockupOpen] = React.useState(false);
+  const [wallpaperPickerOpen, setWallpaperPickerOpen] = React.useState(false);
+  const [pluginManagerOpen, setPluginManagerOpen] = React.useState(false);
+  const [mcpInstallerOpen, setMcpInstallerOpen] = React.useState(false);
 
   const closeCaptureOverlay = React.useCallback(() => {
     captureDragRef.current.active = false;
@@ -758,6 +772,32 @@ export default function MainLayout({
         if (!pos) return;
         if (pos !== "left" && pos !== "bottom" && pos !== "right") return;
         setDockSettings((prev) => ({ ...prev, position: pos }));
+        return;
+      }
+
+      // New feature action handlers
+      if (key === "ocr:capture") {
+        setOcrCaptureOpen(true);
+        return;
+      }
+
+      if (key === "mockup:device") {
+        setDeviceMockupOpen(true);
+        return;
+      }
+
+      if (key === "settings:wallpaper") {
+        setWallpaperPickerOpen(true);
+        return;
+      }
+
+      if (key === "settings:plugins") {
+        setPluginManagerOpen(true);
+        return;
+      }
+
+      if (key === "mcp:installer") {
+        setMcpInstallerOpen(true);
         return;
       }
     },
@@ -1683,6 +1723,27 @@ export default function MainLayout({
             </div>
           </div>
         ) : null}
+
+        {/* Lazy-loaded Feature Dialogs */}
+        <Suspense fallback={null}>
+          <OCRCapture open={ocrCaptureOpen} onOpenChange={setOcrCaptureOpen} />
+          <DeviceMockup
+            open={deviceMockupOpen}
+            onOpenChange={setDeviceMockupOpen}
+          />
+          <WallpaperPicker
+            open={wallpaperPickerOpen}
+            onOpenChange={setWallpaperPickerOpen}
+          />
+          <PluginManager
+            open={pluginManagerOpen}
+            onOpenChange={setPluginManagerOpen}
+          />
+          <MCPInstaller
+            open={mcpInstallerOpen}
+            onOpenChange={setMcpInstallerOpen}
+          />
+        </Suspense>
       </div>
     </TooltipProvider>
   );

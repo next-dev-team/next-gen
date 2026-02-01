@@ -10,6 +10,11 @@ import {
   Settings,
   Table,
   TestTube,
+  ScanText,
+  Smartphone,
+  Palette,
+  Puzzle,
+  Server,
 } from "lucide-react";
 import React from "react";
 import { Button } from "../components/ui/button";
@@ -67,7 +72,7 @@ function pushRecentDockAction(item) {
     const list = loadRecentDockActions();
     const next = [item, ...list.filter((it) => it.key !== item.key)].slice(
       0,
-      6
+      6,
     );
     localStorage.setItem(DOCK_RECENT_ACTIONS_KEY, JSON.stringify(next));
     window.dispatchEvent(new Event("dock:recentActionsUpdated"));
@@ -246,8 +251,60 @@ export default function LaunchpadView() {
           "bg-gradient-to-br from-slate-500 via-zinc-500 to-neutral-600",
         keywords: ["dock", "pin"],
       },
+      {
+        key: "ocr:capture",
+        title: "OCR Capture",
+        category: "Tools",
+        icon: ScanText,
+        iconName: "scan-text",
+        actionKey: "ocr:capture",
+        gradient: "bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500",
+        keywords: ["text", "extract", "image", "recognition"],
+      },
+      {
+        key: "mockup:device",
+        title: "Device Mockup",
+        category: "Tools",
+        icon: Smartphone,
+        iconName: "smartphone",
+        actionKey: "mockup:device",
+        gradient: "bg-gradient-to-br from-pink-500 via-rose-500 to-red-500",
+        keywords: ["frame", "screenshot", "phone", "tablet", "desktop"],
+      },
+      {
+        key: "settings:wallpaper",
+        title: "Wallpaper Settings",
+        category: "Settings",
+        icon: Palette,
+        iconName: "palette",
+        actionKey: "settings:wallpaper",
+        gradient:
+          "bg-gradient-to-br from-violet-500 via-purple-500 to-indigo-500",
+        keywords: ["background", "theme", "customize"],
+      },
+      {
+        key: "settings:plugins",
+        title: "Plugin Manager",
+        category: "Settings",
+        icon: Puzzle,
+        iconName: "puzzle",
+        actionKey: "settings:plugins",
+        gradient: "bg-gradient-to-br from-amber-500 via-orange-500 to-red-500",
+        keywords: ["extension", "addon", "marketplace"],
+      },
+      {
+        key: "mcp:installer",
+        title: "MCP Installer",
+        category: "Tools",
+        icon: Server,
+        iconName: "server",
+        actionKey: "mcp:installer",
+        gradient:
+          "bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600",
+        keywords: ["model", "context", "protocol", "claude", "cursor"],
+      },
     ],
-    []
+    [],
   );
 
   const categories = React.useMemo(() => {
@@ -353,7 +410,7 @@ export default function LaunchpadView() {
     window.dispatchEvent(
       new CustomEvent("launchpad:run", {
         detail: { actionKey: action.actionKey, payload: action.payload },
-      })
+      }),
     );
   }, []);
 
@@ -378,7 +435,7 @@ export default function LaunchpadView() {
 
   const pageIndices = React.useMemo(
     () => Array.from({ length: pages }, (_, i) => i + 1),
-    [pages]
+    [pages],
   );
 
   React.useEffect(() => {
@@ -470,7 +527,7 @@ export default function LaunchpadView() {
                       "shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition cursor-pointer",
                       active
                         ? "border-menu-active bg-menu-active text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
-                        : "border-white/10 bg-white/8 text-white/75 hover:bg-menu-active hover:text-white"
+                        : "border-white/10 bg-white/8 text-white/75 hover:bg-menu-active hover:text-white",
                     )}
                   >
                     {cat}
@@ -516,13 +573,13 @@ export default function LaunchpadView() {
                           onClick={() => runAction(a)}
                           className={cn(
                             "flex w-full items-center gap-3 px-4 py-2.5 text-left transition",
-                            active ? "bg-white/14" : "hover:bg-white/10"
+                            active ? "bg-white/14" : "hover:bg-white/10",
                           )}
                         >
                           <span
                             className={cn(
                               "relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl shadow-[0_18px_34px_rgba(0,0,0,0.30),inset_0_1px_0_rgba(255,255,255,0.25)]",
-                              a.gradient
+                              a.gradient,
                             )}
                           >
                             <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.40)_0%,transparent_70%)]" />
@@ -569,7 +626,7 @@ export default function LaunchpadView() {
                       <span
                         className={cn(
                           "relative flex h-[89px] w-[89px] items-center justify-center overflow-hidden rounded-[26px] border border-white/12 shadow-[0_24px_52px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.26)] transition-transform duration-150 ease-out group-hover:scale-[1.06] group-active:scale-[0.98]",
-                          a.gradient
+                          a.gradient,
                         )}
                       >
                         <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_60%_at_30%_18%,rgba(255,255,255,0.42)_0%,transparent_70%)]" />
@@ -596,7 +653,7 @@ export default function LaunchpadView() {
                       "h-2 w-2 rounded-full transition",
                       p - 1 === page
                         ? "bg-white/80"
-                        : "bg-white/30 hover:bg-white/45"
+                        : "bg-white/30 hover:bg-white/45",
                     )}
                   />
                 ))}

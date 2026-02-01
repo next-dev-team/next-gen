@@ -1,8 +1,10 @@
 import {
   AppstoreOutlined,
   BgColorsOutlined,
+  CloudDownloadOutlined,
   ControlOutlined,
   DesktopOutlined,
+  MenuOutlined,
   MoonOutlined,
   SettingOutlined,
   SunOutlined,
@@ -21,10 +23,16 @@ import {
   theme,
   Modal,
 } from "antd";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, lazy, Suspense } from "react";
 import { useOutletContext } from "react-router-dom";
 import { keyboardShortcuts } from "../components/editor/hooks/useKeyboardShortcuts";
 import LabeledItem from "../components/ui/LabeledItem";
+import AutoUpdatePanel from "../components/AutoUpdatePanel";
+import MenuManagement from "../components/MenuManagement";
+
+// Lazy load dialogs
+const WallpaperPicker = lazy(() => import("../components/WallpaperPicker"));
+const PluginManager = lazy(() => import("../components/PluginManager"));
 
 const { Title, Text } = Typography;
 
@@ -48,8 +56,10 @@ export default function SettingsView() {
     minimized: false,
   });
   const [quickToggleShortcut, setQuickToggleShortcut] = useState(
-    "CommandOrControl+Shift+Space"
+    "CommandOrControl+Shift+Space",
   );
+  const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
+  const [pluginManagerOpen, setPluginManagerOpen] = useState(false);
 
   useEffect(() => {
     let cleanupVisibility;
@@ -117,7 +127,7 @@ export default function SettingsView() {
       cleanupVisibility = window.electronAPI.onAppVisibilityChanged(
         (payload) => {
           if (payload && typeof payload === "object") setAppVisibility(payload);
-        }
+        },
       );
     }
 
@@ -130,7 +140,7 @@ export default function SettingsView() {
             setKeyboardControlsEnabled(Boolean(value));
           if (key === "quickToggleEnabled")
             setQuickToggleEnabled(Boolean(value));
-        }
+        },
       );
     }
 
@@ -152,7 +162,7 @@ export default function SettingsView() {
     try {
       window.localStorage.setItem(
         "runInBackground",
-        checked ? "true" : "false"
+        checked ? "true" : "false",
       );
     } catch {}
     if (window.electronAPI?.setRunInBackground) {
@@ -165,7 +175,7 @@ export default function SettingsView() {
     try {
       window.localStorage.setItem(
         "keyboardControlsEnabled",
-        checked ? "true" : "false"
+        checked ? "true" : "false",
       );
     } catch {}
     if (window.electronAPI?.setKeyboardControlsEnabled) {
@@ -178,7 +188,7 @@ export default function SettingsView() {
     try {
       window.localStorage.setItem(
         "quickToggleEnabled",
-        checked ? "true" : "false"
+        checked ? "true" : "false",
       );
     } catch {}
     if (window.electronAPI?.setQuickToggleEnabled) {
@@ -536,6 +546,49 @@ export default function SettingsView() {
               />
             </LabeledItem>
           </Card>
+
+          <Card title="Customization" variant="outlined">
+            <Space size="small" wrap>
+              <Button onClick={() => setWallpaperPickerOpen(true)}>
+                🎨 Wallpaper
+              </Button>
+              <Button onClick={() => setPluginManagerOpen(true)}>
+                🧩 Plugins
+              </Button>
+            </Space>
+          </Card>
+        </Space>
+      ),
+    },
+    {
+      key: "updates",
+      label: (
+        <span>
+          <CloudDownloadOutlined />
+          Updates
+        </span>
+      ),
+      children: (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Card title="Auto Updates" variant="outlined">
+            <AutoUpdatePanel />
+          </Card>
+        </Space>
+      ),
+    },
+    {
+      key: "menu",
+      label: (
+        <span>
+          <MenuOutlined />
+          Menu
+        </span>
+      ),
+      children: (
+        <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Card variant="outlined">
+            <MenuManagement />
+          </Card>
         </Space>
       ),
     },
@@ -564,6 +617,18 @@ export default function SettingsView() {
 
         <div style={{ height: 40 }} />
       </div>
+
+      {/* Lazy-loaded Dialogs */}
+      <Suspense fallback={null}>
+        <WallpaperPicker
+          open={wallpaperPickerOpen}
+          onOpenChange={setWallpaperPickerOpen}
+        />
+        <PluginManager
+          open={pluginManagerOpen}
+          onOpenChange={setPluginManagerOpen}
+        />
+      </Suspense>
     </div>
   );
 }

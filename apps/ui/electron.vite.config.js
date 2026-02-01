@@ -60,6 +60,22 @@ export default defineConfig({
         "@gen": resolve(__dirname, "src/gen"),
       },
     },
+    build: {
+      rollupOptions: {
+        // External optional dependencies that may not be installed
+        external: [],
+        onwarn(warning, warn) {
+          // Suppress warnings for optional dependencies like html2canvas
+          if (
+            warning.code === "UNRESOLVED_IMPORT" &&
+            warning.source === "html2canvas"
+          ) {
+            return;
+          }
+          warn(warning);
+        },
+      },
+    },
     server: {
       port: 5175,
       strictPort: true,

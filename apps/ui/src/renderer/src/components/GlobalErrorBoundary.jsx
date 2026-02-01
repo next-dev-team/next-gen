@@ -1,6 +1,13 @@
 import React from "react";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
 import { AlertTriangle, Home, RefreshCw } from "lucide-react";
 
 class GlobalErrorBoundary extends React.Component {
@@ -38,13 +45,16 @@ class GlobalErrorBoundary extends React.Component {
               <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
                 <AlertTriangle className="h-6 w-6" />
               </div>
-              <CardTitle className="text-2xl font-bold">Something went wrong</CardTitle>
+              <CardTitle className="text-2xl font-bold">
+                Something went wrong
+              </CardTitle>
               <CardDescription>
-                An unexpected error occurred. You can try reloading the page or going back to the dashboard.
+                An unexpected error occurred. You can try reloading the page or
+                going back to the dashboard.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {process.env.NODE_ENV === "development" && this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <div className="mt-2 max-h-32 overflow-auto rounded bg-muted p-3 text-xs font-mono text-muted-foreground">
                   {this.state.error.toString()}
                 </div>
@@ -59,10 +69,7 @@ class GlobalErrorBoundary extends React.Component {
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Reload Page
               </Button>
-              <Button
-                className="w-full sm:w-auto"
-                onClick={this.handleGoHome}
-              >
+              <Button className="w-full sm:w-auto" onClick={this.handleGoHome}>
                 <Home className="mr-2 h-4 w-4" />
                 Go to Home
               </Button>
