@@ -2,6 +2,7 @@
  * BMAD Store - State management for BMAD Method workflow
  *
  * Manages BMAD phases, installation status, and project context.
+ * Now supports per-project sessions - each project has isolated state.
  */
 
 import { create } from "zustand";
@@ -53,44 +54,52 @@ const INSTALL_STATUS = {
   ERROR: "error",
 };
 
+// Default project session state
+const createDefaultProjectSession = () => ({
+  projectContext: {
+    prd: null,
+    prdPath: null,
+    architecture: null,
+    architecturePath: null,
+    productBrief: null,
+    productBriefPath: null,
+  },
+  currentPhase: "analysis",
+  phaseProgress: {
+    analysis: { completed: false, startedAt: null, completedAt: null },
+    planning: { completed: false, startedAt: null, completedAt: null },
+    solutioning: { completed: false, startedAt: null, completedAt: null },
+    implementation: { completed: false, startedAt: null, completedAt: null },
+  },
+  chatHistory: {}, // Keyed by agentId, e.g. { pm: [messages], analyst: [messages] }
+  generatedStories: [],
+});
+
+// Normalize path for consistent keys (handle Windows/Unix paths)
+const normalizePath = (path) =>
+  String(path || "")
+    .replace(/\\/g, "/")
+    .toLowerCase();
+
 /**
  * BMAD Store
  */
 const useBmadStore = create(
   persist(
     (set, get) => ({
-      // Installation state
+      // Installation state (global)
       installStatus: INSTALL_STATUS.NOT_CHECKED,
       installError: null,
       bmadVersion: null,
       bmadPath: null,
 
-      // Project state
-      currentProject: null,
-      projectPath: null,
-      projectContext: {
-        prd: null,
-        prdPath: null,
-        architecture: null,
-        architecturePath: null,
-        productBrief: null,
-        productBriefPath: null,
-      },
+      // Current active project path
+      activeProjectPath: null,
 
-      // Workflow state
-      currentPhase: "analysis",
-      phaseProgress: {
-        analysis: { completed: false, startedAt: null, completedAt: null },
-        planning: { completed: false, startedAt: null, completedAt: null },
-        solutioning: { completed: false, startedAt: null, completedAt: null },
-        implementation: {
-          completed: false,
-          startedAt: null,
-          completedAt: null,
-        },
-      },
+      // Per-project sessions (keyed by normalized projectPath)
+      projectSessions: {},
 
-      // Setup wizard state
+      // Wizard state (global)
       wizardStep: 0,
       wizardData: {
         projectName: "",
@@ -103,9 +112,62 @@ const useBmadStore = create(
 
       // Getters
       getPhases: () => BMAD_PHASES,
-      getCurrentPhase: () =>
-        BMAD_PHASES.find((p) => p.id === get().currentPhase),
+      getCurrentPhase: () => {
+        const session = get().getActiveSession();
+        return BMAD_PHASES.find((p) => p.id === session.currentPhase);
+      },
       getPhaseById: (id) => BMAD_PHASES.find((p) => p.id === id),
+
+      // Get the active project session (or create default if not exists)
+      getActiveSession: () => {
+        const { activeProjectPath, projectSessions } = get();
+        if (!activeProjectPath) {
+          return createDefaultProjectSession();
+        }
+        const key = normalizePath(activeProjectPath);
+        return projectSessions[key] || createDefaultProjectSession();
+      },
+
+      // Get session for a specific project
+      getSessionForProject: (projectPath) => {
+        const key = normalizePath(projectPath);
+        return get().projectSessions[key] || createDefaultProjectSession();
+      },
+
+      // Update session for active project
+      updateActiveSession: (updates) => {
+        const { activeProjectPath } = get();
+        if (!activeProjectPath) return;
+
+        const key = normalizePath(activeProjectPath);
+        set((state) => ({
+          projectSessions: {
+            ...state.projectSessions,
+            [key]: {
+              ...(state.projectSessions[key] || createDefaultProjectSession()),
+              ...updates,
+            },
+          },
+        }));
+      },
+
+      // Set active project
+      setActiveProject: (projectPath) => {
+        const key = normalizePath(projectPath);
+        set((state) => ({
+          activeProjectPath: projectPath,
+          // Initialize session if doesn't exist
+          projectSessions: {
+            ...state.projectSessions,
+            [key]: state.projectSessions[key] || createDefaultProjectSession(),
+          },
+        }));
+      },
+
+      // Get project context for active session
+      get projectContext() {
+        return get().getActiveSession().projectContext;
+      },
 
       // Installation actions
       checkInstallation: async () => {
@@ -167,35 +229,24 @@ const useBmadStore = create(
         }
       },
 
-      // Project actions
-      setProject: (projectPath, projectName) => {
-        set({
-          currentProject: projectName,
-          projectPath,
-        });
-      },
-
-      loadProjectContext: async () => {
-        const { projectPath } = get();
-        if (!projectPath) return;
+      // Project context actions
+      loadProjectContext: async (projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return;
 
         try {
           // Load context files via electronAPI
           if (window.electronAPI?.readFile) {
-            const bmadOutput = `${projectPath}/_bmad-output`;
+            const bmadOutput = `${path}/_bmad-output`;
+            const updates = {};
 
             // Try to load PRD
             try {
               const prd = await window.electronAPI.readFile(
                 `${bmadOutput}/prd.md`,
               );
-              set((state) => ({
-                projectContext: {
-                  ...state.projectContext,
-                  prd,
-                  prdPath: `${bmadOutput}/prd.md`,
-                },
-              }));
+              updates.prd = prd;
+              updates.prdPath = `${bmadOutput}/prd.md`;
             } catch {
               // PRD doesn't exist yet
             }
@@ -205,13 +256,8 @@ const useBmadStore = create(
               const arch = await window.electronAPI.readFile(
                 `${bmadOutput}/architecture.md`,
               );
-              set((state) => ({
-                projectContext: {
-                  ...state.projectContext,
-                  architecture: arch,
-                  architecturePath: `${bmadOutput}/architecture.md`,
-                },
-              }));
+              updates.architecture = arch;
+              updates.architecturePath = `${bmadOutput}/architecture.md`;
             } catch {
               // Architecture doesn't exist yet
             }
@@ -221,27 +267,41 @@ const useBmadStore = create(
               const brief = await window.electronAPI.readFile(
                 `${bmadOutput}/product-brief.md`,
               );
-              set((state) => ({
-                projectContext: {
-                  ...state.projectContext,
-                  productBrief: brief,
-                  productBriefPath: `${bmadOutput}/product-brief.md`,
-                },
-              }));
+              updates.productBrief = brief;
+              updates.productBriefPath = `${bmadOutput}/product-brief.md`;
             } catch {
               // Brief doesn't exist yet
             }
+
+            // Update project session
+            const key = normalizePath(path);
+            set((state) => {
+              const currentSession =
+                state.projectSessions[key] || createDefaultProjectSession();
+              return {
+                projectSessions: {
+                  ...state.projectSessions,
+                  [key]: {
+                    ...currentSession,
+                    projectContext: {
+                      ...currentSession.projectContext,
+                      ...updates,
+                    },
+                  },
+                },
+              };
+            });
           }
         } catch (err) {
           console.error("Failed to load project context:", err);
         }
       },
 
-      saveProjectContext: async (type, content) => {
-        const { projectPath } = get();
-        if (!projectPath) return false;
+      saveProjectContext: async (type, content, projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return false;
 
-        const bmadOutput = `${projectPath}/_bmad-output`;
+        const bmadOutput = `${path}/_bmad-output`;
         const filePaths = {
           prd: `${bmadOutput}/prd.md`,
           architecture: `${bmadOutput}/architecture.md`,
@@ -254,13 +314,25 @@ const useBmadStore = create(
         try {
           if (window.electronAPI?.writeFile) {
             await window.electronAPI.writeFile(filePath, content);
-            set((state) => ({
-              projectContext: {
-                ...state.projectContext,
-                [type]: content,
-                [`${type}Path`]: filePath,
-              },
-            }));
+
+            const key = normalizePath(path);
+            set((state) => {
+              const currentSession =
+                state.projectSessions[key] || createDefaultProjectSession();
+              return {
+                projectSessions: {
+                  ...state.projectSessions,
+                  [key]: {
+                    ...currentSession,
+                    projectContext: {
+                      ...currentSession.projectContext,
+                      [type]: content,
+                      [`${type}Path`]: filePath,
+                    },
+                  },
+                },
+              };
+            });
             return true;
           }
           return false;
@@ -270,64 +342,192 @@ const useBmadStore = create(
         }
       },
 
-      // Phase actions
-      setCurrentPhase: (phaseId) => {
-        const phase = BMAD_PHASES.find((p) => p.id === phaseId);
-        if (phase) {
-          set({ currentPhase: phaseId });
-
-          // Mark phase as started if not already
-          const progress = get().phaseProgress[phaseId];
-          if (!progress.startedAt) {
-            set((state) => ({
-              phaseProgress: {
-                ...state.phaseProgress,
-                [phaseId]: {
-                  ...progress,
-                  startedAt: new Date().toISOString(),
-                },
-              },
-            }));
-          }
-        }
+      // Chat history actions (per project, per agent)
+      getChatHistory: (agentId, projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return [];
+        const session = get().getSessionForProject(path);
+        return session.chatHistory[agentId] || [];
       },
 
-      completePhase: (phaseId) => {
-        set((state) => ({
-          phaseProgress: {
-            ...state.phaseProgress,
-            [phaseId]: {
-              ...state.phaseProgress[phaseId],
-              completed: true,
-              completedAt: new Date().toISOString(),
+      saveChatHistory: (agentId, messages, projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return;
+
+        const key = normalizePath(path);
+        set((state) => {
+          const currentSession =
+            state.projectSessions[key] || createDefaultProjectSession();
+          return {
+            projectSessions: {
+              ...state.projectSessions,
+              [key]: {
+                ...currentSession,
+                chatHistory: {
+                  ...currentSession.chatHistory,
+                  [agentId]: messages,
+                },
+              },
             },
-          },
-        }));
+          };
+        });
+      },
+
+      clearChatHistory: (agentId, projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return;
+
+        const key = normalizePath(path);
+        set((state) => {
+          const currentSession =
+            state.projectSessions[key] || createDefaultProjectSession();
+          const newChatHistory = { ...currentSession.chatHistory };
+          delete newChatHistory[agentId];
+          return {
+            projectSessions: {
+              ...state.projectSessions,
+              [key]: {
+                ...currentSession,
+                chatHistory: newChatHistory,
+              },
+            },
+          };
+        });
+      },
+
+      // Generated stories actions (per project)
+      getGeneratedStories: (projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return [];
+        const session = get().getSessionForProject(path);
+        return session.generatedStories || [];
+      },
+
+      saveGeneratedStories: (stories, projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return;
+
+        const key = normalizePath(path);
+        set((state) => {
+          const currentSession =
+            state.projectSessions[key] || createDefaultProjectSession();
+          return {
+            projectSessions: {
+              ...state.projectSessions,
+              [key]: {
+                ...currentSession,
+                generatedStories: stories,
+              },
+            },
+          };
+        });
+      },
+
+      // Phase actions
+      setCurrentPhase: (phaseId, projectPath) => {
+        const phase = BMAD_PHASES.find((p) => p.id === phaseId);
+        if (!phase) return;
+
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return;
+
+        const key = normalizePath(path);
+        set((state) => {
+          const currentSession =
+            state.projectSessions[key] || createDefaultProjectSession();
+          const progress = currentSession.phaseProgress[phaseId];
+
+          return {
+            projectSessions: {
+              ...state.projectSessions,
+              [key]: {
+                ...currentSession,
+                currentPhase: phaseId,
+                phaseProgress: {
+                  ...currentSession.phaseProgress,
+                  [phaseId]: {
+                    ...progress,
+                    startedAt: progress.startedAt || new Date().toISOString(),
+                  },
+                },
+              },
+            },
+          };
+        });
+      },
+
+      completePhase: (phaseId, projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return;
+
+        const key = normalizePath(path);
+        set((state) => {
+          const currentSession =
+            state.projectSessions[key] || createDefaultProjectSession();
+          return {
+            projectSessions: {
+              ...state.projectSessions,
+              [key]: {
+                ...currentSession,
+                phaseProgress: {
+                  ...currentSession.phaseProgress,
+                  [phaseId]: {
+                    ...currentSession.phaseProgress[phaseId],
+                    completed: true,
+                    completedAt: new Date().toISOString(),
+                  },
+                },
+              },
+            },
+          };
+        });
 
         // Auto-advance to next phase
         const currentIndex = BMAD_PHASES.findIndex((p) => p.id === phaseId);
         if (currentIndex < BMAD_PHASES.length - 1) {
-          get().setCurrentPhase(BMAD_PHASES[currentIndex + 1].id);
+          get().setCurrentPhase(BMAD_PHASES[currentIndex + 1].id, path);
         }
       },
 
-      resetPhaseProgress: () => {
-        set({
-          currentPhase: "analysis",
-          phaseProgress: {
-            analysis: { completed: false, startedAt: null, completedAt: null },
-            planning: { completed: false, startedAt: null, completedAt: null },
-            solutioning: {
-              completed: false,
-              startedAt: null,
-              completedAt: null,
+      resetPhaseProgress: (projectPath) => {
+        const path = projectPath || get().activeProjectPath;
+        if (!path) return;
+
+        const key = normalizePath(path);
+        set((state) => {
+          const currentSession =
+            state.projectSessions[key] || createDefaultProjectSession();
+          return {
+            projectSessions: {
+              ...state.projectSessions,
+              [key]: {
+                ...currentSession,
+                currentPhase: "analysis",
+                phaseProgress: {
+                  analysis: {
+                    completed: false,
+                    startedAt: null,
+                    completedAt: null,
+                  },
+                  planning: {
+                    completed: false,
+                    startedAt: null,
+                    completedAt: null,
+                  },
+                  solutioning: {
+                    completed: false,
+                    startedAt: null,
+                    completedAt: null,
+                  },
+                  implementation: {
+                    completed: false,
+                    startedAt: null,
+                    completedAt: null,
+                  },
+                },
+              },
             },
-            implementation: {
-              completed: false,
-              startedAt: null,
-              completedAt: null,
-            },
-          },
+          };
         });
       },
 
@@ -354,7 +554,12 @@ const useBmadStore = create(
 
       // Execute wizard setup
       executeWizardSetup: async () => {
-        const { wizardData, installBmad } = get();
+        const {
+          wizardData,
+          installBmad,
+          setActiveProject,
+          loadProjectContext,
+        } = get();
 
         try {
           // Step 1: Install BMAD
@@ -386,8 +591,8 @@ const useBmadStore = create(
           }
 
           // Step 4: Set up project
-          get().setProject(wizardData.projectPath, wizardData.projectName);
-          await get().loadProjectContext();
+          setActiveProject(wizardData.projectPath);
+          await loadProjectContext(wizardData.projectPath);
 
           return { success: true };
         } catch (err) {
@@ -398,10 +603,8 @@ const useBmadStore = create(
     {
       name: "bmad-store",
       partialize: (state) => ({
-        currentProject: state.currentProject,
-        projectPath: state.projectPath,
-        currentPhase: state.currentPhase,
-        phaseProgress: state.phaseProgress,
+        activeProjectPath: state.activeProjectPath,
+        projectSessions: state.projectSessions,
       }),
     },
   ),

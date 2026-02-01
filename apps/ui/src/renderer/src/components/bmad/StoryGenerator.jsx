@@ -7,6 +7,7 @@
  * - Generate stories using API
  * - Preview and edit generated stories
  * - Add stories to Kanban board
+ * - Per-project story persistence
  */
 
 import React, { useState, useEffect } from "react";
@@ -203,10 +204,16 @@ export default function StoryGenerator({
   onAddStory,
   projectPath,
 }) {
-  const { projectContext, loadProjectContext } = useBmadStore();
+  const {
+    getActiveSession,
+    loadProjectContext,
+    setActiveProject,
+    activeProjectPath,
+    getGeneratedStories,
+    saveGeneratedStories,
+  } = useBmadStore();
   const { addCard, state, activeBoardId } = useKanbanStore();
 
-  const [stories, setStories] = useState([]);
   const [editingStory, setEditingStory] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -215,9 +222,27 @@ export default function StoryGenerator({
   // Check if we're in modal mode or embedded mode
   const isModal = typeof onClose === "function";
 
+  // Sync projectPath with bmadStore
   useEffect(() => {
-    loadProjectContext();
-  }, []);
+    if (projectPath && projectPath !== activeProjectPath) {
+      setActiveProject(projectPath);
+    }
+  }, [projectPath, activeProjectPath, setActiveProject]);
+
+  useEffect(() => {
+    loadProjectContext(projectPath || activeProjectPath);
+  }, [projectPath, activeProjectPath]);
+
+  // Get project context and stories from store
+  const projectContext = getActiveSession().projectContext;
+  const stories = getGeneratedStories(projectPath || activeProjectPath);
+
+  const setStories = (newStories) => {
+    saveGeneratedStories(
+      typeof newStories === "function" ? newStories(stories) : newStories,
+      projectPath || activeProjectPath,
+    );
+  };
 
   const hasPrd = !!projectContext.prd;
   const hasArchitecture = !!projectContext.architecture;

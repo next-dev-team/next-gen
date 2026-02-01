@@ -41,14 +41,14 @@ import {
 } from "lucide-react";
 import * as React from "react";
 import { toast } from "sonner";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
+import { Badge } from "../../components/ui/badge";
+import { Button } from "../../components/ui/button";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "../components/ui/card";
+} from "../../components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -56,32 +56,32 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "../components/ui/dialog";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { ScrollArea } from "../components/ui/scroll-area";
+} from "../../components/ui/dialog";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { ScrollArea } from "../../components/ui/scroll-area";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "../components/ui/select";
-import { Separator } from "../components/ui/separator";
-import { Switch } from "../components/ui/switch";
+} from "../../components/ui/select";
+import { Separator } from "../../components/ui/separator";
+import { Switch } from "../../components/ui/switch";
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from "../components/ui/tabs";
+} from "../../components/ui/tabs";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "../components/ui/tooltip";
-import { cn } from "../lib/utils";
+} from "../../components/ui/tooltip";
+import { cn } from "../../lib/utils";
 
 // Import new BMAD components
 import {
@@ -90,14 +90,14 @@ import {
   StoryGenerator,
   ContextManager,
   SetupWizard,
-} from "../components/bmad";
+} from "../../components/bmad";
 
 import useKanbanStore, {
   EPIC_STATUSES,
   PRIORITY_LEVELS,
   STORY_STATUSES,
-} from "../stores/kanbanStore";
-import useLlmStore from "../stores/llmStore";
+} from "../../stores/kanbanStore";
+import useLlmStore from "../../stores/llmStore";
 
 // Board templates based on BMAD-Method
 const BOARD_TEMPLATES = [
@@ -6572,7 +6572,6 @@ export default function ScrumBoardView() {
   const [cardDialogContext, setCardDialogContext] = React.useState(null);
   const [createBoardOpen, setCreateBoardOpen] = React.useState(false);
   const [settingsOpen, setSettingsOpen] = React.useState(false);
-  const [agentAssistOpen, setAgentAssistOpen] = React.useState(false);
   const [epicManagerOpen, setEpicManagerOpen] = React.useState(false);
   const [sprintManagerOpen, setSprintManagerOpen] = React.useState(false);
   const [dragState, setDragState] = React.useState(null);
@@ -7253,13 +7252,72 @@ export default function ScrumBoardView() {
         </div>
 
         {/* BMAD Tab Content */}
-        <TabsContent value="bmad" className="flex-1 min-h-0 mt-0">
-          <div className="h-full grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <TabsContent value="bmad" className="flex-1 min-h-0 mt-0 flex flex-col">
+          {/* Board Controls - same as SCRUM */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <Select value={activeBoardId || ""} onValueChange={setActiveBoard}>
+              <SelectTrigger className="w-[180px] bg-background/50 h-8 text-xs">
+                <SelectValue placeholder="Select Board" />
+              </SelectTrigger>
+              <SelectContent>
+                {state?.boards?.map((b) => (
+                  <SelectItem key={b.id} value={b.id}>
+                    <div className="flex items-center gap-2 text-xs">
+                      {b.type === "bmad" && (
+                        <Sparkles className="h-3 w-3 text-primary" />
+                      )}
+                      {b.name}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateBoardOpen(true)}
+              className="h-8 px-2 text-xs bg-background/50"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              New Board
+            </Button>
+
+            {activeBoard && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => {
+                  openConfirm({
+                    title: "Delete board?",
+                    description: "This action cannot be undone.",
+                    confirmText: "Delete",
+                    onConfirm: async () => {
+                      await deleteBoard(activeBoard.id);
+                    },
+                  });
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+
+            <div className="flex-1" />
+          </div>
+
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
             {/* Left Column - Phase Progress & Agent Chat */}
             <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
-              <PhaseProgress variant="compact" />
+              <PhaseProgress
+                variant="compact"
+                projectPath={agentSetup.projectRoot || ""}
+              />
               <div className="flex-1 min-h-0">
-                <AgentChat storyId={activeBoardId || "dashboard"} />
+                <AgentChat
+                  storyId={activeBoardId || "dashboard"}
+                  projectPath={agentSetup.projectRoot || ""}
+                />
               </div>
             </div>
 
@@ -7671,18 +7729,6 @@ export default function ScrumBoardView() {
       />
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
-
-      <AgentAssistDialog
-        open={agentAssistOpen}
-        onOpenChange={setAgentAssistOpen}
-        setup={agentSetup}
-        onChangeSetup={setAgentSetup}
-        activeBoard={activeBoard}
-        stats={stats}
-        onCreateStory={openAgentCreateStory}
-        onOpenStory={openAgentStory}
-        onStartStory={startAgentStory}
-      />
 
       <EpicManagerDialog
         open={epicManagerOpen}

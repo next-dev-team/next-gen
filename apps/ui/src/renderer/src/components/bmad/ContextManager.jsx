@@ -228,10 +228,11 @@ function ContextEditor({ type, initialContent, onSave, onClose }) {
 }
 
 // Main Context Manager Component
-export default function ContextManager() {
+export default function ContextManager({ projectPath = "" }) {
   const {
-    projectContext,
-    projectPath,
+    getActiveSession,
+    activeProjectPath,
+    setActiveProject,
     loadProjectContext,
     saveProjectContext,
   } = useBmadStore();
@@ -239,21 +240,32 @@ export default function ContextManager() {
   const [editingType, setEditingType] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Sync projectPath with bmadStore
+  useEffect(() => {
+    if (projectPath && projectPath !== activeProjectPath) {
+      setActiveProject(projectPath);
+    }
+  }, [projectPath, activeProjectPath, setActiveProject]);
+
+  // Get project context from active session
+  const projectContext = getActiveSession().projectContext;
+  const currentPath = projectPath || activeProjectPath;
+
   useEffect(() => {
     handleRefresh();
-  }, [projectPath]);
+  }, [currentPath]);
 
   const handleRefresh = async () => {
     setIsLoading(true);
     try {
-      await loadProjectContext();
+      await loadProjectContext(currentPath);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSave = async (typeId, content) => {
-    await saveProjectContext(typeId, content);
+    await saveProjectContext(typeId, content, currentPath);
   };
 
   const handleImport = async (typeId) => {
@@ -262,8 +274,8 @@ export default function ContextManager() {
         filters: [{ name: "Markdown", extensions: ["md", "markdown"] }],
       });
       if (result?.content) {
-        await saveProjectContext(typeId, result.content);
-        await loadProjectContext();
+        await saveProjectContext(typeId, result.content, currentPath);
+        await loadProjectContext(currentPath);
       }
     }
   };
@@ -315,7 +327,7 @@ export default function ContextManager() {
             Project Context
           </h2>
           <p className="text-sm text-muted-foreground">
-            {projectPath || "No project selected"}
+            {currentPath || "No project selected"}
           </p>
         </div>
         <button

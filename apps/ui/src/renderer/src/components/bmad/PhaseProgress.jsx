@@ -7,9 +7,10 @@
  * - Progress indicators
  * - Phase completion status
  * - Time tracking
+ * - Per-project phase tracking
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Check, ArrowRight, Clock, Play, Pause } from "lucide-react";
 import useBmadStore, { BMAD_PHASES } from "../../stores/bmadStore";
 
@@ -125,13 +126,28 @@ function ProgressBar({ phases, phaseProgress }) {
 }
 
 // Compact horizontal progress tracker
-export function PhaseProgressCompact() {
-  const { currentPhase, phaseProgress, setCurrentPhase } = useBmadStore();
+export function PhaseProgressCompact({ projectPath = "" }) {
+  const {
+    getActiveSession,
+    setCurrentPhase,
+    setActiveProject,
+    activeProjectPath,
+  } = useBmadStore();
+
+  // Sync projectPath with bmadStore
+  useEffect(() => {
+    if (projectPath && projectPath !== activeProjectPath) {
+      setActiveProject(projectPath);
+    }
+  }, [projectPath, activeProjectPath, setActiveProject]);
+
+  const session = getActiveSession();
+  const { currentPhase, phaseProgress } = session;
 
   return (
     <div className="flex items-center gap-1">
       {BMAD_PHASES.map((phase, index) => {
-        const progress = phaseProgress[phase.id];
+        const progress = phaseProgress[phase.id] || {};
         const isActive = currentPhase === phase.id;
         const isCompleted = progress?.completed;
 
@@ -142,7 +158,9 @@ export function PhaseProgressCompact() {
               progress={progress}
               isActive={isActive}
               isCompleted={isCompleted}
-              onClick={() => setCurrentPhase(phase.id)}
+              onClick={() =>
+                setCurrentPhase(phase.id, projectPath || activeProjectPath)
+              }
             />
             {index < BMAD_PHASES.length - 1 && (
               <PhaseConnector isCompleted={isCompleted} />
@@ -155,9 +173,24 @@ export function PhaseProgressCompact() {
 }
 
 // Vertical timeline progress tracker
-export function PhaseProgressVertical() {
-  const { currentPhase, phaseProgress, setCurrentPhase, completePhase } =
-    useBmadStore();
+export function PhaseProgressVertical({ projectPath = "" }) {
+  const {
+    getActiveSession,
+    setCurrentPhase,
+    completePhase,
+    setActiveProject,
+    activeProjectPath,
+  } = useBmadStore();
+
+  // Sync projectPath with bmadStore
+  useEffect(() => {
+    if (projectPath && projectPath !== activeProjectPath) {
+      setActiveProject(projectPath);
+    }
+  }, [projectPath, activeProjectPath, setActiveProject]);
+
+  const session = getActiveSession();
+  const { currentPhase, phaseProgress } = session;
 
   return (
     <div className="space-y-4">
@@ -165,7 +198,7 @@ export function PhaseProgressVertical() {
 
       <div className="space-y-3">
         {BMAD_PHASES.map((phase, index) => {
-          const progress = phaseProgress[phase.id];
+          const progress = phaseProgress[phase.id] || {};
           const isActive = currentPhase === phase.id;
           const isCompleted = progress?.completed;
           const status = isCompleted
@@ -196,7 +229,9 @@ export function PhaseProgressVertical() {
               {/* Phase content */}
               <div className="flex-1 pb-4">
                 <button
-                  onClick={() => setCurrentPhase(phase.id)}
+                  onClick={() =>
+                    setCurrentPhase(phase.id, projectPath || activeProjectPath)
+                  }
                   className={`w-full text-left p-4 rounded-lg border transition-all ${styles.container}`}
                 >
                   <div className="flex items-center justify-between">
@@ -210,7 +245,10 @@ export function PhaseProgressVertical() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          completePhase(phase.id);
+                          completePhase(
+                            phase.id,
+                            projectPath || activeProjectPath,
+                          );
                         }}
                         className="px-3 py-1.5 text-xs bg-green-500/20 text-green-400 border border-green-500/50 rounded-lg hover:bg-green-500/30 transition-colors"
                       >
@@ -243,8 +281,20 @@ export function PhaseProgressVertical() {
 }
 
 // Mini progress indicator
-export function PhaseProgressMini() {
-  const { phaseProgress } = useBmadStore();
+export function PhaseProgressMini({ projectPath = "" }) {
+  const { getActiveSession, setActiveProject, activeProjectPath } =
+    useBmadStore();
+
+  // Sync projectPath with bmadStore
+  useEffect(() => {
+    if (projectPath && projectPath !== activeProjectPath) {
+      setActiveProject(projectPath);
+    }
+  }, [projectPath, activeProjectPath, setActiveProject]);
+
+  const session = getActiveSession();
+  const { phaseProgress } = session;
+
   const completedCount = BMAD_PHASES.filter(
     (p) => phaseProgress[p.id]?.completed,
   ).length;
@@ -271,14 +321,17 @@ export function PhaseProgressMini() {
 }
 
 // Default export - full progress component
-export default function PhaseProgress({ variant = "compact" }) {
+export default function PhaseProgress({
+  variant = "compact",
+  projectPath = "",
+}) {
   switch (variant) {
     case "vertical":
-      return <PhaseProgressVertical />;
+      return <PhaseProgressVertical projectPath={projectPath} />;
     case "mini":
-      return <PhaseProgressMini />;
+      return <PhaseProgressMini projectPath={projectPath} />;
     case "compact":
     default:
-      return <PhaseProgressCompact />;
+      return <PhaseProgressCompact projectPath={projectPath} />;
   }
 }

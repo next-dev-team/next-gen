@@ -4,7 +4,7 @@
  * Standalone chat component for interacting with BMAD agents.
  * Features:
  * - Agent selection
- * - Conversation history per story
+ * - Conversation history per project and agent
  * - Context-aware responses
  * - Continue conversation
  */
@@ -239,15 +239,41 @@ function SuggestedPrompts({ agent, onSelect }) {
 }
 
 // Main Agent Chat Component
-export default function AgentChat({ storyId = "default", className = "" }) {
+export default function AgentChat({
+  storyId = "default",
+  projectPath = "",
+  className = "",
+}) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeAgent, setActiveAgent] = useState("pm");
   const chatRef = useRef(null);
 
-  const { projectContext } = useBmadStore();
+  const {
+    getActiveSession,
+    getChatHistory,
+    saveChatHistory,
+    clearChatHistory,
+    setActiveProject,
+    activeProjectPath,
+  } = useBmadStore();
+
+  // Sync projectPath with bmadStore
+  useEffect(() => {
+    if (projectPath && projectPath !== activeProjectPath) {
+      setActiveProject(projectPath);
+    }
+  }, [projectPath, activeProjectPath, setActiveProject]);
+
+  // Get messages from store for current project and agent
+  const messages = getChatHistory(
+    activeAgent,
+    projectPath || activeProjectPath,
+  );
+
+  // Get project context
+  const projectContext = getActiveSession().projectContext;
 
   const agents = AGENTS;
   const currentAgent = agents[activeAgent];
@@ -292,7 +318,8 @@ export default function AgentChat({ storyId = "default", className = "" }) {
       timestamp: new Date().toISOString(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    saveChatHistory(activeAgent, newMessages, projectPath || activeProjectPath);
     setInput("");
     setIsLoading(true);
     setError(null);
@@ -301,8 +328,7 @@ export default function AgentChat({ storyId = "default", className = "" }) {
       // Build messages array with system prompt
       const apiMessages = [
         { role: "system", content: buildSystemPrompt() },
-        ...messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user", content: input },
+        ...newMessages.map((m) => ({ role: m.role, content: m.content })),
       ];
 
       const response = await fetch(API_URL, {
@@ -333,7 +359,12 @@ export default function AgentChat({ storyId = "default", className = "" }) {
         timestamp: new Date().toISOString(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      const updatedMessages = [...newMessages, assistantMessage];
+      saveChatHistory(
+        activeAgent,
+        updatedMessages,
+        projectPath || activeProjectPath,
+      );
     } catch (err) {
       console.error("Failed to send message:", err);
       setError(err.message || "Failed to send message");
@@ -351,13 +382,19 @@ export default function AgentChat({ storyId = "default", className = "" }) {
 
   const handleClear = () => {
     if (confirm(`Clear conversation with ${currentAgent?.name}?`)) {
-      setMessages([]);
+      clearChatHistory(activeAgent, projectPath || activeProjectPath);
       setError(null);
     }
   };
 
   const handleSuggestedPrompt = (prompt) => {
     setInput(prompt);
+  };
+
+  // Handle agent change - messages are automatically loaded from store
+  const handleAgentChange = (agentId) => {
+    setActiveAgent(agentId);
+    setError(null);
   };
 
   return (
@@ -369,8 +406,13 @@ export default function AgentChat({ storyId = "default", className = "" }) {
         <AgentSelector
           agents={agents}
           activeAgent={activeAgent}
-          onSelect={setActiveAgent}
+          onSelect={handleAgentChange}
         />
+        {projectPath && (
+          <div className="mt-2 text-xs text-muted-foreground truncate">
+            📁 {projectPath.split(/[/\\]/).pop() || projectPath}
+          </div>
+        )}
       </div>
 
       {/* Messages */}
