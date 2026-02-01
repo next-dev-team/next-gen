@@ -3287,8 +3287,8 @@ const SettingsDialog = ({ open, onOpenChange }) => {
   const [tempApiKey, setTempApiKey] = React.useState("");
 
   // Get available providers
-  const providers = getAvailableProviders();
-  const currentProvider = providers[activeProvider];
+  const providers = getAvailableProviders() || {};
+  const currentProvider = providers[activeProvider] || null;
 
   React.useEffect(() => {
     if (open) {

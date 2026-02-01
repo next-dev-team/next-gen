@@ -40,8 +40,20 @@ const WallpaperPicker = lazy(() => import("../components/WallpaperPicker"));
 const PluginManager = lazy(() => import("../components/PluginManager"));
 const MCPInstaller = lazy(() => import("../components/MCPInstaller"));
 
+const MENU_STORAGE_KEY = "menu-visibility-settings";
+
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function loadMenuVisibilitySettings() {
+  try {
+    const saved = localStorage.getItem(MENU_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch {}
+  return null;
 }
 
 function KeepAliveOutlet({ outletContext, keepAliveKeys }) {
@@ -820,10 +832,35 @@ export default function MainLayout({
     return () => window.removeEventListener("launchpad:run", handler);
   }, [runLaunchpadAction]);
 
-  const tabOptions = React.useMemo(
+  // Menu visibility settings state
+  const [menuVisibilitySettings, setMenuVisibilitySettings] = React.useState(
+    () => loadMenuVisibilitySettings(),
+  );
+
+  // Listen for menu settings changes
+  React.useEffect(() => {
+    const handleSettingsChange = (e) => {
+      setMenuVisibilitySettings(e?.detail || loadMenuVisibilitySettings());
+    };
+
+    const handleStorageChange = (e) => {
+      if (e.key === MENU_STORAGE_KEY) {
+        setMenuVisibilitySettings(loadMenuVisibilitySettings());
+      }
+    };
+
+    window.addEventListener("menu-settings-changed", handleSettingsChange);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("menu-settings-changed", handleSettingsChange);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
+
+  const allTabOptions = React.useMemo(
     () => [
       { key: "generator", label: "Generator", icon: Rocket },
-
       { key: "projects", label: "Projects", icon: AppWindow },
       { key: "resources", label: "Resources", icon: Folder },
       { key: "launchpad", label: "Launchpad", icon: Search },
@@ -833,6 +870,22 @@ export default function MainLayout({
     ],
     [],
   );
+
+  // Filter tabs based on visibility settings
+  const tabOptions = React.useMemo(() => {
+    if (!menuVisibilitySettings?.menuItems) {
+      return allTabOptions;
+    }
+
+    return allTabOptions.filter((tab) => {
+      const settingsItem = menuVisibilitySettings.menuItems.find(
+        (item) => item.id === `nav:${tab.key}`,
+      );
+      // If no setting found, show the tab by default
+      // If setting found, respect the visible property
+      return settingsItem ? settingsItem.visible !== false : true;
+    });
+  }, [allTabOptions, menuVisibilitySettings]);
 
   const segmentedValue = tabOptions.some((t) => t.key === activeTab)
     ? activeTab
@@ -1146,27 +1199,19 @@ export default function MainLayout({
               </TooltipContent>
             </Tooltip>
 
-            <DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground"
-                    >
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>Settings</TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => navigate("/settings")}>
-                  Settings
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
+                  onClick={() => navigate("/settings")}
+                >
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Settings</TooltipContent>
+            </Tooltip>
           </div>
         </div>
 

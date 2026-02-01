@@ -63,7 +63,7 @@ function ContextFileCard({ type, content, path, onEdit, onRefresh }) {
       className={`rounded-lg border transition-all ${
         hasContent
           ? "bg-green-500/10 border-green-500/30"
-          : "bg-slate-800/50 border-slate-700"
+          : "bg-card/50 border-border"
       }`}
     >
       <div
@@ -72,7 +72,7 @@ function ContextFileCard({ type, content, path, onEdit, onRefresh }) {
       >
         <div
           className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${
-            hasContent ? "bg-green-500/20" : "bg-slate-700"
+            hasContent ? "bg-green-500/20" : "bg-muted"
           }`}
         >
           {type.icon}
@@ -81,15 +81,15 @@ function ContextFileCard({ type, content, path, onEdit, onRefresh }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3
-              className={`font-medium ${hasContent ? "text-white" : "text-slate-400"}`}
+              className={`font-medium ${hasContent ? "text-foreground" : "text-muted-foreground"}`}
             >
               {type.name}
             </h3>
-            {hasContent && <Check size={14} className="text-green-400" />}
+            {hasContent && <Check size={14} className="text-green-500" />}
           </div>
-          <p className="text-sm text-slate-500">{type.description}</p>
+          <p className="text-sm text-muted-foreground">{type.description}</p>
           {hasContent && (
-            <p className="text-xs text-slate-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {wordCount} words • {type.filename}
             </p>
           )}
@@ -103,7 +103,7 @@ function ContextFileCard({ type, content, path, onEdit, onRefresh }) {
                   e.stopPropagation();
                   onEdit();
                 }}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
                 title="Edit"
               >
                 <Edit3 size={16} />
@@ -113,7 +113,7 @@ function ContextFileCard({ type, content, path, onEdit, onRefresh }) {
                   e.stopPropagation();
                   onRefresh();
                 }}
-                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+                className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded transition-colors"
                 title="Refresh"
               >
                 <RefreshCw size={16} />
@@ -125,7 +125,7 @@ function ContextFileCard({ type, content, path, onEdit, onRefresh }) {
                 e.stopPropagation();
                 onEdit();
               }}
-              className="px-3 py-1.5 text-sm bg-indigo-500/20 text-indigo-400 rounded hover:bg-indigo-500/30 transition-colors"
+              className="px-3 py-1.5 text-sm bg-primary/20 text-primary rounded hover:bg-primary/30 transition-colors"
             >
               Create
             </button>
@@ -135,11 +135,11 @@ function ContextFileCard({ type, content, path, onEdit, onRefresh }) {
 
       {isExpanded && hasContent && (
         <div className="px-4 pb-4">
-          <div className="bg-slate-900/50 rounded-lg p-4 max-h-64 overflow-y-auto">
-            <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">
+          <div className="bg-muted/50 rounded-lg p-4 max-h-64 overflow-y-auto">
+            <pre className="text-sm text-foreground whitespace-pre-wrap font-mono">
               {content.slice(0, 2000)}
               {content.length > 2000 && (
-                <span className="text-slate-500">... (truncated)</span>
+                <span className="text-muted-foreground">... (truncated)</span>
               )}
             </pre>
           </div>
@@ -168,19 +168,19 @@ function ContextEditor({ type, initialContent, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-slate-900 rounded-2xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-background rounded-2xl border border-border w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+        <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <span className="text-2xl">{type.icon}</span>
             <div>
-              <h2 className="font-semibold text-white">{type.name}</h2>
-              <p className="text-xs text-slate-400">{type.filename}</p>
+              <h2 className="font-semibold text-foreground">{type.name}</h2>
+              <p className="text-xs text-muted-foreground">{type.filename}</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white transition-colors"
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
           >
             <X size={20} />
           </button>
@@ -191,27 +191,27 @@ function ContextEditor({ type, initialContent, onSave, onClose }) {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            className="w-full h-full bg-slate-950 text-slate-300 font-mono text-sm p-4 resize-none focus:outline-none"
+            className="w-full h-full bg-muted/30 text-foreground font-mono text-sm p-4 resize-none focus:outline-none"
             placeholder={`# ${type.name}\n\nStart writing your ${type.name.toLowerCase()} here...`}
           />
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-slate-700 flex items-center justify-between">
-          <p className="text-sm text-slate-500">
+        <div className="p-4 border-t border-border flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
             {content.split(/\s+/).filter(Boolean).length} words
           </p>
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-slate-700 text-white rounded-lg flex items-center gap-2 transition-colors"
+              className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-muted text-white rounded-lg flex items-center gap-2 transition-colors"
             >
               {isSaving ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -310,18 +310,18 @@ export default function ContextManager() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-            <FileText size={20} className="text-indigo-400" />
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+            <FileText size={20} className="text-primary" />
             Project Context
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted-foreground">
             {projectPath || "No project selected"}
           </p>
         </div>
         <button
           onClick={handleRefresh}
           disabled={isLoading}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <RefreshCw size={14} className={isLoading ? "animate-spin" : ""} />
           Refresh
@@ -343,21 +343,21 @@ export default function ContextManager() {
       </div>
 
       {/* Quick Actions */}
-      <div className="pt-4 border-t border-slate-700">
-        <h3 className="text-sm font-medium text-slate-400 mb-3">
+      <div className="pt-4 border-t border-border">
+        <h3 className="text-sm font-medium text-muted-foreground mb-3">
           Quick Actions
         </h3>
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => handleImport("prd")}
-            className="px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:border-slate-600 flex items-center gap-2 transition-colors"
+            className="px-3 py-2 text-sm bg-muted border border-border rounded-lg text-foreground hover:bg-accent hover:border-border/80 flex items-center gap-2 transition-colors"
           >
             <Upload size={14} />
             Import PRD
           </button>
           <button
             onClick={() => handleImport("architecture")}
-            className="px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:border-slate-600 flex items-center gap-2 transition-colors"
+            className="px-3 py-2 text-sm bg-muted border border-border rounded-lg text-foreground hover:bg-accent hover:border-border/80 flex items-center gap-2 transition-colors"
           >
             <Upload size={14} />
             Import Architecture
@@ -365,7 +365,7 @@ export default function ContextManager() {
           {projectContext.prd && (
             <button
               onClick={() => handleExport("prd", projectContext.prd)}
-              className="px-3 py-2 text-sm bg-slate-800 border border-slate-700 rounded-lg text-slate-300 hover:text-white hover:border-slate-600 flex items-center gap-2 transition-colors"
+              className="px-3 py-2 text-sm bg-muted border border-border rounded-lg text-foreground hover:bg-accent hover:border-border/80 flex items-center gap-2 transition-colors"
             >
               <Download size={14} />
               Export PRD

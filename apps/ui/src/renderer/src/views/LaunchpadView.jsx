@@ -23,6 +23,17 @@ import { cn } from "../lib/utils";
 
 const DOCK_RECENT_ACTIONS_KEY = "dockRecentActions";
 const LAUNCHPAD_USAGE_KEY = "launchpadActionUsage";
+const MENU_STORAGE_KEY = "menu-visibility-settings";
+
+function loadMenuVisibilitySettings() {
+  try {
+    const saved = localStorage.getItem(MENU_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch {}
+  return null;
+}
 
 function normalizeText(value) {
   return String(value || "")
@@ -87,6 +98,30 @@ export default function LaunchpadView() {
   const [page, setPage] = React.useState(0);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [usage, setUsage] = React.useState(() => loadUsage());
+  const [menuVisibilitySettings, setMenuVisibilitySettings] = React.useState(
+    () => loadMenuVisibilitySettings(),
+  );
+
+  // Listen for menu visibility settings changes
+  React.useEffect(() => {
+    const handleSettingsChange = (e) => {
+      setMenuVisibilitySettings(e?.detail || loadMenuVisibilitySettings());
+    };
+
+    const handleStorageChange = (e) => {
+      if (e.key === MENU_STORAGE_KEY) {
+        setMenuVisibilitySettings(loadMenuVisibilitySettings());
+      }
+    };
+
+    window.addEventListener("menu-settings-changed", handleSettingsChange);
+    window.addEventListener("storage", handleStorageChange);
+
+    return () => {
+      window.removeEventListener("menu-settings-changed", handleSettingsChange);
+      window.removeEventListener("storage", handleStorageChange);
+    };
+  }, []);
 
   React.useEffect(() => {
     const onKeyDown = (e) => {
@@ -328,8 +363,42 @@ export default function LaunchpadView() {
       return hay.includes(q);
     };
 
-    return actions.filter((a) => matchesCategory(a) && matchesQuery(a));
-  }, [actions, activeCategory, query]);
+    // Check if action is visible based on menu visibility settings
+    const isVisible = (a) => {
+      if (!menuVisibilitySettings) return true;
+
+      // Check in menuItems (nav: prefixed items)
+      if (menuVisibilitySettings.menuItems) {
+        const menuItem = menuVisibilitySettings.menuItems.find(
+          (item) => item.id === a.key,
+        );
+        if (menuItem) return menuItem.visible !== false;
+      }
+
+      // Check in captureItems (capture: prefixed items)
+      if (menuVisibilitySettings.captureItems) {
+        const captureItem = menuVisibilitySettings.captureItems.find(
+          (item) => item.id === a.key,
+        );
+        if (captureItem) return captureItem.visible !== false;
+      }
+
+      // Check in shortcutItems (other items like openExternal:, dock:)
+      if (menuVisibilitySettings.shortcutItems) {
+        const shortcutItem = menuVisibilitySettings.shortcutItems.find(
+          (item) => item.id === a.key,
+        );
+        if (shortcutItem) return shortcutItem.visible !== false;
+      }
+
+      // Default: show if no setting found
+      return true;
+    };
+
+    return actions.filter(
+      (a) => isVisible(a) && matchesCategory(a) && matchesQuery(a),
+    );
+  }, [actions, activeCategory, menuVisibilitySettings, query]);
 
   const sortedActions = React.useMemo(() => {
     const q = normalizeText(query);

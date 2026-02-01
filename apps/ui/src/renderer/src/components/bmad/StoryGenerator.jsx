@@ -4,7 +4,7 @@
  * AI-powered story generation from PRD and architecture context.
  * Features:
  * - Load project context (PRD, Architecture)
- * - Generate stories using LLM
+ * - Generate stories using API
  * - Preview and edit generated stories
  * - Add stories to Kanban board
  */
@@ -12,28 +12,29 @@
 import React, { useState, useEffect } from "react";
 import {
   Sparkles,
-  FileText,
   Loader2,
   Plus,
   Trash2,
   Edit3,
   Check,
   X,
-  ChevronDown,
   AlertCircle,
   Zap,
   RefreshCw,
 } from "lucide-react";
 import useBmadStore from "../../stores/bmadStore";
-import useLlmStore from "../../stores/llmStore";
 import useKanbanStore from "../../stores/kanbanStore";
 
-// Priority colors
+// API endpoint
+const API_URL = "http://127.0.0.1:3333/api/chat";
+
+// Priority colors - using theme-aware colors
 const PRIORITY_COLORS = {
-  critical: "bg-red-500/20 text-red-400 border-red-500/50",
-  high: "bg-orange-500/20 text-orange-400 border-orange-500/50",
-  medium: "bg-yellow-500/20 text-yellow-400 border-yellow-500/50",
-  low: "bg-blue-500/20 text-blue-400 border-blue-500/50",
+  critical: "bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/50",
+  high: "bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/50",
+  medium:
+    "bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-yellow-500/50",
+  low: "bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/50",
 };
 
 // Story Card Preview
@@ -53,7 +54,7 @@ function StoryPreview({
 
   if (isEditing) {
     return (
-      <div className="bg-slate-800 rounded-lg border border-indigo-500 p-4">
+      <div className="bg-card rounded-lg border border-primary p-4">
         <div className="space-y-3">
           <input
             type="text"
@@ -61,7 +62,7 @@ function StoryPreview({
             onChange={(e) =>
               setEditData({ ...editData, title: e.target.value })
             }
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
+            className="w-full bg-muted border border-input rounded px-3 py-2 text-foreground text-sm focus:outline-none focus:border-primary"
             placeholder="Story title"
           />
           <textarea
@@ -70,7 +71,7 @@ function StoryPreview({
               setEditData({ ...editData, description: e.target.value })
             }
             rows={3}
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 resize-none"
+            className="w-full bg-muted border border-input rounded px-3 py-2 text-foreground text-sm focus:outline-none focus:border-primary resize-none"
             placeholder="As a [user], I want [feature] so that [benefit]"
           />
           <div className="grid grid-cols-3 gap-2">
@@ -79,7 +80,7 @@ function StoryPreview({
               onChange={(e) =>
                 setEditData({ ...editData, priority: e.target.value })
               }
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
+              className="bg-muted border border-input rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-primary"
             >
               <option value="critical">Critical</option>
               <option value="high">High</option>
@@ -97,7 +98,7 @@ function StoryPreview({
               }
               min="0"
               max="21"
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
+              className="bg-muted border border-input rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-primary"
               placeholder="Points"
             />
             <input
@@ -106,20 +107,20 @@ function StoryPreview({
               onChange={(e) =>
                 setEditData({ ...editData, epic: e.target.value })
               }
-              className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-indigo-500"
+              className="bg-muted border border-input rounded px-2 py-1 text-sm text-foreground focus:outline-none focus:border-primary"
               placeholder="Epic"
             />
           </div>
           <div className="flex justify-end gap-2">
             <button
               onClick={onCancel}
-              className="px-3 py-1 text-sm text-slate-400 hover:text-white transition-colors"
+              className="px-3 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={() => onSave(editData)}
-              className="px-3 py-1 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600 transition-colors"
+              className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
             >
               Save
             </button>
@@ -130,24 +131,26 @@ function StoryPreview({
   }
 
   return (
-    <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-4 hover:border-slate-600 transition-colors">
+    <div className="bg-card/50 rounded-lg border border-border p-4 hover:border-border/80 transition-colors">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-white truncate">{story.title}</h4>
-          <p className="text-sm text-slate-400 mt-1 line-clamp-2">
+          <h4 className="font-medium text-foreground truncate">
+            {story.title}
+          </h4>
+          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
             {story.description}
           </p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
             onClick={() => onEdit(story)}
-            className="p-1 text-slate-400 hover:text-white transition-colors"
+            className="p-1 text-muted-foreground hover:text-foreground transition-colors"
           >
             <Edit3 size={14} />
           </button>
           <button
             onClick={() => onRemove(story)}
-            className="p-1 text-slate-400 hover:text-red-400 transition-colors"
+            className="p-1 text-muted-foreground hover:text-destructive transition-colors"
           >
             <Trash2 size={14} />
           </button>
@@ -160,27 +163,29 @@ function StoryPreview({
         >
           {story.priority}
         </span>
-        <span className="px-2 py-0.5 text-xs bg-slate-700 rounded text-slate-400">
+        <span className="px-2 py-0.5 text-xs bg-muted rounded text-muted-foreground">
           {story.storyPoints} pts
         </span>
         {story.epic && (
-          <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-400 rounded">
+          <span className="px-2 py-0.5 text-xs bg-purple-500/20 text-purple-600 dark:text-purple-400 rounded">
             {story.epic}
           </span>
         )}
       </div>
 
       {story.acceptanceCriteria?.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-700">
-          <p className="text-xs text-slate-500 mb-1">Acceptance Criteria:</p>
-          <ul className="text-xs text-slate-400 space-y-0.5">
+        <div className="mt-3 pt-3 border-t border-border">
+          <p className="text-xs text-muted-foreground mb-1">
+            Acceptance Criteria:
+          </p>
+          <ul className="text-xs text-muted-foreground space-y-0.5">
             {story.acceptanceCriteria.slice(0, 3).map((ac, i) => (
               <li key={i} className="truncate">
                 • {ac}
               </li>
             ))}
             {story.acceptanceCriteria.length > 3 && (
-              <li className="text-slate-500">
+              <li className="text-muted-foreground/70">
                 +{story.acceptanceCriteria.length - 3} more...
               </li>
             )}
@@ -199,16 +204,6 @@ export default function StoryGenerator({
   projectPath,
 }) {
   const { projectContext, loadProjectContext } = useBmadStore();
-  const {
-    generateStories,
-    isLoading,
-    error,
-    activeProvider,
-    activeModel,
-    getAvailableProviders,
-    setActiveProvider,
-    setActiveModel,
-  } = useLlmStore();
   const { addCard, state, activeBoardId } = useKanbanStore();
 
   const [stories, setStories] = useState([]);
@@ -216,14 +211,9 @@ export default function StoryGenerator({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [generationError, setGenerationError] = useState(null);
-  const [showProviderDropdown, setShowProviderDropdown] = useState(false);
 
   // Check if we're in modal mode or embedded mode
   const isModal = typeof onClose === "function";
-
-  // Get available providers
-  const providers = getAvailableProviders();
-  const currentProvider = providers[activeProvider];
 
   useEffect(() => {
     loadProjectContext();
@@ -232,6 +222,7 @@ export default function StoryGenerator({
   const hasPrd = !!projectContext.prd;
   const hasArchitecture = !!projectContext.architecture;
 
+  // Generate stories using the API
   const handleGenerate = async () => {
     if (!hasPrd) {
       setGenerationError("Please create or import a PRD first");
@@ -242,12 +233,60 @@ export default function StoryGenerator({
     setGenerationError(null);
 
     try {
-      const generatedStories = await generateStories(
-        projectContext.prd,
-        projectContext.architecture,
-      );
+      const prompt = `You are a Scrum Master AI assistant. Based on the following PRD and architecture documents, generate user stories for development.
+
+PRD Document:
+${projectContext.prd}
+
+${projectContext.architecture ? `Architecture Document:\n${projectContext.architecture}` : ""}
+
+Generate 5-10 user stories in JSON format. Each story should have:
+- title: A concise title
+- description: User story format "As a [user], I want [feature] so that [benefit]"
+- priority: One of "critical", "high", "medium", or "low"
+- storyPoints: Estimated points (1, 2, 3, 5, 8, 13)
+- epic: The feature category/epic name
+- acceptanceCriteria: Array of acceptance criteria strings
+
+Respond ONLY with a valid JSON array of stories, no other text.`;
+
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: prompt }],
+          provider: "codex",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const responseContent =
+        data.text || data.content || data.message || data.response || "";
+
+      // Try to parse JSON from the response
+      let generatedStories = [];
+      try {
+        // Try to extract JSON from the response
+        const jsonMatch = responseContent.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          generatedStories = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error("No valid JSON array found in response");
+        }
+      } catch (parseErr) {
+        console.error("Failed to parse stories:", parseErr);
+        throw new Error("Failed to parse generated stories. Please try again.");
+      }
+
       setStories(generatedStories);
     } catch (err) {
+      console.error("Generation error:", err);
       setGenerationError(err.message);
     } finally {
       setIsGenerating(false);
@@ -315,28 +354,28 @@ export default function StoryGenerator({
     <>
       {/* Context Status */}
       <div
-        className={`${isModal ? "px-6 py-3 bg-slate-800/50 border-b border-slate-700" : "p-3 bg-slate-800/30 rounded-lg border border-slate-700 mb-4"} flex items-center gap-4`}
+        className={`${isModal ? "px-6 py-3 bg-muted/50 border-b border-border" : "p-3 bg-muted/30 rounded-lg border border-border mb-4"} flex items-center gap-4`}
       >
         <div
-          className={`flex items-center gap-2 text-sm ${hasPrd ? "text-green-400" : "text-slate-400"}`}
+          className={`flex items-center gap-2 text-sm ${hasPrd ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
         >
           <div
-            className={`w-2 h-2 rounded-full ${hasPrd ? "bg-green-400" : "bg-slate-500"}`}
+            className={`w-2 h-2 rounded-full ${hasPrd ? "bg-green-500" : "bg-muted-foreground/50"}`}
           />
           PRD {hasPrd ? "Loaded" : "Not found"}
         </div>
         <div
-          className={`flex items-center gap-2 text-sm ${hasArchitecture ? "text-green-400" : "text-slate-400"}`}
+          className={`flex items-center gap-2 text-sm ${hasArchitecture ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
         >
           <div
-            className={`w-2 h-2 rounded-full ${hasArchitecture ? "bg-green-400" : "bg-slate-500"}`}
+            className={`w-2 h-2 rounded-full ${hasArchitecture ? "bg-green-500" : "bg-muted-foreground/50"}`}
           />
           Arch {hasArchitecture ? "Loaded" : "Not found"}
         </div>
         <div className="flex-1" />
         <button
           onClick={loadProjectContext}
-          className="text-sm text-slate-400 hover:text-white flex items-center gap-1 transition-colors"
+          className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
         >
           <RefreshCw size={14} />
           Refresh
@@ -363,23 +402,23 @@ export default function StoryGenerator({
           <div className={`text-center ${isModal ? "py-12" : "py-8"}`}>
             {isGenerating ? (
               <>
-                <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin text-indigo-400" />
-                <h3 className="text-base font-medium text-white mb-2">
+                <Loader2 className="w-10 h-10 mx-auto mb-4 animate-spin text-primary" />
+                <h3 className="text-base font-medium text-foreground mb-2">
                   Generating Stories...
                 </h3>
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   Analyzing PRD and creating user stories
                 </p>
               </>
             ) : (
               <>
-                <div className="w-12 h-12 mx-auto mb-3 bg-slate-800 rounded-full flex items-center justify-center">
-                  <Zap className="w-6 h-6 text-slate-600" />
+                <div className="w-12 h-12 mx-auto mb-3 bg-muted rounded-full flex items-center justify-center">
+                  <Zap className="w-6 h-6 text-muted-foreground" />
                 </div>
-                <h3 className="text-base font-medium text-white mb-2">
+                <h3 className="text-base font-medium text-foreground mb-2">
                   Generate Stories from PRD
                 </h3>
-                <p className="text-sm text-slate-400 mb-4">
+                <p className="text-sm text-muted-foreground mb-4">
                   {hasPrd
                     ? "Click generate to create user stories"
                     : "Import or create a PRD first"}
@@ -387,7 +426,7 @@ export default function StoryGenerator({
                 <button
                   onClick={handleGenerate}
                   disabled={!hasPrd || isGenerating}
-                  className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-700 disabled:text-slate-500 text-white text-sm rounded-lg font-medium transition-all"
+                  className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground text-sm rounded-lg font-medium transition-all"
                 >
                   <span className="flex items-center gap-2">
                     <Sparkles size={16} />
@@ -400,13 +439,13 @@ export default function StoryGenerator({
         ) : (
           <>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-white font-medium text-sm">
+              <h3 className="text-foreground font-medium text-sm">
                 Generated Stories ({stories.length})
               </h3>
               <button
                 onClick={handleGenerate}
                 disabled={isGenerating}
-                className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors"
+                className="text-xs text-primary hover:text-primary/80 flex items-center gap-1 transition-colors"
               >
                 <RefreshCw
                   size={12}
@@ -438,9 +477,9 @@ export default function StoryGenerator({
       {/* Footer */}
       {stories.length > 0 && (
         <div
-          className={`${isModal ? "p-6 border-t border-slate-700" : "pt-3 border-t border-slate-700 mt-3"} flex items-center justify-between`}
+          className={`${isModal ? "p-6 border-t border-border" : "pt-3 border-t border-border mt-3"} flex items-center justify-between`}
         >
-          <p className="text-xs text-slate-400">
+          <p className="text-xs text-muted-foreground">
             {stories.reduce((sum, s) => sum + (s.storyPoints || 0), 0)} total
             pts
           </p>
@@ -448,7 +487,7 @@ export default function StoryGenerator({
             {isModal && (
               <button
                 onClick={onClose}
-                className="px-3 py-1.5 text-sm text-slate-400 hover:text-white transition-colors"
+                className="px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 Cancel
               </button>
@@ -456,7 +495,7 @@ export default function StoryGenerator({
             <button
               onClick={handleAddToBoard}
               disabled={isAdding}
-              className="px-4 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-slate-700 text-white text-sm rounded-lg font-medium flex items-center gap-2 transition-colors"
+              className="px-4 py-1.5 bg-green-500 hover:bg-green-600 disabled:bg-muted text-white text-sm rounded-lg font-medium flex items-center gap-2 transition-colors"
             >
               {isAdding ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -475,26 +514,26 @@ export default function StoryGenerator({
   if (isModal) {
     return (
       <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="bg-slate-900 rounded-2xl border border-slate-700 w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="bg-background rounded-2xl border border-border w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="p-6 border-b border-slate-700">
+          <div className="p-6 border-b border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-indigo-500 flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-white" />
+                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-primary-foreground" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-white">
+                  <h2 className="text-lg font-semibold text-foreground">
                     AI Story Generator
                   </h2>
-                  <p className="text-sm text-slate-400">
-                    Generate user stories from your PRD using {activeProvider}
+                  <p className="text-sm text-muted-foreground">
+                    Generate user stories from your PRD using AI
                   </p>
                 </div>
               </div>
               <button
                 onClick={onClose}
-                className="p-2 text-slate-400 hover:text-white transition-colors"
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <X size={20} />
               </button>
@@ -509,73 +548,13 @@ export default function StoryGenerator({
 
   // Embedded mode - just the content, no modal wrapper
   return (
-    <div className="h-full flex flex-col bg-slate-900/50 rounded-lg border border-slate-700 p-3">
-      {/* Header for embedded mode with provider selector */}
-      <div className="flex items-center gap-2 mb-3 pb-3 border-b border-slate-700">
-        <Sparkles className="w-4 h-4 text-indigo-400" />
-        <span className="text-sm font-medium text-white">Story Generator</span>
-
-        {/* Provider Dropdown */}
-        <div className="relative ml-auto">
-          <button
-            type="button"
-            onClick={() => setShowProviderDropdown(!showProviderDropdown)}
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded text-slate-300 transition-colors"
-          >
-            {currentProvider?.name || activeProvider}
-            <ChevronDown
-              size={12}
-              className={`transition-transform ${showProviderDropdown ? "rotate-180" : ""}`}
-            />
-          </button>
-
-          {showProviderDropdown && (
-            <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-600 rounded-lg shadow-xl z-50 overflow-hidden">
-              <div className="max-h-64 overflow-y-auto">
-                {Object.entries(providers).map(([id, provider]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => {
-                      setActiveProvider(id);
-                      setShowProviderDropdown(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs hover:bg-slate-700 transition-colors ${
-                      activeProvider === id
-                        ? "bg-indigo-500/20 text-indigo-400"
-                        : "text-slate-300"
-                    }`}
-                  >
-                    <div className="font-medium">{provider.name}</div>
-                    <div className="text-slate-500 text-[10px]">
-                      {provider.defaultModel}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Model selector */}
-              {currentProvider?.models && (
-                <div className="border-t border-slate-600 p-2">
-                  <div className="text-[10px] text-slate-500 mb-1 px-1">
-                    Model
-                  </div>
-                  <select
-                    value={activeModel}
-                    onChange={(e) => setActiveModel(e.target.value)}
-                    className="w-full px-2 py-1 text-xs bg-slate-700 border border-slate-600 rounded text-slate-300"
-                  >
-                    {currentProvider.models.map((model) => (
-                      <option key={model} value={model}>
-                        {model}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+    <div className="h-full flex flex-col bg-card/50 rounded-lg border border-border p-3">
+      {/* Header for embedded mode */}
+      <div className="flex items-center gap-2 mb-3 pb-3 border-b border-border">
+        <Sparkles className="w-4 h-4 text-primary" />
+        <span className="text-sm font-medium text-foreground">
+          Story Generator
+        </span>
       </div>
 
       {content}

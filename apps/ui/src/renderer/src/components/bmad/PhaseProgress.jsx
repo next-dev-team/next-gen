@@ -13,22 +13,23 @@ import React from "react";
 import { Check, ArrowRight, Clock, Play, Pause } from "lucide-react";
 import useBmadStore, { BMAD_PHASES } from "../../stores/bmadStore";
 
-// Phase status styles
+// Phase status styles - using semantic colors that work in both light and dark modes
 const PHASE_STYLES = {
   completed: {
-    container: "bg-green-500/20 border-green-500 text-green-400",
-    icon: "bg-green-500/30 text-green-400",
+    container:
+      "bg-green-500/20 border-green-500/50 text-green-600 dark:text-green-400",
+    icon: "bg-green-500/20 text-green-600 dark:text-green-400",
     connector: "bg-green-500",
   },
   active: {
-    container: "bg-indigo-500/20 border-indigo-500 text-indigo-400",
-    icon: "bg-indigo-500/30 text-indigo-400",
-    connector: "bg-slate-600",
+    container: "bg-primary/20 border-primary text-primary",
+    icon: "bg-primary/20 text-primary",
+    connector: "bg-border",
   },
   pending: {
-    container: "bg-slate-700/50 border-slate-600 text-slate-400",
-    icon: "bg-slate-700 text-slate-500",
-    connector: "bg-slate-700",
+    container: "bg-muted border-border text-muted-foreground",
+    icon: "bg-muted text-muted-foreground",
+    connector: "bg-border",
   },
 };
 
@@ -87,12 +88,12 @@ function PhaseConnector({ isCompleted }) {
     <div className="flex items-center px-2">
       <div
         className={`h-0.5 w-8 transition-colors ${
-          isCompleted ? "bg-green-500" : "bg-slate-700"
+          isCompleted ? "bg-green-500" : "bg-border"
         }`}
       />
       <ArrowRight
         size={16}
-        className={isCompleted ? "text-green-500" : "text-slate-600"}
+        className={isCompleted ? "text-green-500" : "text-muted-foreground"}
       />
     </div>
   );
@@ -108,14 +109,14 @@ function ProgressBar({ phases, phaseProgress }) {
   return (
     <div className="mb-6">
       <div className="flex items-center justify-between text-sm mb-2">
-        <span className="text-slate-400">Overall Progress</span>
-        <span className="text-white font-medium">
+        <span className="text-muted-foreground">Overall Progress</span>
+        <span className="text-foreground font-medium">
           {completedCount}/{phases.length} phases
         </span>
       </div>
-      <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
         <div
-          className="h-full bg-gradient-to-r from-indigo-500 to-green-500 rounded-full transition-all duration-500"
+          className="h-full bg-gradient-to-r from-primary to-green-500 rounded-full transition-all duration-500"
           style={{ width: `${percentage}%` }}
         />
       </div>
@@ -256,13 +257,13 @@ export function PhaseProgressMini() {
           <div
             key={phase.id}
             className={`w-3 h-3 rounded-full transition-colors ${
-              isCompleted ? "bg-green-500" : "bg-slate-600"
+              isCompleted ? "bg-green-500" : "bg-muted"
             }`}
             title={`${phase.name}: ${isCompleted ? "Complete" : "Pending"}`}
           />
         );
       })}
-      <span className="text-xs text-slate-400 ml-1">
+      <span className="text-xs text-muted-foreground ml-1">
         {completedCount}/{BMAD_PHASES.length}
       </span>
     </div>

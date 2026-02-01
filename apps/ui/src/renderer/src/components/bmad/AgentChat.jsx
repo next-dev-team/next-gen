@@ -23,8 +23,49 @@ import {
   Copy,
   Check,
 } from "lucide-react";
-import useLlmStore from "../../stores/llmStore";
 import useBmadStore from "../../stores/bmadStore";
+
+// API endpoint
+const API_URL = "http://127.0.0.1:3333/api/chat";
+
+// Available agents configuration
+const AGENTS = {
+  pm: {
+    id: "pm",
+    name: "Product Manager",
+    title: "PM Agent",
+    icon: "📊",
+    description: "Helps with PRD and product requirements",
+  },
+  analyst: {
+    id: "analyst",
+    name: "Analyst",
+    title: "Analyst Agent",
+    icon: "🔍",
+    description: "Analyzes market and competitors",
+  },
+  architect: {
+    id: "architect",
+    name: "Architect",
+    title: "Architect Agent",
+    icon: "🏗️",
+    description: "Designs system architecture",
+  },
+  sm: {
+    id: "sm",
+    name: "Scrum Master",
+    title: "SM Agent",
+    icon: "📋",
+    description: "Helps with sprint planning and stories",
+  },
+  dev: {
+    id: "dev",
+    name: "Developer",
+    title: "Dev Agent",
+    icon: "💻",
+    description: "Helps with implementation",
+  },
+};
 
 // Chat Message Component
 function ChatMessage({ message, agent, onCopy }) {
@@ -42,8 +83,8 @@ function ChatMessage({ message, agent, onCopy }) {
       <div
         className={`w-9 h-9 rounded-full flex items-center justify-center text-sm flex-shrink-0 ${
           isUser
-            ? "bg-blue-500/20 text-blue-400"
-            : "bg-purple-500/20 text-purple-400"
+            ? "bg-primary/20 text-primary"
+            : "bg-purple-500/20 text-purple-500 dark:text-purple-400"
         }`}
       >
         {isUser ? <User size={16} /> : agent?.icon || <Bot size={16} />}
@@ -51,15 +92,15 @@ function ChatMessage({ message, agent, onCopy }) {
       <div
         className={`max-w-[80%] rounded-xl px-4 py-3 ${
           isUser
-            ? "bg-blue-500/20 border border-blue-500/30"
-            : "bg-slate-700/50 border border-slate-600/50"
+            ? "bg-primary/10 border border-primary/30"
+            : "bg-muted border border-border"
         }`}
       >
-        <div className="text-sm text-slate-300 whitespace-pre-wrap leading-relaxed">
+        <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
           {message.content}
         </div>
-        <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-600/30">
-          <span className="text-xs text-slate-500">
+        <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
+          <span className="text-xs text-muted-foreground">
             {message.timestamp
               ? new Date(message.timestamp).toLocaleTimeString()
               : ""}
@@ -67,7 +108,7 @@ function ChatMessage({ message, agent, onCopy }) {
           {!isUser && (
             <button
               onClick={handleCopy}
-              className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 transition-colors"
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
             >
               {copied ? (
                 <>
@@ -97,23 +138,25 @@ function AgentSelector({ agents, activeAgent, onSelect }) {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-3 px-4 py-3 bg-slate-800/50 border border-slate-700 rounded-lg hover:border-slate-600 transition-colors w-full"
+        className="flex items-center gap-3 px-4 py-3 bg-muted/50 border border-border rounded-lg hover:border-primary/50 transition-colors w-full"
       >
         <span className="text-xl">{currentAgent?.icon}</span>
         <div className="flex-1 text-left">
-          <div className="text-sm font-medium text-white">
+          <div className="text-sm font-medium text-foreground">
             {currentAgent?.title}
           </div>
-          <div className="text-xs text-slate-400">{currentAgent?.name}</div>
+          <div className="text-xs text-muted-foreground">
+            {currentAgent?.name}
+          </div>
         </div>
         <ChevronDown
           size={16}
-          className={`text-slate-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          className={`text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-10 max-h-64 overflow-y-auto">
+        <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-lg shadow-xl z-10 max-h-64 overflow-y-auto">
           {Object.values(agents).map((agent) => (
             <button
               key={agent.id}
@@ -121,21 +164,21 @@ function AgentSelector({ agents, activeAgent, onSelect }) {
                 onSelect(agent.id);
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-700/50 transition-colors ${
-                activeAgent === agent.id ? "bg-indigo-500/20" : ""
+              className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-accent transition-colors ${
+                activeAgent === agent.id ? "bg-primary/10" : ""
               }`}
             >
               <span className="text-lg">{agent.icon}</span>
               <div className="flex-1 text-left">
-                <div className="text-sm font-medium text-white">
+                <div className="text-sm font-medium text-foreground">
                   {agent.title}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-muted-foreground">
                   {agent.description}
                 </div>
               </div>
               {activeAgent === agent.id && (
-                <Check size={16} className="text-indigo-400" />
+                <Check size={16} className="text-primary" />
               )}
             </button>
           ))}
@@ -179,13 +222,13 @@ function SuggestedPrompts({ agent, onSelect }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-slate-500">Suggested prompts:</p>
+      <p className="text-xs text-muted-foreground">Suggested prompts:</p>
       <div className="flex flex-wrap gap-2">
         {agentPrompts.map((prompt, i) => (
           <button
             key={i}
             onClick={() => onSelect(prompt)}
-            className="px-3 py-1.5 text-xs bg-slate-700/50 border border-slate-600 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
+            className="px-3 py-1.5 text-xs bg-muted border border-border rounded-full text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
             {prompt}
           </button>
@@ -198,25 +241,16 @@ function SuggestedPrompts({ agent, onSelect }) {
 // Main Agent Chat Component
 export default function AgentChat({ storyId = "default", className = "" }) {
   const [input, setInput] = useState("");
+  const [messages, setMessages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [activeAgent, setActiveAgent] = useState("pm");
   const chatRef = useRef(null);
-
-  const {
-    activeAgent,
-    getAvailableAgents,
-    getCurrentAgent,
-    setActiveAgent,
-    getConversation,
-    sendMessage,
-    clearConversation,
-    isLoading,
-    error,
-  } = useLlmStore();
 
   const { projectContext } = useBmadStore();
 
-  const agents = getAvailableAgents();
-  const currentAgent = getCurrentAgent();
-  const messages = getConversation(storyId, activeAgent);
+  const agents = AGENTS;
+  const currentAgent = agents[activeAgent];
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -225,19 +259,86 @@ export default function AgentChat({ storyId = "default", className = "" }) {
     }
   }, [messages]);
 
+  // Build system prompt based on agent and context
+  const buildSystemPrompt = () => {
+    const agentRoles = {
+      pm: "You are a Product Manager AI assistant. Help with product requirements, PRDs, and feature prioritization.",
+      analyst:
+        "You are a Business Analyst AI assistant. Help with market analysis, research, and competitor analysis.",
+      architect:
+        "You are a Software Architect AI assistant. Help with system design, architecture decisions, and technical planning.",
+      sm: "You are a Scrum Master AI assistant. Help with sprint planning, user stories, and agile practices.",
+      dev: "You are a Senior Developer AI assistant. Help with implementation, code review, and debugging.",
+    };
+
+    let prompt = agentRoles[activeAgent] || agentRoles.pm;
+
+    if (projectContext.prd) {
+      prompt += `\n\nProject PRD Context:\n${projectContext.prd.slice(0, 2000)}`;
+    }
+    if (projectContext.architecture) {
+      prompt += `\n\nArchitecture Context:\n${projectContext.architecture.slice(0, 2000)}`;
+    }
+
+    return prompt;
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    const message = input;
+    const userMessage = {
+      role: "user",
+      content: input,
+      timestamp: new Date().toISOString(),
+    };
+
+    setMessages((prev) => [...prev, userMessage]);
     setInput("");
+    setIsLoading(true);
+    setError(null);
 
     try {
-      await sendMessage(storyId, activeAgent, message, {
-        prd: projectContext.prd,
-        architecture: projectContext.architecture,
+      // Build messages array with system prompt
+      const apiMessages = [
+        { role: "system", content: buildSystemPrompt() },
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: input },
+      ];
+
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          provider: "codex",
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const assistantMessage = {
+        role: "assistant",
+        content:
+          data.text ||
+          data.content ||
+          data.message ||
+          data.response ||
+          "No response received",
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
       console.error("Failed to send message:", err);
+      setError(err.message || "Failed to send message");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -250,7 +351,8 @@ export default function AgentChat({ storyId = "default", className = "" }) {
 
   const handleClear = () => {
     if (confirm(`Clear conversation with ${currentAgent?.name}?`)) {
-      clearConversation(storyId, activeAgent);
+      setMessages([]);
+      setError(null);
     }
   };
 
@@ -260,10 +362,10 @@ export default function AgentChat({ storyId = "default", className = "" }) {
 
   return (
     <div
-      className={`flex flex-col bg-slate-800/50 rounded-xl border border-slate-700/50 overflow-hidden ${className}`}
+      className={`flex flex-col bg-card rounded-xl border border-border overflow-hidden ${className}`}
     >
       {/* Header */}
-      <div className="p-4 border-b border-slate-700/50">
+      <div className="p-4 border-b border-border">
         <AgentSelector
           agents={agents}
           activeAgent={activeAgent}
@@ -275,13 +377,13 @@ export default function AgentChat({ storyId = "default", className = "" }) {
       <div ref={chatRef} className="flex-1 p-4 overflow-y-auto space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 mx-auto mb-4 bg-slate-700/50 rounded-full flex items-center justify-center text-3xl">
+            <div className="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center text-3xl">
               {currentAgent?.icon || <Sparkles size={24} />}
             </div>
-            <h3 className="text-white font-medium mb-1">
+            <h3 className="text-foreground font-medium mb-1">
               Chat with {currentAgent?.name}
             </h3>
-            <p className="text-sm text-slate-400 mb-6">
+            <p className="text-sm text-muted-foreground mb-6">
               {currentAgent?.description}
             </p>
             <SuggestedPrompts
@@ -295,9 +397,12 @@ export default function AgentChat({ storyId = "default", className = "" }) {
               <ChatMessage key={i} message={msg} agent={currentAgent} />
             ))}
             {isLoading && (
-              <div className="flex items-center gap-3 text-slate-400">
+              <div className="flex items-center gap-3 text-muted-foreground">
                 <div className="w-9 h-9 rounded-full bg-purple-500/20 flex items-center justify-center">
-                  <Loader2 size={16} className="animate-spin text-purple-400" />
+                  <Loader2
+                    size={16}
+                    className="animate-spin text-purple-500 dark:text-purple-400"
+                  />
                 </div>
                 <span className="text-sm">
                   {currentAgent?.name} is thinking...
@@ -307,19 +412,19 @@ export default function AgentChat({ storyId = "default", className = "" }) {
           </>
         )}
         {error && (
-          <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm">
+          <div className="bg-destructive/10 border border-destructive/50 rounded-lg p-3 text-destructive text-sm">
             {error}
           </div>
         )}
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-slate-700/50">
+      <div className="p-4 border-t border-border">
         {messages.length > 0 && (
           <div className="flex justify-end mb-2">
             <button
               onClick={handleClear}
-              className="text-xs text-slate-500 hover:text-red-400 flex items-center gap-1 transition-colors"
+              className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 transition-colors"
             >
               <Trash2 size={12} />
               Clear chat
@@ -332,13 +437,13 @@ export default function AgentChat({ storyId = "default", className = "" }) {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={`Message ${currentAgent?.name}...`}
-            className="flex-1 bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 resize-none"
+            className="flex-1 bg-muted/50 border border-input rounded-lg px-4 py-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary resize-none"
             rows={2}
           />
           <button
             onClick={handleSend}
             disabled={isLoading || !input.trim()}
-            className="px-4 bg-indigo-500 hover:bg-indigo-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg transition-colors"
+            className="px-4 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground rounded-lg transition-colors"
           >
             <Send size={18} />
           </button>
