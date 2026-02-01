@@ -1,5 +1,7 @@
 # Next Gen
 
+> ⚠️ **Active Development** - This project is under active development and may contain breaking changes. Use at your own risk.
+
 the next generation of template
 
 ![Screenshot](./assets/generator.png)
