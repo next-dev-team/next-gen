@@ -455,7 +455,13 @@ function ContextStep({ data, onChange }) {
 }
 
 // Step 5: Complete
-function CompleteStep({ data, isInstalling, installError }) {
+function CompleteStep({
+  data,
+  isInstalling,
+  installError,
+  onRetry,
+  onCreateManually,
+}) {
   return (
     <div className="space-y-6 text-center">
       {isInstalling ? (
@@ -469,22 +475,44 @@ function CompleteStep({ data, isInstalling, installError }) {
           </p>
           <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 text-left">
             <div className="space-y-2 text-sm font-mono text-slate-400">
-              <p>→ Creating _bmad directory...</p>
-              <p>→ Installing agent configurations...</p>
-              <p>→ Setting up workflows...</p>
+              <p>→ Downloading BMAD v6.0.0-Beta.5 from GitHub...</p>
+              <p>→ Setting up agents and workflows...</p>
             </div>
           </div>
         </>
       ) : installError ? (
         <>
-          <AlertCircle className="w-16 h-16 mx-auto mb-4 text-red-400" />
+          <AlertCircle className="w-16 h-16 mx-auto mb-4 text-amber-400" />
           <h3 className="text-xl font-semibold text-white mb-2">
-            Setup Failed
+            Installation Issue
           </h3>
-          <p className="text-red-400">{installError}</p>
-          <button className="px-6 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white hover:bg-slate-600 transition-colors">
-            Try Again
-          </button>
+          <p className="text-slate-400 text-sm mb-4">
+            The automatic installation via npx failed. This usually means
+            Node.js is not available.
+          </p>
+          <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700 text-left mb-4">
+            <p className="text-red-400 text-xs font-mono break-all">
+              {installError}
+            </p>
+          </div>
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={onRetry}
+              className="px-5 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white hover:bg-slate-600 transition-colors text-sm"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={onCreateManually}
+              className="px-5 py-2 bg-indigo-600 rounded-lg text-white hover:bg-indigo-500 transition-colors text-sm font-medium"
+            >
+              Download from GitHub
+            </button>
+          </div>
+          <p className="text-slate-500 text-xs mt-3">
+            Downloads BMAD files directly from GitHub and creates the project
+            structure
+          </p>
         </>
       ) : (
         <>
@@ -545,18 +573,44 @@ function CompleteStep({ data, isInstalling, installError }) {
 }
 
 // Main Wizard Component
-export default function SetupWizard({ onComplete, onClose }) {
+export default function SetupWizard({
+  onComplete,
+  onClose,
+  existingProjectPath,
+}) {
   const {
     wizardStep,
     setWizardStep,
     wizardData,
     updateWizardData,
     executeWizardSetup,
+    createManualBmadStructure,
     installStatus,
     installError,
+    activeProjectPath,
   } = useBmadStore();
 
   const [isInstalling, setIsInstalling] = useState(false);
+
+  // Auto-detect existing project and skip to step 2 (Modules)
+  useEffect(() => {
+    const projectPath = existingProjectPath || activeProjectPath;
+    if (projectPath && wizardStep === 0 && !wizardData.projectPath) {
+      // Pre-fill project data and skip to modules step
+      updateWizardData({
+        projectPath: projectPath,
+        projectName: projectPath.split(/[/\\]/).pop(),
+      });
+      setWizardStep(1); // Skip to Modules step
+    }
+  }, [
+    existingProjectPath,
+    activeProjectPath,
+    wizardStep,
+    wizardData.projectPath,
+    updateWizardData,
+    setWizardStep,
+  ]);
 
   const currentStepIndex = wizardStep;
   const currentStep = WIZARD_STEPS[currentStepIndex];
@@ -604,6 +658,29 @@ export default function SetupWizard({ onComplete, onClose }) {
     onComplete?.(wizardData);
   };
 
+  // Retry npx installation
+  const handleRetry = async () => {
+    setIsInstalling(true);
+    try {
+      await executeWizardSetup();
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
+  // Create BMAD structure manually (without npx)
+  const handleCreateManually = async () => {
+    setIsInstalling(true);
+    try {
+      const success = await createManualBmadStructure();
+      if (success) {
+        // Structure created, setup complete
+      }
+    } finally {
+      setIsInstalling(false);
+    }
+  };
+
   const renderStep = () => {
     switch (currentStepIndex) {
       case 0:
@@ -620,6 +697,8 @@ export default function SetupWizard({ onComplete, onClose }) {
             data={wizardData}
             isInstalling={isInstalling}
             installError={installError}
+            onRetry={handleRetry}
+            onCreateManually={handleCreateManually}
           />
         );
       default:

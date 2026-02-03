@@ -8,6 +8,7 @@ export { default as SetupWizard } from "./SetupWizard";
 export { default as StoryGenerator } from "./StoryGenerator";
 export { default as ContextManager } from "./ContextManager";
 export { default as AgentChat } from "./AgentChat";
+export { default as BmadIntegration } from "./BmadIntegration";
 export {
   default as PhaseProgress,
   PhaseProgressCompact,

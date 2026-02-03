@@ -282,6 +282,7 @@ Respond ONLY with a valid JSON array of stories, no other text.`;
         },
         body: JSON.stringify({
           messages: [{ role: "user", content: prompt }],
+          model: "gpt-5.2",
           provider: "codex",
         }),
       });

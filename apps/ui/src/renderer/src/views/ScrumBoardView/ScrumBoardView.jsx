@@ -57,6 +57,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../../components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../../components/ui/dropdown-menu";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -98,6 +105,7 @@ import useKanbanStore, {
   STORY_STATUSES,
 } from "../../stores/kanbanStore";
 import useLlmStore from "../../stores/llmStore";
+import useBmadStore from "../../stores/bmadStore";
 
 // Board templates based on BMAD-Method
 const BOARD_TEMPLATES = [
@@ -6581,6 +6589,27 @@ export default function ScrumBoardView() {
   const [projectPickerValue, setProjectPickerValue] = React.useState("");
   const projectPickerFileRef = React.useRef(null);
 
+  // BMAD Setup Wizard state from Zustand store (persisted)
+  const {
+    showSetupWizard,
+    setShowSetupWizard,
+    isSetupComplete,
+    completeSetup,
+    skipSetup,
+  } = useBmadStore();
+
+  // Handler for wizard completion
+  const handleSetupWizardComplete = React.useCallback(
+    (wizardData) => {
+      completeSetup();
+      // Set the project path from wizard
+      if (wizardData?.projectPath) {
+        setAgentSetup((s) => ({ ...s, projectRoot: wizardData.projectPath }));
+      }
+    },
+    [completeSetup],
+  );
+
   const [assigneeFilter, setAssigneeFilter] = React.useState("");
   const [epicFilter, setEpicFilter] = React.useState("");
   const [sprintFilter, setSprintFilter] = React.useState("");
@@ -7253,104 +7282,212 @@ export default function ScrumBoardView() {
 
         {/* BMAD Tab Content */}
         <TabsContent value="bmad" className="flex-1 min-h-0 mt-0 flex flex-col">
-          {/* Board Controls - same as SCRUM */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <Select value={activeBoardId || ""} onValueChange={setActiveBoard}>
-              <SelectTrigger className="w-[180px] bg-background/50 h-8 text-xs">
-                <SelectValue placeholder="Select Board" />
-              </SelectTrigger>
-              <SelectContent>
-                {state?.boards?.map((b) => (
-                  <SelectItem key={b.id} value={b.id}>
-                    <div className="flex items-center gap-2 text-xs">
-                      {b.type === "bmad" && (
-                        <Sparkles className="h-3 w-3 text-primary" />
-                      )}
-                      {b.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* BMAD Setup Wizard - render when explicitly shown */}
+          {showSetupWizard && (
+            <SetupWizard
+              onComplete={handleSetupWizardComplete}
+              onClose={() => {
+                // Skip setup - user can still use scrum without full setup
+                skipSetup();
+              }}
+              existingProjectPath={agentSetup.projectRoot}
+            />
+          )}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCreateBoardOpen(true)}
-              className="h-8 px-2 text-xs bg-background/50"
-            >
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              New Board
-            </Button>
-
-            {activeBoard && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                onClick={() => {
-                  openConfirm({
-                    title: "Delete board?",
-                    description: "This action cannot be undone.",
-                    confirmText: "Delete",
-                    onConfirm: async () => {
-                      await deleteBoard(activeBoard.id);
-                    },
-                  });
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-
-            <div className="flex-1" />
-          </div>
-
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Left Column - Phase Progress & Agent Chat */}
-            <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
-              <PhaseProgress
-                variant="compact"
-                projectPath={agentSetup.projectRoot || ""}
-              />
-              <div className="flex-1 min-h-0">
-                <AgentChat
-                  storyId={activeBoardId || "dashboard"}
-                  projectPath={agentSetup.projectRoot || ""}
-                />
+          {/* Welcome screen - show only when no wizard and not setup complete and no project */}
+          {!showSetupWizard && !isSetupComplete && !agentSetup.projectRoot && (
+            <div className="flex flex-col items-center justify-center py-12 gap-4">
+              <Sparkles className="h-12 w-12 text-muted-foreground" />
+              <h3 className="text-lg font-medium">Welcome to BMAD</h3>
+              <p className="text-sm text-muted-foreground text-center max-w-md">
+                Set up your project with BMAD-Method for AI-powered development,
+                or select an existing project.
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  variant="default"
+                  onClick={() => setShowSetupWizard(true)}
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Run Setup Wizard
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => handleBrowseProjectRoot()}
+                >
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Select Existing Project
+                </Button>
               </div>
             </div>
+          )}
 
-            {/* Right Column - Stories & Context */}
-            <div className="flex flex-col gap-4 min-h-0">
-              <Tabs
-                defaultValue="stories"
-                className="flex-1 flex flex-col min-h-0"
-              >
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="stories">Stories</TabsTrigger>
-                  <TabsTrigger value="context">Context</TabsTrigger>
-                </TabsList>
-                <TabsContent value="stories" className="flex-1 min-h-0 mt-2">
-                  <StoryGenerator
-                    onAddStory={(story) => {
-                      if (!activeBoard) return;
-                      const backlog = activeBoard.lists.find(
-                        (l) => l.statusId === "backlog",
-                      );
-                      if (backlog) {
-                        addCard(activeBoard.id, backlog.id, story);
-                      }
+          {/* Board Controls - only show if project is selected or setup was skipped */}
+          {(agentSetup.projectRoot || isSetupComplete) && (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <Select
+                  value={activeBoardId || ""}
+                  onValueChange={setActiveBoard}
+                >
+                  <SelectTrigger className="w-[180px] bg-background/50 h-8 text-xs">
+                    <SelectValue placeholder="Select Board" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {state?.boards?.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        <div className="flex items-center gap-2 text-xs">
+                          {b.type === "bmad" && (
+                            <Sparkles className="h-3 w-3 text-primary" />
+                          )}
+                          {b.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCreateBoardOpen(true)}
+                  className="h-8 px-2 text-xs bg-background/50"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  New Board
+                </Button>
+
+                {activeBoard && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => {
+                      openConfirm({
+                        title: "Delete board?",
+                        description: "This action cannot be undone.",
+                        confirmText: "Delete",
+                        onConfirm: async () => {
+                          await deleteBoard(activeBoard.id);
+                        },
+                      });
                     }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+
+                <div className="flex-1" />
+
+                {/* BMAD Settings Button */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      title="BMAD Settings"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        // Force show wizard - reset setup state
+                        useBmadStore.setState({ isSetupComplete: false });
+                        setShowSetupWizard(true);
+                      }}
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Open Setup Wizard
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        // Force re-sync BMAD files
+                        if (agentSetup.projectRoot) {
+                          const bmadStore = useBmadStore.getState();
+                          bmadStore.createManualBmadStructure(
+                            agentSetup.projectRoot,
+                          );
+                        }
+                      }}
+                    >
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Re-download BMAD Files
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        // Reset everything
+                        useBmadStore.getState().resetWizard();
+                        useBmadStore.setState({ isSetupComplete: false });
+                        setShowSetupWizard(true);
+                      }}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Reset BMAD Setup
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+
+              <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Left Column - Phase Progress & Agent Chat */}
+                <div className="lg:col-span-2 flex flex-col gap-4 min-h-0">
+                  <PhaseProgress
+                    variant="compact"
                     projectPath={agentSetup.projectRoot || ""}
                   />
-                </TabsContent>
-                <TabsContent value="context" className="flex-1 min-h-0 mt-2">
-                  <ContextManager projectPath={agentSetup.projectRoot || ""} />
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
+                  <div className="flex-1 min-h-0">
+                    <AgentChat
+                      storyId={activeBoardId || "dashboard"}
+                      projectPath={agentSetup.projectRoot || ""}
+                    />
+                  </div>
+                </div>
+
+                {/* Right Column - Stories & Context */}
+                <div className="flex flex-col gap-4 min-h-0">
+                  <Tabs
+                    defaultValue="stories"
+                    className="flex-1 flex flex-col min-h-0"
+                  >
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="stories">Stories</TabsTrigger>
+                      <TabsTrigger value="context">Context</TabsTrigger>
+                    </TabsList>
+                    <TabsContent
+                      value="stories"
+                      className="flex-1 min-h-0 mt-2"
+                    >
+                      <StoryGenerator
+                        onAddStory={(story) => {
+                          if (!activeBoard) return;
+                          const backlog = activeBoard.lists.find(
+                            (l) => l.statusId === "backlog",
+                          );
+                          if (backlog) {
+                            addCard(activeBoard.id, backlog.id, story);
+                          }
+                        }}
+                        projectPath={agentSetup.projectRoot || ""}
+                      />
+                    </TabsContent>
+                    <TabsContent
+                      value="context"
+                      className="flex-1 min-h-0 mt-2"
+                    >
+                      <ContextManager
+                        projectPath={agentSetup.projectRoot || ""}
+                      />
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+            </>
+          )}
         </TabsContent>
 
         {/* SCRUM Tab Content */}

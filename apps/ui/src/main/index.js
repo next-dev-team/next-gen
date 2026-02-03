@@ -2553,7 +2553,7 @@ ipcMain.handle(
     const runEnv = { ...process.env, FORCE_COLOR: "1" };
     runEnv.PATH = buildAugmentedPath(runEnv.PATH);
 
-    const BMAD_NPX_PACKAGE = "bmad-method@alpha";
+    const BMAD_NPX_PACKAGE = "github:bmad-code-org/BMAD-METHOD";
     const getBmadFolderStatus = async () => {
       const folders = ["_bmad", "_config"];
       const results = await Promise.all(
@@ -2924,15 +2924,34 @@ ipcMain.handle(
       }
     } else {
       command = process.platform === "win32" ? "npx.cmd" : "npx";
-      if (isWorkflowAction) {
-        args = ["-y", "--package", BMAD_NPX_PACKAGE, "workflow", ...extra];
-      } else {
-        args = ["-y", "--package", BMAD_NPX_PACKAGE, "bmad", selectedAction];
-        if (selectedAction === "install") {
-          const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
-          if (mods.length > 0) args.push("-m", ...mods);
+      // For GitHub packages, use direct invocation: npx -y github:org/repo install
+      // For npm packages, use --package flag: npx -y --package pkg bmad install
+      const isGitHubPackage = BMAD_NPX_PACKAGE.startsWith("github:");
+
+      if (isGitHubPackage) {
+        // GitHub package: npx -y github:org/repo install
+        if (isWorkflowAction) {
+          args = ["-y", BMAD_NPX_PACKAGE, "workflow", ...extra];
+        } else {
+          args = ["-y", BMAD_NPX_PACKAGE, selectedAction];
+          if (selectedAction === "install") {
+            const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
+            if (mods.length > 0) args.push("-m", ...mods);
+          }
+          args.push(...extra);
         }
-        args.push(...extra);
+      } else {
+        // npm package: npx -y --package pkg bmad install
+        if (isWorkflowAction) {
+          args = ["-y", "--package", BMAD_NPX_PACKAGE, "workflow", ...extra];
+        } else {
+          args = ["-y", "--package", BMAD_NPX_PACKAGE, "bmad", selectedAction];
+          if (selectedAction === "install") {
+            const mods = Array.isArray(moduleCodes) ? moduleCodes : [];
+            if (mods.length > 0) args.push("-m", ...mods);
+          }
+          args.push(...extra);
+        }
       }
     }
 

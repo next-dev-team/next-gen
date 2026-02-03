@@ -294,6 +294,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   readProjectFile: (payload) =>
     ipcRenderer.invoke("read-project-file", payload),
 
+  // BMAD Method CLI runner (for workflows)
+  runBmadCli: (options) => ipcRenderer.invoke("bmad-cli-run", options),
+
   // E2E Tests
   tests: {
     run: (testFile, options) =>

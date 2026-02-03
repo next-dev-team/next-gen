@@ -49,12 +49,12 @@
     "vite": "^7.3.0"
   },
   "dependencies": {
-    "@nde/llm": "workspace:*",
     "@ant-design/cssinjs": "^2.0.1",
     "@ant-design/icons": "^6.1.0",
     "@ghostery/adblocker-electron": "^2.5.0",
     "@measured/puck": "^0.20.2",
     "@modelcontextprotocol/sdk": "^1.25.1",
+    "@nde/llm": "workspace:*",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-collapsible": "^1.1.7",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -77,8 +77,8 @@
     "clsx": "^2.1.1",
     "conf": "^10.2.0",
     "cross-fetch": "^4.1.0",
-    "electron-updater": "^6.3.0",
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.3.0",
     "lucide-react": "^0.562.0",
     "node-pty": "^1.1.0",
     "react": "^19.2.3",
