@@ -78,30 +78,8 @@ const resolveMcpServerPath = () => {
 
 const mcpServer = require(resolveMcpServerPath());
 
-// LLM Server path resolver
-const resolveLlmServerPath = () => {
-  const packagedCandidates = [
-    path.join(app.getAppPath(), "scripts", "llm-server.js"),
-    path.join(process.resourcesPath, "scripts", "llm-server.js"),
-    path.join(path.dirname(app.getAppPath()), "scripts", "llm-server.js"),
-  ];
-
-  const devCandidates = [path.join(__dirname, "../../scripts/llm-server.js")];
-
-  const candidates = app.isPackaged
-    ? [...packagedCandidates, ...devCandidates]
-    : [...devCandidates, ...packagedCandidates];
-
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) return candidate;
-    } catch {}
-  }
-
-  return candidates[0];
-};
-
-const llmServer = require(resolveLlmServerPath());
+// NOTE: LLM functionality now provided by external agent-llm API server (http://127.0.0.1:3333)
+// Legacy llm-server.js has been removed
 
 let store;
 
@@ -4364,7 +4342,7 @@ ipcMain.handle("save-file", async (event, options = {}) => {
   }
 });
 
-// ======= ELECTRON STORE IPC HANDLERS (for @nde/llm package) =======
+// ======= ELECTRON STORE IPC HANDLERS =======
 
 // Store get
 ipcMain.handle("store-get", async (event, { key }) => {

@@ -1,14 +1,22 @@
 /**
- * Project Context Store - Manages project-scoped context for LLM chat
+ * Project Context Store - The "Brain" of the application
+ *
+ * v1.0.2: Enhanced with RAG (Retrieval Augmented Generation)
  *
  * Provides:
  * - Active project tracking
  * - Project file indexing (AGENTS.md, Skills, PRD, etc.)
- * - Context building for LLM prompts
+ * - RAG integration for semantic search
+ * - Automatic indexing of kanban changes
+ * - Context building for LLM prompts with retrieved knowledge
  */
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import {
+  RAGServiceProxy as RAGService,
+  DOC_TYPES_PROXY as DOC_TYPES,
+} from "../services/ragServiceWrapper";
 
 // Document types for context
 const CONTEXT_TYPES = {
@@ -42,6 +50,10 @@ const useProjectContextStore = create(
       isIndexing: false,
       indexError: null,
 
+      // RAG state
+      ragInitialized: false,
+      ragStats: null,
+
       // Get context for active project
       getActiveContext: () => {
         const { activeProject, projectContexts } = get();
@@ -60,6 +72,14 @@ const useProjectContextStore = create(
 
         const normalizedPath = projectPath.replace(/\\/g, "/");
         set({ activeProject: normalizedPath });
+
+        // Initialize RAG for this project
+        try {
+          await RAGService.initialize(normalizedPath);
+          set({ ragInitialized: true, ragStats: RAGService.getStats() });
+        } catch (err) {
+          console.error("[ProjectContext] RAG init failed:", err);
+        }
 
         // Check if we need to index
         const { projectContexts } = get();
@@ -102,6 +122,11 @@ const useProjectContextStore = create(
             const agentsContent = await fs.readFile(agentsPath, "utf-8");
             if (agentsContent) {
               context.agentRules = agentsContent;
+              // Also index in RAG
+              await RAGService.addDocument("agents-md", agentsContent, {
+                type: DOC_TYPES.DOCUMENT,
+                source: "AGENTS.md",
+              });
             }
           } catch {
             // Try CLAUDE.md as fallback
@@ -129,6 +154,25 @@ const useProjectContextStore = create(
               const prdContent = await fs.readFile(prdPath, "utf-8");
               if (prdContent) {
                 context.prd = prdContent;
+                // Index in RAG
+                await RAGService.indexPRD(prdContent, prdPath);
+                break;
+              }
+            } catch {
+              // Try next path
+            }
+          }
+
+          // Index architecture
+          const archPaths = [
+            `${projectPath}/_bmad-output/architecture.md`,
+            `${projectPath}/docs/architecture.md`,
+          ];
+          for (const archPath of archPaths) {
+            try {
+              const archContent = await fs.readFile(archPath, "utf-8");
+              if (archContent) {
+                await RAGService.indexArchitecture(archContent, archPath);
                 break;
               }
             } catch {
@@ -153,6 +197,11 @@ const useProjectContextStore = create(
                     path: `${skillsDir}/${file}`,
                     content: content.substring(0, 2000), // Truncate for context
                   });
+                  // Index in RAG
+                  await RAGService.addDocument(`skill-${file}`, content, {
+                    type: DOC_TYPES.DOCUMENT,
+                    source: `skills/${file}`,
+                  });
                 } catch {
                   // Skip unreadable file
                 }
@@ -169,15 +218,15 @@ const useProjectContextStore = create(
             const agentFiles = await fs.readdir(bmadAgentsDir);
             const agents = [];
             for (const file of agentFiles) {
-              if (file.endsWith(".md")) {
+              if (file.endsWith(".md") || file.endsWith(".yaml")) {
                 try {
                   const content = await fs.readFile(
                     `${bmadAgentsDir}/${file}`,
                     "utf-8",
                   );
                   agents.push({
-                    id: file.replace(".md", ""),
-                    name: file.replace(".md", ""),
+                    id: file.replace(/\.(md|yaml)$/, ""),
+                    name: file.replace(/\.(md|yaml)$/, ""),
                     content: content.substring(0, 5000), // Keep full persona (was 1500)
                   });
                 } catch {
@@ -220,6 +269,7 @@ const useProjectContextStore = create(
               [projectPath]: context,
             },
             isIndexing: false,
+            ragStats: RAGService.getStats(),
           }));
 
           console.log(
@@ -232,18 +282,136 @@ const useProjectContextStore = create(
         }
       },
 
-      // Build context prompt for LLM
-      buildContextPrompt: (options = {}) => {
+      // =====================================================
+      // RAG Integration Methods (NEW in v1.0.2)
+      // =====================================================
+
+      /**
+       * Index kanban state into RAG
+       * Called when kanban data changes
+       */
+      indexKanbanState: async (kanbanState) => {
+        if (!kanbanState) return;
+
+        try {
+          await RAGService.reindexKanban(kanbanState);
+          set({ ragStats: RAGService.getStats() });
+          console.log("[ProjectContext] Kanban indexed in RAG");
+        } catch (err) {
+          console.error("[ProjectContext] Failed to index kanban:", err);
+        }
+      },
+
+      /**
+       * Index a single ticket (for incremental updates)
+       */
+      indexTicket: async (ticket) => {
+        try {
+          await RAGService.indexTicket(ticket);
+          set({ ragStats: RAGService.getStats() });
+        } catch (err) {
+          console.error("[ProjectContext] Failed to index ticket:", err);
+        }
+      },
+
+      /**
+       * Index an important chat decision
+       */
+      indexChatDecision: async (message, agentId) => {
+        try {
+          await RAGService.indexChatDecision(message, agentId);
+          set({ ragStats: RAGService.getStats() });
+        } catch (err) {
+          console.error("[ProjectContext] Failed to index chat:", err);
+        }
+      },
+
+      /**
+       * Query RAG for relevant context
+       * @param {string} query - User query
+       * @param {Object} options - Query options
+       * @returns {Promise<string>} - Context string for LLM
+       */
+      queryRAG: async (query, options = {}) => {
+        try {
+          return await RAGService.buildContextForQuery(query, options);
+        } catch (err) {
+          console.error("[ProjectContext] RAG query failed:", err);
+          return "";
+        }
+      },
+
+      /**
+       * Force full re-sync of RAG index
+       * Called by "Sync All" button
+       */
+      syncAll: async () => {
+        const { activeProject, indexProject } = get();
+        if (!activeProject) return;
+
+        set({ isIndexing: true });
+
+        try {
+          // Re-index project files
+          await indexProject(activeProject);
+
+          // Get kanban state and reindex
+          // Note: Caller should also pass kanbanState for full sync
+
+          set({
+            isIndexing: false,
+            ragStats: RAGService.getStats(),
+          });
+
+          console.log("[ProjectContext] Full sync complete");
+        } catch (err) {
+          console.error("[ProjectContext] Sync failed:", err);
+          set({ isIndexing: false, indexError: err.message });
+        }
+      },
+
+      /**
+       * Get RAG statistics
+       */
+      getRAGStats: () => {
+        return RAGService.getStats();
+      },
+
+      // =====================================================
+      // Original Methods (maintained for compatibility)
+      // =====================================================
+
+      // Build context prompt for LLM (enhanced with RAG)
+      buildContextPrompt: async (options = {}) => {
         const context = get().getActiveContext();
         const {
           maxTokens = 6000,
           includeSkills = true,
           includePrd = true,
           agentId = null, // Pass agent ID to include their full prompt
+          userQuery = null, // NEW: User's question for RAG lookup
         } = options;
 
         const parts = [];
         let currentLength = 0;
+
+        // NEW: Add RAG-retrieved context if we have a user query
+        if (userQuery) {
+          try {
+            const ragContext = await RAGService.buildContextForQuery(
+              userQuery,
+              {
+                maxTokens: 2000,
+              },
+            );
+            if (ragContext) {
+              parts.push(ragContext);
+              currentLength += ragContext.length;
+            }
+          } catch (err) {
+            console.warn("[ProjectContext] RAG lookup failed:", err);
+          }
+        }
 
         // Add BMAD agent prompt if matching agent found
         if (agentId && context.bmadAgents.length > 0) {
@@ -325,6 +493,8 @@ const useProjectContextStore = create(
       // Get context stats
       getContextStats: () => {
         const context = get().getActiveContext();
+        const ragStats = RAGService.getStats();
+
         return {
           hasAgentRules: !!context.agentRules,
           hasPrd: !!context.prd,
@@ -334,6 +504,9 @@ const useProjectContextStore = create(
           lastIndexed: context.lastIndexed
             ? new Date(context.lastIndexed).toLocaleString()
             : null,
+          // RAG stats
+          ragDocuments: ragStats.documentCount || 0,
+          ragReady: ragStats.isInitialized && ragStats.embeddingReady,
         };
       },
 

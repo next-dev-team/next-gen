@@ -27,9 +27,19 @@ import {
   FileOutput,
   Save,
   FolderOpen,
+  Paperclip,
+  X,
+  FileText,
+  FileCode,
+  Image as ImageIcon,
 } from "lucide-react";
 import useBmadStore from "../../stores/bmadStore";
 import useProjectContextStore from "../../stores/projectContextStore";
+import { useKanbanStore } from "../../stores/kanbanStore";
+import { useRAGSync } from "../../hooks/useRAGSync";
+
+// RAG Constants
+const RAG_ENABLED = true; // Toggle RAG feature
 
 // API endpoints
 const API_URL = "http://127.0.0.1:3333/api/chat";
@@ -465,6 +475,20 @@ function ChatMessage({
         <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
           {message.content}
         </div>
+        {/* Show attachments indicator for user messages */}
+        {isUser && message.attachments && message.attachments.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-border/50 flex flex-wrap gap-1">
+            {message.attachments.map((att, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 bg-primary/20 text-primary rounded"
+              >
+                <Paperclip size={10} />
+                {att.name}
+              </span>
+            ))}
+          </div>
+        )}
         <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
           <span className="text-xs text-muted-foreground">
             {message.timestamp
@@ -664,14 +688,25 @@ export default function AgentChat({
     activeProjectPath,
   } = useBmadStore();
 
-  // Project context store for enhanced context
+  // Project context store for enhanced context (now with RAG)
   const {
     setActiveProject: setContextProject,
     buildContextPrompt,
     getContextStats,
     isIndexing,
     reindexCurrentProject,
+    queryRAG,
+    indexChatDecision,
+    syncAll,
+    ragInitialized,
+    indexKanbanState,
   } = useProjectContextStore();
+
+  // Kanban store for accessing ticket data
+  const kanbanState = useKanbanStore((state) => state.state);
+
+  // RAG sync hook - automatically syncs kanban changes to RAG
+  const { syncKanbanToRAG, isSyncing: isRAGSyncing } = useRAGSync();
 
   // Use a default fallback key for persistence when no project is set
   const DEFAULT_PROJECT_KEY = "__default_scrum_project__";
@@ -719,7 +754,8 @@ export default function AgentChat({
   const contextStats = getContextStats();
 
   // Build system prompt based on agent and enhanced project context
-  const buildSystemPrompt = () => {
+  // Now async to support RAG queries (v1.0.2)
+  const buildSystemPrompt = async (userQuery = null) => {
     // Detailed agent role descriptions
     const agentRoles = {
       pm: `You are John, an expert Product Manager AI assistant with 8+ years of experience launching B2B and consumer products.
@@ -787,10 +823,126 @@ Write clean, maintainable code with clear explanations.`,
 
     let prompt = agentRoles[activeAgent] || agentRoles.pm;
 
+    // v1.0.2: Query RAG for relevant context based on user's question
+    if (RAG_ENABLED && userQuery && ragInitialized) {
+      try {
+        const ragContext = await queryRAG(userQuery, { maxTokens: 2000 });
+        if (ragContext && ragContext.length > 0) {
+          prompt += `\n\n---\n\n# Retrieved Knowledge (from project memory)\n\n${ragContext}`;
+          console.log(
+            "[AgentChat] RAG context injected, length:",
+            ragContext.length,
+          );
+        }
+      } catch (err) {
+        console.warn("[AgentChat] RAG query failed:", err);
+      }
+    }
+
+    // v1.0.2: Inject live kanban data for SM agent or when asking about tickets/backlog
+    const kanbanKeywords = [
+      "ticket",
+      "backlog",
+      "sprint",
+      "story",
+      "stories",
+      "epic",
+      "board",
+      "status",
+      "blocked",
+      "in progress",
+      "done",
+      "todo",
+      "how many",
+    ];
+    const isKanbanQuery =
+      userQuery &&
+      kanbanKeywords.some((kw) => userQuery.toLowerCase().includes(kw));
+
+    if (kanbanState && (activeAgent === "sm" || isKanbanQuery)) {
+      try {
+        const boards = kanbanState.boards || [];
+        const epics = kanbanState.epics || [];
+        const sprints = kanbanState.sprints || [];
+
+        let kanbanContext = "\n\n---\n\n# Live Kanban Board Data\n\n";
+
+        // Summarize tickets by status
+        const ticketsByStatus = {};
+        let totalTickets = 0;
+
+        for (const board of boards) {
+          for (const list of board.lists || []) {
+            const statusName = list.name || list.statusId || "Unknown";
+            const cards = list.cards || [];
+            ticketsByStatus[statusName] = ticketsByStatus[statusName] || [];
+
+            for (const card of cards) {
+              ticketsByStatus[statusName].push({
+                id: card.id,
+                title: card.title,
+                priority: card.priority,
+                labels: card.labels,
+              });
+              totalTickets++;
+            }
+          }
+        }
+
+        kanbanContext += `## Summary\n- **Total Tickets:** ${totalTickets}\n`;
+
+        // Show ticket counts by status
+        kanbanContext += `\n## Tickets by Status\n`;
+        for (const [status, tickets] of Object.entries(ticketsByStatus)) {
+          kanbanContext += `\n### ${status} (${tickets.length} tickets)\n`;
+          for (const ticket of tickets.slice(0, 10)) {
+            // Limit to 10 per status
+            const priorityEmoji =
+              ticket.priority === "high"
+                ? "🔴"
+                : ticket.priority === "medium"
+                  ? "🟡"
+                  : "🟢";
+            kanbanContext += `- ${priorityEmoji} #${ticket.id}: ${ticket.title}\n`;
+          }
+          if (tickets.length > 10) {
+            kanbanContext += `- ... and ${tickets.length - 10} more\n`;
+          }
+        }
+
+        // Show epics
+        if (epics.length > 0) {
+          kanbanContext += `\n## Epics (${epics.length})\n`;
+          for (const epic of epics.slice(0, 5)) {
+            kanbanContext += `- 🎯 ${epic.name}: ${epic.description || "No description"}\n`;
+          }
+        }
+
+        // Show sprints
+        if (sprints.length > 0) {
+          const activeSprint = sprints.find((s) => s.status === "active");
+          if (activeSprint) {
+            kanbanContext += `\n## Active Sprint: ${activeSprint.name}\n`;
+            kanbanContext += `- Goal: ${activeSprint.goal || "Not set"}\n`;
+            kanbanContext += `- Period: ${activeSprint.startDate} to ${activeSprint.endDate}\n`;
+          }
+        }
+
+        prompt += kanbanContext;
+        console.log(
+          "[AgentChat] Kanban context injected, total tickets:",
+          totalTickets,
+        );
+      } catch (err) {
+        console.warn("[AgentChat] Failed to inject kanban context:", err);
+      }
+    }
+
     // Add enhanced project context from projectContextStore (with agentId for agent-specific context)
-    const enhancedContext = buildContextPrompt({
+    const enhancedContext = await buildContextPrompt({
       maxTokens: 6000,
       agentId: activeAgent, // Pass agent ID to get agent-specific BMAD persona
+      userQuery, // Pass user query for additional RAG lookup
     });
 
     // Debug: log context stats
@@ -799,6 +951,8 @@ Write clean, maintainable code with clear explanations.`,
       activeAgent,
       "Context stats:",
       contextStats,
+      "RAG ready:",
+      ragInitialized,
     );
     console.log(
       "[AgentChat] Enhanced context length:",
@@ -874,12 +1028,12 @@ Write clean, maintainable code with clear explanations.`,
       setError(null);
 
       try {
-        // Include workflow instructions in the prompt
+        // Include workflow instructions in the prompt (now async with RAG)
+        const systemPrompt = await buildSystemPrompt(input);
         const apiMessages = [
           {
             role: "system",
-            content:
-              buildSystemPrompt() + "\n\n---\n\n" + workflow.instructions,
+            content: systemPrompt + "\n\n---\n\n" + workflow.instructions,
           },
           ...newMessages.map((m) => ({ role: m.role, content: m.content })),
         ];
@@ -923,19 +1077,88 @@ Write clean, maintainable code with clear explanations.`,
       role: "user",
       content: input,
       timestamp: new Date().toISOString(),
+      attachments:
+        attachedFiles.length > 0
+          ? attachedFiles.map((f) => ({
+              name: f.name,
+              type: f.type,
+              size: f.size,
+            }))
+          : undefined,
     };
 
-    const newMessages = [...messages, userMessage];
+    // Build message content with attachments
+    let messageContent = input;
+    if (attachedFiles.length > 0) {
+      messageContent += "\n\n---\n\n## Attached Files (Uploaded via Chat)\n\n";
+      for (const file of attachedFiles) {
+        messageContent += `### 📎 ${file.name}\n`;
+        if (file.isImage) {
+          // For images - clarify this is an embedded upload, not a file path to read
+          messageContent += `**[EMBEDDED IMAGE UPLOAD]**\n`;
+          messageContent += `- Filename: ${file.name}\n`;
+          messageContent += `- Size: ${formatFileSize(file.size)}\n`;
+          messageContent += `- Type: ${file.type}\n\n`;
+          messageContent += `> ⚠️ NOTE: This image was uploaded directly to this chat. You cannot access it via file path. `;
+          messageContent += `Since you are a text-only AI, you cannot see the image content. `;
+          messageContent += `Please ask the user to describe what's in the image or what they need help with regarding it.\n\n`;
+        } else if (file.isCode) {
+          messageContent += `\`\`\`${file.extension.replace(".", "")}\n${file.content.slice(0, 10000)}\n\`\`\`\n\n`;
+        } else {
+          messageContent += `\`\`\`\n${file.content.slice(0, 10000)}\n\`\`\`\n\n`;
+        }
+        if (!file.isImage && file.content.length > 10000) {
+          messageContent += `*(truncated, showing first 10,000 characters)*\n\n`;
+        }
+      }
+    }
+
+    // Create message with original content for display, but use enhanced content for API
+    const displayMessage = { ...userMessage, content: input };
+
+    // Save attached files before clearing (needed for API call)
+    const filesToSend = [...attachedFiles];
+
+    const newMessages = [...messages, displayMessage];
     saveChatHistory(activeAgent, newMessages, effectiveProjectPath);
     setInput("");
+    setAttachedFiles([]); // Clear attachments after sending
     setIsLoading(true);
     setError(null);
 
     try {
-      // Build messages array with system prompt
+      // Build messages array with system prompt (now async with RAG - v1.0.2)
+      const systemPrompt = await buildSystemPrompt(messageContent); // Use enhanced content for RAG
+
+      // Build the user message content - use multimodal format if images are attached
+      const hasImages = filesToSend.some((f) => f.isImage && f.dataUrl);
+      let userMessageContent;
+
+      if (hasImages) {
+        // Use OpenAI Vision format: content is an array of text and image_url objects
+        userMessageContent = [{ type: "text", text: messageContent }];
+
+        // Add images as image_url objects with base64 data URLs
+        for (const file of filesToSend) {
+          if (file.isImage && file.dataUrl) {
+            userMessageContent.push({
+              type: "image_url",
+              image_url: {
+                url: file.dataUrl, // Already in data:image/...;base64,... format
+                detail: "auto", // Let the model decide detail level
+              },
+            });
+          }
+        }
+      } else {
+        // Text-only message
+        userMessageContent = messageContent;
+      }
+
       const apiMessages = [
-        { role: "system", content: buildSystemPrompt() },
-        ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "system", content: systemPrompt },
+        ...messages.map((m) => ({ role: m.role, content: m.content })),
+        { role: "user", content: userMessageContent },
       ];
 
       const response = await fetch(API_URL, {
@@ -968,6 +1191,25 @@ Write clean, maintainable code with clear explanations.`,
 
       const updatedMessages = [...newMessages, assistantMessage];
       saveChatHistory(activeAgent, updatedMessages, effectiveProjectPath);
+
+      // v1.0.2: Index important decisions in RAG
+      // Check if the response looks like an important decision or artifact
+      const responseContent = assistantMessage.content || "";
+      const isImportantDecision =
+        responseContent.includes("# ") ||
+        responseContent.includes("Decision:") ||
+        responseContent.includes("We decided") ||
+        responseContent.includes("Conclusion:") ||
+        responseContent.length > 500;
+
+      if (isImportantDecision && RAG_ENABLED) {
+        try {
+          await indexChatDecision(assistantMessage, activeAgent);
+        } catch (err) {
+          // Non-critical, just log
+          console.warn("[AgentChat] Failed to index decision:", err);
+        }
+      }
     } catch (err) {
       console.error("Failed to send message:", err);
       setError(err.message || "Failed to send message");
@@ -981,6 +1223,202 @@ Write clean, maintainable code with clear explanations.`,
       e.preventDefault();
       handleSend();
     }
+  };
+
+  // File attachment state
+  const [attachedFiles, setAttachedFiles] = useState([]);
+  const fileInputRef = useRef(null);
+
+  // Supported file extensions (no video files)
+  const SUPPORTED_EXTENSIONS = [
+    ".js",
+    ".jsx",
+    ".ts",
+    ".tsx",
+    ".py",
+    ".java",
+    ".cpp",
+    ".c",
+    ".h",
+    ".css",
+    ".scss",
+    ".html",
+    ".vue",
+    ".svelte",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".xml",
+    ".toml",
+    ".md",
+    ".txt",
+    ".csv",
+    ".log",
+    ".sql",
+    ".sh",
+    ".bash",
+    ".ps1",
+    ".env",
+    ".gitignore",
+    ".dockerfile",
+    // Image files
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".webp",
+    ".ico",
+    ".bmp",
+    // Document files
+    ".pdf",
+    // Design files
+    ".fig",
+    ".sketch",
+    ".xd",
+  ];
+
+  // Image extensions for special handling
+  const IMAGE_EXTENSIONS = [
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".webp",
+    ".ico",
+    ".bmp",
+  ];
+
+  // Check if file is an image
+  const isImageFile = (ext) => IMAGE_EXTENSIONS.includes(ext.toLowerCase());
+
+  // Handle file selection
+  const handleFileSelect = async (e) => {
+    const files = Array.from(e.target.files || []);
+    const newAttachments = [];
+
+    for (const file of files) {
+      // Skip video files
+      if (file.type.startsWith("video/")) {
+        console.warn(`Video files are not supported: ${file.name}`);
+        continue;
+      }
+
+      // Check file size (max 2MB for images, 500KB for text)
+      const maxSize = file.type.startsWith("image/")
+        ? 2 * 1024 * 1024
+        : 500 * 1024;
+      if (file.size > maxSize) {
+        console.warn(
+          `File ${file.name} is too large (max ${maxSize / 1024}KB)`,
+        );
+        continue;
+      }
+
+      try {
+        const ext = "." + file.name.split(".").pop()?.toLowerCase();
+        const isImage = isImageFile(ext) || file.type.startsWith("image/");
+        const isCode = [
+          ".js",
+          ".jsx",
+          ".ts",
+          ".tsx",
+          ".py",
+          ".java",
+          ".cpp",
+          ".css",
+          ".html",
+        ].includes(ext);
+
+        let content;
+        let dataUrl = null;
+
+        if (isImage) {
+          // Read image as base64 data URL
+          dataUrl = await readFileAsDataUrl(file);
+          content = `[Image: ${file.name} (${formatFileSize(file.size)})]`;
+        } else {
+          // Read as text
+          content = await readFileAsText(file);
+        }
+
+        newAttachments.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          name: file.name,
+          size: file.size,
+          type: file.type || "text/plain",
+          content: content,
+          dataUrl: dataUrl,
+          isCode,
+          isImage,
+          extension: ext,
+        });
+      } catch (err) {
+        console.error(`Failed to read file ${file.name}:`, err);
+      }
+    }
+
+    setAttachedFiles((prev) => [...prev, ...newAttachments]);
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  // Read file as text
+  const readFileAsText = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result || "");
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  // Read file as data URL (for images)
+  const readFileAsDataUrl = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result || "");
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Remove attached file
+  const removeAttachment = (id) => {
+    setAttachedFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  // Get file icon based on extension
+  const getFileIcon = (ext) => {
+    if (
+      [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx",
+        ".py",
+        ".java",
+        ".cpp",
+        ".css",
+        ".html",
+      ].includes(ext)
+    ) {
+      return <FileCode size={14} className="text-blue-500" />;
+    }
+    if ([".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp"].includes(ext)) {
+      return <ImageIcon size={14} className="text-green-500" />;
+    }
+    return <FileText size={14} className="text-muted-foreground" />;
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const handleClear = () => {
@@ -1058,6 +1496,15 @@ Write clean, maintainable code with clear explanations.`,
                 {contextStats.bmadAgentsCount} agents
               </span>
             )}
+            {/* v1.0.2: RAG Memory Stats */}
+            {contextStats.ragReady && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 rounded flex items-center gap-1"
+                title="RAG Memory: AI can recall project knowledge semantically"
+              >
+                🧠 {contextStats.ragDocuments || 0} memories
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -1129,22 +1576,89 @@ Write clean, maintainable code with clear explanations.`,
             </button>
           </div>
         )}
+
+        {/* Attached Files Preview */}
+        {attachedFiles.length > 0 && (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {attachedFiles.map((file) => (
+              <div
+                key={file.id}
+                className="flex items-center gap-2 bg-muted/50 border border-border rounded-lg px-3 py-1.5 text-xs"
+              >
+                {/* Show thumbnail for images */}
+                {file.isImage && file.dataUrl ? (
+                  <img
+                    src={file.dataUrl}
+                    alt={file.name}
+                    className="w-8 h-8 object-cover rounded"
+                  />
+                ) : (
+                  getFileIcon(file.extension)
+                )}
+                <span
+                  className="text-foreground max-w-[150px] truncate"
+                  title={file.name}
+                >
+                  {file.name}
+                </span>
+                <span className="text-muted-foreground">
+                  {formatFileSize(file.size)}
+                </span>
+                <button
+                  onClick={() => removeAttachment(file.id)}
+                  className="text-muted-foreground hover:text-destructive transition-colors ml-1"
+                  title="Remove file"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex gap-2">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".js,.jsx,.ts,.tsx,.py,.java,.cpp,.c,.h,.css,.scss,.html,.vue,.svelte,.json,.yaml,.yml,.xml,.toml,.md,.txt,.csv,.log,.sql,.sh,.bash,.ps1,.env,.gitignore,.dockerfile,.png,.jpg,.jpeg,.gif,.svg,.webp,.ico,.bmp,.pdf,.fig,.sketch,.xd,image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
+          {/* Attach file button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3 bg-muted/50 hover:bg-muted border border-input rounded-lg transition-colors flex items-center justify-center"
+            title="Attach files (code, documents, etc.)"
+          >
+            <Paperclip size={18} className="text-muted-foreground" />
+          </button>
+
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={`Message ${currentAgent?.name}...`}
+            placeholder={`Message ${currentAgent?.name}...${attachedFiles.length > 0 ? ` (${attachedFiles.length} file${attachedFiles.length > 1 ? "s" : ""} attached)` : ""}`}
             className="flex-1 bg-muted/50 border border-input rounded-lg px-4 py-3 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary resize-none"
             rows={2}
           />
           <button
             onClick={handleSend}
-            disabled={isLoading || !input.trim()}
+            disabled={
+              isLoading || (!input.trim() && attachedFiles.length === 0)
+            }
             className="px-4 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground rounded-lg transition-colors"
           >
             <Send size={18} />
           </button>
+        </div>
+
+        {/* File attachment hint */}
+        <div className="mt-2 text-[10px] text-muted-foreground flex items-center gap-1">
+          <Paperclip size={10} />
+          Attach code, images, documents (no video)
         </div>
       </div>
     </div>

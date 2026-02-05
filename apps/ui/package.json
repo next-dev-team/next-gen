@@ -54,7 +54,6 @@
     "@ghostery/adblocker-electron": "^2.5.0",
     "@measured/puck": "^0.20.2",
     "@modelcontextprotocol/sdk": "^1.25.1",
-    "@nde/llm": "workspace:*",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-collapsible": "^1.1.7",
     "@radix-ui/react-dialog": "^1.1.15",

@@ -22,7 +22,7 @@ const BMAD_AGENT_IDS = [
 ];
 
 // Default providers with their configurations
-// Synced with @nde/llm package providers
+// Synced with agent-llm package providers
 const DEFAULT_PROVIDERS = {
   // Claude via Anthropic API (not the Codex CLI)
   codex: {
@@ -327,7 +327,7 @@ ${context.storyContext ? `\n## Story Context:\n${context.storyContext}` : ""}`,
           };
 
           // Make API call (to our LLM server)
-          const response = await fetch("http://localhost:4444/api/chat", {
+          const response = await fetch("http://127.0.0.1:3333/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
@@ -389,7 +389,7 @@ Return ONLY the JSON array, no other text.`;
             ? state.apiKeys[state.activeProvider]
             : null;
 
-          const response = await fetch("http://localhost:4444/api/chat", {
+          const response = await fetch("http://127.0.0.1:3333/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

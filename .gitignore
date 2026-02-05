@@ -18,3 +18,4 @@ dist*
 gen
 .turbo
 temps
+_bmad-output/.rag-index.json
