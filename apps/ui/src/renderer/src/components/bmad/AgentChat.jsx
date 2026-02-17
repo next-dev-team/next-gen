@@ -32,6 +32,9 @@ import {
   FileText,
   FileCode,
   Image as ImageIcon,
+  Repeat2,
+  Play,
+  Clipboard,
 } from "lucide-react";
 import useBmadStore from "../../stores/bmadStore";
 import useProjectContextStore from "../../stores/projectContextStore";
@@ -44,6 +47,123 @@ const RAG_ENABLED = true; // Toggle RAG feature
 // API endpoints
 const API_URL = "http://127.0.0.1:3333/api/chat";
 const MCP_URL = "http://127.0.0.1:3847";
+const AGENT_LOOP_STORAGE_KEY = "bmad-agent-loop-v1";
+
+const summarizeKanbanState = (kanbanState) => {
+  const boards = Array.isArray(kanbanState?.boards) ? kanbanState.boards : [];
+  const activeBoard = boards[0] || null;
+  const lists = Array.isArray(activeBoard?.lists) ? activeBoard.lists : [];
+
+  const summary = {
+    boardName: activeBoard?.name || "Sprint Board",
+    totalCards: 0,
+    doneCards: 0,
+    byStatus: {},
+    highPriorityCards: [],
+    blockers: [],
+    readyCandidates: [],
+  };
+
+  for (const list of lists) {
+    const status = String(list?.statusId || list?.name || "unknown")
+      .trim()
+      .toLowerCase();
+    const cards = Array.isArray(list?.cards) ? list.cards : [];
+    summary.byStatus[status] = cards.length;
+    summary.totalCards += cards.length;
+
+    const isDone = status === "done" || status === "completed";
+    if (isDone) {
+      summary.doneCards += cards.length;
+    }
+
+    for (const card of cards) {
+      const priority = String(card?.priority || "").toLowerCase();
+      const title = String(card?.title || "Untitled");
+      const desc = String(card?.description || "").toLowerCase();
+      const labels = Array.isArray(card?.labels)
+        ? card.labels.map((v) => String(v).toLowerCase())
+        : [];
+
+      if (priority === "high" || priority === "critical") {
+        summary.highPriorityCards.push({ id: card?.id, title, status, priority });
+      }
+
+      const looksBlocked =
+        status.includes("block") ||
+        labels.some((l) => l.includes("block")) ||
+        desc.includes("blocked") ||
+        desc.includes("blocker");
+      if (looksBlocked) {
+        summary.blockers.push({ id: card?.id, title, status });
+      }
+
+      const isReady = status === "ready-for-dev" || status === "backlog";
+      if (isReady) {
+        summary.readyCandidates.push({ id: card?.id, title, priority, status });
+      }
+    }
+  }
+
+  return summary;
+};
+
+const buildLoopInstruction = ({ mode, summary }) => {
+  const byStatusText = Object.entries(summary.byStatus)
+    .map(([k, v]) => `- ${k}: ${v}`)
+    .join("\n");
+
+  const highPriorityText = (summary.highPriorityCards || [])
+    .slice(0, 8)
+    .map((card) => `- #${card.id} (${card.priority}) ${card.title}`)
+    .join("\n");
+
+  const blockersText = (summary.blockers || [])
+    .slice(0, 8)
+    .map((card) => `- #${card.id} ${card.title}`)
+    .join("\n");
+
+  const readyText = (summary.readyCandidates || [])
+    .slice(0, 8)
+    .map((card) => `- #${card.id} (${card.priority || "n/a"}) ${card.title}`)
+    .join("\n");
+
+  const modeInstruction =
+    mode === "standup"
+      ? "Generate a standup update with yesterday/today/blockers based on this board data."
+      : mode === "next-story"
+        ? "Pick the best next story and explain why in one short paragraph."
+        : "Find blockers and propose concrete unblocking steps.";
+
+  return `
+You are running an automated Scrum loop for BMAD.
+
+Board: ${summary.boardName}
+Total stories: ${summary.totalCards}
+Done stories: ${summary.doneCards}
+
+Status counts:
+${byStatusText || "- no data"}
+
+High priority stories:
+${highPriorityText || "- none"}
+
+Blockers:
+${blockersText || "- none"}
+
+Ready candidates:
+${readyText || "- none"}
+
+Task:
+${modeInstruction}
+
+Output format (strict):
+1) Title line
+2) 3-5 bullet points
+3) One "Recommended action" line
+Keep it concise and practical.
+`.trim();
+};
 
 // Available agents configuration
 const AGENTS = {
@@ -677,6 +797,23 @@ export default function AgentChat({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeAgent, setActiveAgent] = useState("pm");
+  const [loopBusy, setLoopBusy] = useState(false);
+  const [loopLastRunAt, setLoopLastRunAt] = useState(null);
+  const [loopConfig, setLoopConfig] = useState(() => {
+    try {
+      const raw = localStorage.getItem(AGENT_LOOP_STORAGE_KEY);
+      const parsed = JSON.parse(raw || "{}");
+      return {
+        enabled: Boolean(parsed.enabled),
+        intervalSec: Number(parsed.intervalSec) > 0 ? Number(parsed.intervalSec) : 300,
+        mode: ["standup", "next-story", "blockers"].includes(parsed.mode)
+          ? parsed.mode
+          : "standup",
+      };
+    } catch {
+      return { enabled: false, intervalSec: 300, mode: "standup" };
+    }
+  });
   const chatRef = useRef(null);
 
   const {
@@ -752,6 +889,95 @@ export default function AgentChat({
 
   // Get context stats for display
   const contextStats = getContextStats();
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AGENT_LOOP_STORAGE_KEY, JSON.stringify(loopConfig));
+    } catch {
+      // ignore persistence errors
+    }
+  }, [loopConfig]);
+
+  const runAgentLoop = async ({ manual = false } = {}) => {
+    if (loopBusy || isLoading) return;
+
+    const summary = summarizeKanbanState(kanbanState);
+    const instruction = buildLoopInstruction({ mode: loopConfig.mode, summary });
+
+    setLoopBusy(true);
+    setError(null);
+
+    try {
+      const systemPrompt = await buildSystemPrompt(
+        `Automated scrum loop (${loopConfig.mode}) for board ${summary.boardName}`,
+      );
+
+      const response = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider: "codex",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: instruction },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Loop API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = String(
+        data.text || data.content || data.message || "No loop response received",
+      );
+
+      const loopMessage = {
+        role: "assistant",
+        content: `🔁 Auto Scrum Loop (${loopConfig.mode})${manual ? " [manual]" : ""}\n\n${content}`,
+        timestamp: new Date().toISOString(),
+      };
+
+      const existing = getChatHistory(activeAgent, effectiveProjectPath);
+      saveChatHistory(activeAgent, [...existing, loopMessage], effectiveProjectPath);
+      setLoopLastRunAt(loopMessage.timestamp);
+    } catch (err) {
+      const fallbackSummary = `🔁 Auto Scrum Loop (${loopConfig.mode})\n\n- Board: ${summary.boardName}\n- Total stories: ${summary.totalCards}\n- Done stories: ${summary.doneCards}\n- Blockers: ${summary.blockers.length}\n- Ready candidates: ${summary.readyCandidates.length}\nRecommended action: Triage blockers first, then pull highest-priority ready story.`;
+
+      const fallbackMessage = {
+        role: "assistant",
+        content: fallbackSummary,
+        timestamp: new Date().toISOString(),
+      };
+
+      const existing = getChatHistory(activeAgent, effectiveProjectPath);
+      saveChatHistory(activeAgent, [...existing, fallbackMessage], effectiveProjectPath);
+      setLoopLastRunAt(fallbackMessage.timestamp);
+      setError(err?.message || "Agent loop failed");
+    } finally {
+      setLoopBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!loopConfig.enabled) return;
+    const ms = Math.max(30, Number(loopConfig.intervalSec) || 300) * 1000;
+    const timer = setInterval(() => {
+      runAgentLoop({ manual: false });
+    }, ms);
+    return () => clearInterval(timer);
+  }, [loopConfig.enabled, loopConfig.intervalSec, loopConfig.mode, activeAgent, effectiveProjectPath, kanbanState]);
+
+  const copyOpenClawLoopPrompt = async () => {
+    const mins = Math.max(1, Math.round((Number(loopConfig.intervalSec) || 300) / 60));
+    const prompt = `Set a recurring reminder every ${mins} minutes to review Scrum board and send a short ${loopConfig.mode} update in Telegram with blockers + next action.`;
+    try {
+      await navigator.clipboard.writeText(prompt);
+    } catch {
+      // ignore clipboard errors
+    }
+  };
 
   // Build system prompt based on agent and enhanced project context
   // Now async to support RAG queries (v1.0.2)
@@ -1507,6 +1733,88 @@ Write clean, maintainable code with clear explanations.`,
             )}
           </div>
         )}
+      </div>
+
+      {/* Agent Loop Controls */}
+      <div className="px-4 py-3 border-b border-border bg-muted/20">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center gap-2 text-xs font-medium text-foreground">
+            <Repeat2 size={13} />
+            Agent loop
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              setLoopConfig((prev) => ({ ...prev, enabled: !prev.enabled }))
+            }
+            className={`px-2 py-1 rounded text-[11px] border transition-colors ${
+              loopConfig.enabled
+                ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-300"
+                : "bg-background border-border text-muted-foreground"
+            }`}
+          >
+            {loopConfig.enabled ? "Loop ON" : "Loop OFF"}
+          </button>
+
+          <select
+            value={loopConfig.mode}
+            onChange={(e) =>
+              setLoopConfig((prev) => ({ ...prev, mode: e.target.value }))
+            }
+            className="h-7 rounded border border-input bg-background px-2 text-[11px]"
+          >
+            <option value="standup">Standup</option>
+            <option value="next-story">Next story</option>
+            <option value="blockers">Blockers</option>
+          </select>
+
+          <select
+            value={String(loopConfig.intervalSec)}
+            onChange={(e) =>
+              setLoopConfig((prev) => ({
+                ...prev,
+                intervalSec: Number(e.target.value) || 300,
+              }))
+            }
+            className="h-7 rounded border border-input bg-background px-2 text-[11px]"
+          >
+            <option value="60">1m</option>
+            <option value="180">3m</option>
+            <option value="300">5m</option>
+            <option value="900">15m</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => runAgentLoop({ manual: true })}
+            disabled={loopBusy || isLoading}
+            className="h-7 px-2 rounded border border-border bg-background text-[11px] inline-flex items-center gap-1 disabled:opacity-50"
+          >
+            {loopBusy ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Play size={12} />
+            )}
+            Run now
+          </button>
+
+          <button
+            type="button"
+            onClick={copyOpenClawLoopPrompt}
+            className="h-7 px-2 rounded border border-border bg-background text-[11px] inline-flex items-center gap-1"
+            title="Copy an OpenClaw reminder prompt for Telegram automation"
+          >
+            <Clipboard size={12} />
+            Copy OpenClaw prompt
+          </button>
+        </div>
+
+        <div className="mt-1 text-[10px] text-muted-foreground">
+          {loopLastRunAt
+            ? `Last run: ${new Date(loopLastRunAt).toLocaleTimeString()}`
+            : "No loop runs yet"}
+        </div>
       </div>
 
       {/* Messages */}
