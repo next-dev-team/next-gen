@@ -13,6 +13,7 @@
     "prebuild:copy": "node scripts/prebuild-copy.js",
     "start": "node ../../node_modules/electron-vite/bin/electron-vite.js preview",
     "dev": "npm run prebuild:copy && node ../../node_modules/electron-vite/bin/electron-vite.js dev",
+    "dev:safe": "node scripts/dev-safe.js",
     "web:dev": "node ../../node_modules/vite/bin/vite.js --config vite.web.config.mjs",
     "build": "node ../../node_modules/electron-vite/bin/electron-vite.js build && npm run prebuild:copy",
     "web:build": "node ../../node_modules/vite/bin/vite.js build --config vite.web.config.mjs",
@@ -21,10 +22,11 @@
     "build:win": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --win -c.npmRebuild=false",
     "build:mac": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --mac -c.npmRebuild=false",
     "build:linux": "pnpm run build && node ../../node_modules/electron-builder/out/cli/cli.js --linux -c.npmRebuild=false",
-    "test": "node ../../node_modules/electron-vite/bin/electron-vite.js build && node ../../node_modules/@playwright/test/cli.js test",
+    "test": "pnpm run test:scrum:e2e && node ../../node_modules/electron-vite/bin/electron-vite.js build && node ../../node_modules/@playwright/test/cli.js test",
+    "test:scrum:e2e": "node scripts/scrum-e2e.js",
     "mcp:scrum": "node scripts/scrum-mcp-server.js",
     "mcp:sse": "node scripts/scrum-mcp-server.js",
-    "dev:full": "node ../../node_modules/concurrently/dist/bin/concurrently.js \"pnpm run dev\" \"pnpm run mcp:sse\""
+    "dev:full": "node ../../node_modules/concurrently/dist/bin/concurrently.js \"pnpm run dev:safe\" \"pnpm run mcp:sse\""
   },
   "devDependencies": {
     "@kubb/cli": "^4.12.15",

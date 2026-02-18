@@ -48,6 +48,31 @@ const RAG_ENABLED = true; // Toggle RAG feature
 const API_URL = "http://127.0.0.1:3333/api/chat";
 const MCP_URL = "http://127.0.0.1:3847";
 const AGENT_LOOP_STORAGE_KEY = "bmad-agent-loop-v1";
+const BMAD_ROLE_STORAGE_KEY = "bmad-end-user-role-v1";
+
+const BMAD_ROLE_PRESETS = {
+  pm: {
+    id: "pm",
+    label: "Product Manager",
+    tone: "business",
+    instruction:
+      "Speak in plain product language. Focus on goals, risks, priorities, and decision clarity. Avoid code-heavy explanations unless asked.",
+  },
+  scrum: {
+    id: "scrum",
+    label: "Scrum Master",
+    tone: "delivery",
+    instruction:
+      "Focus on sprint flow, blockers, next actions, and concise standup-ready updates for non-technical stakeholders.",
+  },
+  stakeholder: {
+    id: "stakeholder",
+    label: "Stakeholder/Founder",
+    tone: "executive",
+    instruction:
+      "Use simple, executive-level summaries. Emphasize timeline, impact, risk, and recommendation in under 6 bullets.",
+  },
+};
 
 const summarizeKanbanState = (kanbanState) => {
   const boards = Array.isArray(kanbanState?.boards) ? kanbanState.boards : [];
@@ -754,7 +779,7 @@ function AgentSelector({ agents, activeAgent, onSelect }) {
 }
 
 // Suggested Prompts
-function SuggestedPrompts({ agent, onSelect }) {
+function SuggestedPrompts({ agent, onSelect, rolePreset }) {
   const prompts = {
     pm: ["*create-prd", "*create-epics", "*save-prd"],
     analyst: ["*brainstorm", "*help", "Analyze this competitor"],
@@ -767,7 +792,16 @@ function SuggestedPrompts({ agent, onSelect }) {
     dev: ["*help", "Implement feature", "Debug this issue"],
   };
 
-  const agentPrompts = prompts[agent] || prompts.pm;
+  const rolePrompts = {
+    pm: ["Summarize sprint risks for leadership", "Prioritize top 5 backlog items"],
+    scrum: ["Create daily standup update", "What is blocking progress right now?"],
+    stakeholder: ["Give me executive summary of current sprint", "What should we do next this week?"],
+  };
+
+  const agentPrompts = [
+    ...(prompts[agent] || prompts.pm),
+    ...((rolePrompts[rolePreset] || []).slice(0, 2)),
+  ];
 
   return (
     <div className="space-y-2">
@@ -797,6 +831,14 @@ export default function AgentChat({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [activeAgent, setActiveAgent] = useState("pm");
+  const [endUserRole, setEndUserRole] = useState(() => {
+    try {
+      const saved = localStorage.getItem(BMAD_ROLE_STORAGE_KEY);
+      return BMAD_ROLE_PRESETS[saved] ? saved : "pm";
+    } catch {
+      return "pm";
+    }
+  });
   const [loopBusy, setLoopBusy] = useState(false);
   const [loopLastRunAt, setLoopLastRunAt] = useState(null);
   const [loopConfig, setLoopConfig] = useState(() => {
@@ -897,6 +939,14 @@ export default function AgentChat({
       // ignore persistence errors
     }
   }, [loopConfig]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(BMAD_ROLE_STORAGE_KEY, endUserRole);
+    } catch {
+      // ignore persistence errors
+    }
+  }, [endUserRole]);
 
   const runAgentLoop = async ({ manual = false } = {}) => {
     if (loopBusy || isLoading) return;
@@ -1048,6 +1098,9 @@ Write clean, maintainable code with clear explanations.`,
     };
 
     let prompt = agentRoles[activeAgent] || agentRoles.pm;
+
+    const rolePreset = BMAD_ROLE_PRESETS[endUserRole] || BMAD_ROLE_PRESETS.pm;
+    prompt += `\n\nEnd-user mode: ${rolePreset.label}. ${rolePreset.instruction}`;
 
     // v1.0.2: Query RAG for relevant context based on user's question
     if (RAG_ENABLED && userQuery && ragInitialized) {
@@ -1675,6 +1728,25 @@ Write clean, maintainable code with clear explanations.`,
           activeAgent={activeAgent}
           onSelect={handleAgentChange}
         />
+
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[11px] text-muted-foreground">BMAD role</span>
+          <select
+            value={endUserRole}
+            onChange={(e) => setEndUserRole(e.target.value)}
+            className="h-7 rounded border border-input bg-background px-2 text-[11px]"
+          >
+            {Object.values(BMAD_ROLE_PRESETS).map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.label}
+              </option>
+            ))}
+          </select>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-600 dark:text-indigo-300">
+            End-user friendly
+          </span>
+        </div>
+
         {projectPath && (
           <div className="mt-2 flex items-center justify-between">
             <div className="text-xs text-muted-foreground truncate">
@@ -1832,6 +1904,7 @@ Write clean, maintainable code with clear explanations.`,
             </p>
             <SuggestedPrompts
               agent={activeAgent}
+              rolePreset={endUserRole}
               onSelect={handleSuggestedPrompt}
             />
           </div>
