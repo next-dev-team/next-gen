@@ -117,6 +117,10 @@
         "to": "scripts"
       },
       {
+        "from": "assets/icons/tray.png",
+        "to": "icons/tray.png"
+      },
+      {
         "from": "../../scripts/run-generator.ts",
         "to": "scripts/run-generator.ts"
       },
@@ -143,6 +147,7 @@
         "deb"
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "icon": "assets/icons/icon.png",
       "maintainer": "Next Dev Team <info@next-dev.team>",
       "category": "Development"
     },
@@ -151,6 +156,7 @@
         "nsis"
       ],
       "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "icon": "assets/icons/icon.ico",
       "signAndEditExecutable": false
     }
   }

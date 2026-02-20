@@ -1024,7 +1024,7 @@ export default function MainLayout({
                     : "Next Gen"}
             </h1>
             <div className="rounded bg-[var(--color-bg-elevated)] px-2 py-0.5 text-xs text-[var(--color-text-secondary)]">
-              v1.0
+              v1.0.1
             </div>
           </div>
 

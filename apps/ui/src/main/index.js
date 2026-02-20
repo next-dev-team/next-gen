@@ -616,6 +616,7 @@ function createWindow({ show = true } = {}) {
 
 function resolveTrayIcon() {
   const packagedCandidates = [
+    path.join(process.resourcesPath, "icons", "tray.png"),
     path.join(
       process.resourcesPath,
       "turbo",
@@ -639,6 +640,7 @@ function resolveTrayIcon() {
   ];
 
   const devCandidates = [
+    path.resolve(__dirname, "../../assets/icons/tray.png"),
     path.resolve(
       __dirname,
       "../../../turbo/generators/templates/rnr-expo/assets/images/favicon.png",

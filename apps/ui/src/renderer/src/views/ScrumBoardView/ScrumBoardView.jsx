@@ -11,6 +11,7 @@ import {
   Clock,
   Copy,
   Filter,
+  FolderOpen,
   GitBranch,
   GripVertical,
   Image,
@@ -156,6 +157,10 @@ const BMAD_AGENT_SETUP_STORAGE_KEY = "bmad-scrum-agent-setup-v1";
 const SCRUM_OVERVIEW_TAB_STORAGE_KEY = "scrum-overview-tab-v1";
 const SCRUM_RECENT_PROJECTS_STORAGE_KEY = "scrum-recent-projects-v1";
 const SCRUM_MAX_RECENT_PROJECTS = 8;
+const SCRUM_PROJECT_SYNC_ENABLED_STORAGE_KEY = "scrum-project-sync-enabled-v1";
+const SCRUM_PROJECT_SYNC_REL_PATH_STORAGE_KEY =
+  "scrum-project-sync-rel-path-v1";
+const SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH = ".next-gen/scrum-state.json";
 
 // BMAD v6 Agents - matching the actual bmm module agents
 const BMAD_V6_AGENTS = [
@@ -544,6 +549,16 @@ const MCP_KANBAN_TOOL_OPTIONS = [
     description: "Replace the full state (use carefully).",
   },
   {
+    id: "scrum_sync2project",
+    label: "scrum_sync2project",
+    description: "Write current Scrum state to project file.",
+  },
+  {
+    id: "scrum_sync2store",
+    label: "scrum_sync2store",
+    description: "Load Scrum state from project file into store.",
+  },
+  {
     id: "scrum_create_board",
     label: "scrum_create_board",
     description: "Create a new board.",
@@ -682,6 +697,10 @@ const getMcpToolUsageText = ({ toolId, activeBoard, projectRoot }) => {
       return "scrum-kanban/scrum_get_state";
     case "scrum_set_state":
       return 'scrum-kanban/scrum_set_state {"state":{...}}';
+    case "scrum_sync2project":
+      return `scrum-kanban/scrum_sync2project {"cwd":"${cwd}","relativePath":"${SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH}"}`;
+    case "scrum_sync2store":
+      return `scrum-kanban/scrum_sync2store {"cwd":"${cwd}","relativePath":"${SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH}"}`;
     case "scrum_create_board":
       return 'scrum-kanban/scrum_create_board {"name":"","type":"bmad"}';
     case "scrum_delete_board":
@@ -3269,7 +3288,19 @@ const CreateBoardDialog = ({ open, onOpenChange, onCreateBoard }) => {
 };
 
 // ============ Settings Dialog ============
-const SettingsDialog = ({ open, onOpenChange }) => {
+const SettingsDialog = ({
+  open,
+  onOpenChange,
+  projectRoot,
+  projectSyncEnabled,
+  onProjectSyncEnabledChange,
+  projectSyncRelativePath,
+  onProjectSyncRelativePathChange,
+  onProjectSyncNow,
+  projectSyncInProgress,
+  projectSyncLastAt,
+  projectSyncError,
+}) => {
   const {
     connected,
     autoConnect,
@@ -3335,6 +3366,20 @@ const SettingsDialog = ({ open, onOpenChange }) => {
     setApiKey(activeProvider, tempApiKey);
   };
 
+  const lastSyncLabel = projectSyncLastAt
+    ? new Date(projectSyncLastAt).toLocaleString()
+    : "Not synced yet";
+  const projectRootLabel = String(projectRoot || "").trim();
+  const effectiveProjectSyncRelativePath =
+    String(projectSyncRelativePath || "").trim() ||
+    SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH;
+  const canSyncToProject = Boolean(
+    projectSyncEnabled &&
+      projectRootLabel &&
+      effectiveProjectSyncRelativePath &&
+      window.electronAPI?.writeProjectFile,
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px] h-[550px] flex flex-col bg-background/95 backdrop-blur-lg">
@@ -3355,7 +3400,10 @@ const SettingsDialog = ({ open, onOpenChange }) => {
             <TabsTrigger value="logs">Server Logs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="general" className="space-y-6 py-4">
+          <TabsContent
+            value="general"
+            className="space-y-6 py-4 overflow-y-auto pr-1"
+          >
             <div className="flex items-center justify-between space-x-2">
               <Label htmlFor="auto-connect" className="flex flex-col gap-1">
                 <span>Auto-Connect</span>
@@ -3426,6 +3474,79 @@ const SettingsDialog = ({ open, onOpenChange }) => {
                   )}
                 </Button>
               </div>
+            </div>
+
+            <div className="space-y-4 border-t border-border/50 pt-4">
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium leading-none">
+                  Project File Sync
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Optional. When enabled, Scrum Zustand state is mirrored to a
+                  file inside your selected project root.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between space-x-2">
+                <Label
+                  htmlFor="project-sync-enabled"
+                  className="flex flex-col gap-1"
+                >
+                  <span>Sync Store to Project</span>
+                  <span className="font-normal text-xs text-muted-foreground">
+                    Disabled by default. Writes on state changes.
+                  </span>
+                </Label>
+                <Switch
+                  id="project-sync-enabled"
+                  checked={projectSyncEnabled}
+                  onCheckedChange={onProjectSyncEnabledChange}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="project-sync-relative-path">
+                  Relative file path
+                </Label>
+                <Input
+                  id="project-sync-relative-path"
+                  value={projectSyncRelativePath}
+                  onChange={(e) =>
+                    onProjectSyncRelativePathChange(e.target.value)
+                  }
+                  placeholder={SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH}
+                  className="bg-background/50"
+                />
+              </div>
+
+              <div className="rounded-md border border-border/50 bg-secondary/20 px-3 py-2 text-xs text-muted-foreground break-all">
+                Project root:{" "}
+                {projectRootLabel || "Select a project root to enable sync"}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onProjectSyncNow}
+                  disabled={!canSyncToProject || projectSyncInProgress}
+                >
+                  <RefreshCw
+                    className={cn(
+                      "h-4 w-4 mr-2",
+                      projectSyncInProgress && "animate-spin",
+                    )}
+                  />
+                  Sync now
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Last sync: {lastSyncLabel}
+                </span>
+              </div>
+
+              {projectSyncError && (
+                <div className="text-xs text-destructive">{projectSyncError}</div>
+              )}
             </div>
           </TabsContent>
 
@@ -6724,6 +6845,156 @@ export default function ScrumBoardView() {
     });
   }, [agentSetup.projectRoot]);
 
+  const [projectSyncEnabled, setProjectSyncEnabled] = React.useState(() => {
+    try {
+      return (
+        localStorage.getItem(SCRUM_PROJECT_SYNC_ENABLED_STORAGE_KEY) === "true"
+      );
+    } catch {
+      return false;
+    }
+  });
+  const [projectSyncRelativePath, setProjectSyncRelativePath] =
+    React.useState(() => {
+      try {
+        const saved = localStorage.getItem(SCRUM_PROJECT_SYNC_REL_PATH_STORAGE_KEY);
+        return (
+          String(saved || "").trim() || SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH
+        );
+      } catch {
+        return SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH;
+      }
+    });
+  const [projectSyncInProgress, setProjectSyncInProgress] =
+    React.useState(false);
+  const [projectSyncLastAt, setProjectSyncLastAt] = React.useState(null);
+  const [projectSyncError, setProjectSyncError] = React.useState("");
+  const projectSyncBusyRef = React.useRef(false);
+  const lastProjectSyncRef = React.useRef({ targetKey: "", payload: "" });
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(
+        SCRUM_PROJECT_SYNC_ENABLED_STORAGE_KEY,
+        String(Boolean(projectSyncEnabled)),
+      );
+    } catch {}
+  }, [projectSyncEnabled]);
+
+  React.useEffect(() => {
+    try {
+      const normalized =
+        String(projectSyncRelativePath || "").trim() ||
+        SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH;
+      localStorage.setItem(SCRUM_PROJECT_SYNC_REL_PATH_STORAGE_KEY, normalized);
+    } catch {}
+  }, [projectSyncRelativePath]);
+
+  const syncStateToProjectFile = React.useCallback(
+    async ({ stateOverride, force = false, silent = false } = {}) => {
+      const nextState = stateOverride || state;
+      if (!nextState) {
+        return { success: false, skipped: true, reason: "no-state" };
+      }
+
+      const projectRoot = String(agentSetup.projectRoot || "").trim();
+      if (!projectRoot) {
+        const message = "Select a project root before syncing Scrum state.";
+        if (!silent) setProjectSyncError(message);
+        return { success: false, skipped: true, reason: "no-project-root" };
+      }
+
+      if (!window.electronAPI?.writeProjectFile) {
+        const message = "Project sync requires Electron desktop runtime.";
+        if (!silent) setProjectSyncError(message);
+        return { success: false, skipped: true, reason: "no-electron-api" };
+      }
+
+      const relativePath =
+        String(projectSyncRelativePath || "").trim() ||
+        SCRUM_PROJECT_SYNC_DEFAULT_REL_PATH;
+      if (
+        relativePath.startsWith("/") ||
+        relativePath.startsWith("\\") ||
+        /^[A-Za-z]:[\\/]/.test(relativePath)
+      ) {
+        const message = "Sync path must be relative to project root.";
+        if (!silent) setProjectSyncError(message);
+        return { success: false, skipped: true, reason: "invalid-path" };
+      }
+
+      const payload = JSON.stringify(nextState, null, 2);
+      const targetKey = `${projectRoot}::${relativePath}`;
+      if (
+        !force &&
+        lastProjectSyncRef.current.targetKey === targetKey &&
+        lastProjectSyncRef.current.payload === payload
+      ) {
+        return { success: true, skipped: true };
+      }
+
+      if (projectSyncBusyRef.current) {
+        return { success: false, skipped: true, reason: "busy" };
+      }
+
+      projectSyncBusyRef.current = true;
+      setProjectSyncInProgress(true);
+      try {
+        await window.electronAPI.writeProjectFile({
+          projectRoot,
+          relativePath,
+          content: payload,
+          overwrite: true,
+        });
+        lastProjectSyncRef.current = { targetKey, payload };
+        setProjectSyncError("");
+        setProjectSyncLastAt(new Date().toISOString());
+        return { success: true, skipped: false };
+      } catch (err) {
+        const message = err?.message || "Failed to sync Scrum state to project";
+        if (!silent) setProjectSyncError(message);
+        return { success: false, skipped: false, message };
+      } finally {
+        projectSyncBusyRef.current = false;
+        setProjectSyncInProgress(false);
+      }
+    },
+    [agentSetup.projectRoot, projectSyncRelativePath, state],
+  );
+
+  const handleProjectSyncNow = React.useCallback(async () => {
+    const result = await syncStateToProjectFile({
+      stateOverride: state,
+      force: true,
+      silent: false,
+    });
+    if (result?.success) {
+      toast.success("Scrum state synced to project file");
+      return;
+    }
+    if (!result?.skipped) {
+      toast.error(result?.message || "Failed to sync Scrum state");
+    }
+  }, [state, syncStateToProjectFile]);
+
+  React.useEffect(() => {
+    if (!projectSyncEnabled || !state) return;
+    const timer = window.setTimeout(() => {
+      syncStateToProjectFile({
+        stateOverride: state,
+        force: false,
+        silent: true,
+      }).then((result) => {
+        if (!result?.success && !result?.skipped) {
+          setProjectSyncError(
+            result?.message || "Failed to auto-sync Scrum state",
+          );
+        }
+      });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [projectSyncEnabled, state, syncStateToProjectFile]);
+
   const getProjectLabel = React.useCallback((p) => {
     const cleaned = String(p || "").replace(/[\\/]+$/, "");
     const parts = cleaned.split(/[\\/]+/).filter(Boolean);
@@ -7200,7 +7471,19 @@ export default function ScrumBoardView() {
           onOpenSettings={() => setSettingsOpen(true)}
           serverRunning={serverRunning}
         />
-        <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          projectRoot={agentSetup.projectRoot}
+          projectSyncEnabled={projectSyncEnabled}
+          onProjectSyncEnabledChange={setProjectSyncEnabled}
+          projectSyncRelativePath={projectSyncRelativePath}
+          onProjectSyncRelativePathChange={setProjectSyncRelativePath}
+          onProjectSyncNow={handleProjectSyncNow}
+          projectSyncInProgress={projectSyncInProgress}
+          projectSyncLastAt={projectSyncLastAt}
+          projectSyncError={projectSyncError}
+        />
       </>
     );
   }
@@ -7865,7 +8148,19 @@ export default function ScrumBoardView() {
         onCreateBoard={createBoard}
       />
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        projectRoot={agentSetup.projectRoot}
+        projectSyncEnabled={projectSyncEnabled}
+        onProjectSyncEnabledChange={setProjectSyncEnabled}
+        projectSyncRelativePath={projectSyncRelativePath}
+        onProjectSyncRelativePathChange={setProjectSyncRelativePath}
+        onProjectSyncNow={handleProjectSyncNow}
+        projectSyncInProgress={projectSyncInProgress}
+        projectSyncLastAt={projectSyncLastAt}
+        projectSyncError={projectSyncError}
+      />
 
       <EpicManagerDialog
         open={epicManagerOpen}

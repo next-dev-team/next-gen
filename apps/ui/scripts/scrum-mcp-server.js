@@ -32,6 +32,7 @@ const EPIC_STATUSES = [
   { id: "in-progress", name: "In Progress" },
   { id: "done", name: "Done" },
 ];
+const SCRUM_PROJECT_STATE_RELATIVE_PATH = ".next-gen/scrum-state.json";
 
 // ============ State Management ============
 const defaultState = () => {
@@ -629,6 +630,53 @@ const safeReadFile = async ({ cwd, relativePath }) => {
   return { path: target, content: String(content || "") };
 };
 
+const resolveScrumSyncRelativePath = (relativePath) =>
+  String(relativePath || "").trim() || SCRUM_PROJECT_STATE_RELATIVE_PATH;
+
+const syncStoreStateToProject = async ({ cwd, relativePath }) => {
+  const rel = resolveScrumSyncRelativePath(relativePath);
+  const snapshot = getState();
+  const target = await safeWriteFile({
+    cwd,
+    relativePath: rel,
+    content: JSON.stringify(snapshot, null, 2),
+    overwrite: true,
+  });
+
+  return {
+    success: true,
+    path: target,
+    relativePath: rel,
+    state: snapshot,
+  };
+};
+
+const syncProjectStateToStore = async ({ cwd, relativePath }) => {
+  const rel = resolveScrumSyncRelativePath(relativePath);
+  const read = await safeReadFile({ cwd, relativePath: rel });
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(read.content);
+  } catch (err) {
+    throw new Error(`Invalid JSON in sync file: ${err?.message || String(err)}`);
+  }
+
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.boards)) {
+    throw new Error(
+      "Sync file does not contain a valid Scrum state (missing boards array)"
+    );
+  }
+
+  const state = setState(parsed);
+  return {
+    success: true,
+    path: read.path,
+    relativePath: rel,
+    state,
+  };
+};
+
 const normalizeText = (value) => String(value || "").trim();
 
 const normalizeTextArray = (value) =>
@@ -1190,6 +1238,20 @@ const httpServer = http.createServer((req, res) => {
             result = { state: getState() };
             break;
 
+          case "/api/sync2project":
+            result = await syncStoreStateToProject({
+              cwd: data.cwd,
+              relativePath: data.relativePath,
+            });
+            break;
+
+          case "/api/sync2store":
+            result = await syncProjectStateToStore({
+              cwd: data.cwd,
+              relativePath: data.relativePath,
+            });
+            break;
+
           case "/api/board/create":
             result = await handleCreateBoard(data);
             break;
@@ -1282,6 +1344,10 @@ const httpServer = http.createServer((req, res) => {
         endpoints: {
           sse: "/sse - Server-Sent Events for real-time updates",
           state: "/api/state - GET/POST full state",
+          sync: {
+            sync2project: "/api/sync2project",
+            sync2store: "/api/sync2store",
+          },
           board: {
             create: "/api/board/create",
             delete: "/api/board/delete",
@@ -1929,6 +1995,52 @@ const main = async (enableStdio = true, logger = console) => {
         throw new Error("state must be an object");
       const output = { state: setState(state) };
       return withStructured(output);
+    }
+  );
+
+  server.registerTool(
+    "scrum_sync2project",
+    {
+      title: "Sync Store To Project",
+      description:
+        "Write current Scrum store state to a file inside the provided project directory",
+      inputSchema: {
+        cwd: z.string(),
+        relativePath: z.string().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string(),
+        relativePath: z.string(),
+        state: z.any(),
+      },
+    },
+    async ({ cwd, relativePath }) => {
+      const result = await syncStoreStateToProject({ cwd, relativePath });
+      return withStructured(result);
+    }
+  );
+
+  server.registerTool(
+    "scrum_sync2store",
+    {
+      title: "Sync Project To Store",
+      description:
+        "Read Scrum state JSON from project directory and replace current store state",
+      inputSchema: {
+        cwd: z.string(),
+        relativePath: z.string().optional(),
+      },
+      outputSchema: {
+        success: z.boolean(),
+        path: z.string(),
+        relativePath: z.string(),
+        state: z.any(),
+      },
+    },
+    async ({ cwd, relativePath }) => {
+      const result = await syncProjectStateToStore({ cwd, relativePath });
+      return withStructured(result);
     }
   );
 
